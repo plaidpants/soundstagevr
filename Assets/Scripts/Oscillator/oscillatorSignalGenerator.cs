@@ -35,12 +35,14 @@ public class oscillatorSignalGenerator : signalGenerator
     public static extern void OscillatorSignalGenerator(float[] buffer, int length, int channels, ref double _phase, float analogWave, float frequency, float amplitude, float prevAmplitude
                                 , float[] frequencyBuffer, float[] amplitudeBuffer, bool bFreqGen, bool bAmpGen, double _sampleDuration, ref double dspTime);
 
+    float[] _scratch_frequencyBuffer; // reused audio-thread scratch (see AudioBufferPool)
+    float[] _scratch_amplitudeBuffer; // reused audio-thread scratch (see AudioBufferPool)
     public override void processBuffer(float[] buffer, double dspTime, int channels)
     {
         lastIncomingDspTime = dspTime;
     
-        float[] frequencyBuffer = new float[buffer.Length];
-        float[] amplitudeBuffer = new float[buffer.Length];
+        float[] frequencyBuffer = AudioBufferPool.GetCleared(ref _scratch_frequencyBuffer, buffer.Length);
+        float[] amplitudeBuffer = AudioBufferPool.GetCleared(ref _scratch_amplitudeBuffer, buffer.Length);
 
         if (freqGen != null) freqGen.processBuffer(frequencyBuffer, dspTime, channels);
         if (ampGen != null) ampGen.processBuffer(amplitudeBuffer, dspTime, channels);

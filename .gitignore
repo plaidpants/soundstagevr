@@ -274,3 +274,14 @@ MonoBleedingEdge/etc/mono/config
 MonoBleedingEdge/etc/mono/mconfig/config.xml
 UnityCrashHandler64.exe
 UnityPlayer.dll
+
+# Added 2026-11 (Quest upgrade cleanup)
+/BuildQuest/
+/Logs/
+/_old_builds/
+/SoundStage_Data/
+/MonoBleedingEdge/
+/OVRAssetBundles/
+*.VC.db
+*.VC.opendb
+*.VC.VC.opendb

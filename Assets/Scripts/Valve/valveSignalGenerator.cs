@@ -25,13 +25,14 @@ public class valveSignalGenerator : signalGenerator {
   [DllImport("SoundStageNative")] public static extern void SetArrayToSingleValue(float[] a, int length, float val);
   [DllImport("SoundStageNative")] public static extern void GateProcessBuffer(float[] buffer, int length, int channels, bool incoming, float[] controlBuffer, bool bControlSig, float amp);
 
+  float[] _scratch_controlBuffer; // reused audio-thread scratch (see AudioBufferPool)
   public override void processBuffer(float[] buffer, double dspTime, int channels) {
     if (!active) {
       SetArrayToSingleValue(buffer, buffer.Length, -1f);
       return;
     }
 
-    float[] controlBuffer = new float[buffer.Length];
+    float[] controlBuffer = AudioBufferPool.GetCleared(ref _scratch_controlBuffer, buffer.Length);
     if (controlSig != null) controlSig.processBuffer(controlBuffer, dspTime, channels);
     if (incoming != null) incoming.processBuffer(buffer, dspTime, channels);
 

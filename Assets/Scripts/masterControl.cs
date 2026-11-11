@@ -142,6 +142,10 @@ public class masterControl : MonoBehaviour {
     glowVal = t;
     PlayerPrefs.SetFloat("glowVal", glowVal);
     mainGlowShader.bloomIntensity = Mathf.Lerp(0, .05f, t);
+    // At zero glow, switch the image effect off entirely rather than running the full
+    // bloom chain at zero strength. With no OnRenderImage on the camera, Quest renders
+    // straight into the eye buffer (cheaper, and foveated rendering takes effect).
+    mainGlowShader.enabled = t > 0.001f;
   }
 
   public bool tooltipsOn = true;

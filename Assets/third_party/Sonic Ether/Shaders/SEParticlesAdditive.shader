@@ -32,15 +32,17 @@ Category {
 				float4 vertex : POSITION;
 				fixed4 color : COLOR;
 				float2 texcoord : TEXCOORD0;
+				UNITY_VERTEX_INPUT_INSTANCE_ID
 			};
 
 			struct v2f {
-				float4 vertex : POSITION;
+				float4 vertex : SV_POSITION;
 				fixed4 color : COLOR;
 				float2 texcoord : TEXCOORD0;
 				#ifdef SOFTPARTICLES_ON
 				float4 projPos : TEXCOORD1;
 				#endif
+				UNITY_VERTEX_OUTPUT_STEREO
 			};
 			
 			float4 _MainTex_ST;
@@ -48,6 +50,9 @@ Category {
 			v2f vert (appdata_t v)
 			{
 				v2f o;
+				UNITY_SETUP_INSTANCE_ID(v);
+				UNITY_INITIALIZE_OUTPUT(v2f, o);
+				UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
 				o.vertex = UnityObjectToClipPos(v.vertex);
 				#ifdef SOFTPARTICLES_ON
 				o.projPos = ComputeScreenPos (o.vertex);
@@ -58,14 +63,15 @@ Category {
 				return o;
 			}
 
-			sampler2D _CameraDepthTexture;
+			UNITY_DECLARE_DEPTH_TEXTURE(_CameraDepthTexture);
 			float _InvFade;
 			float _EmissionGain;
 			
 			fixed4 frag (v2f i) : COLOR
 			{
+				UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
 				#ifdef SOFTPARTICLES_ON
-				float sceneZ = LinearEyeDepth (UNITY_SAMPLE_DEPTH(tex2Dproj(_CameraDepthTexture, UNITY_PROJ_COORD(i.projPos))));
+				float sceneZ = LinearEyeDepth (SAMPLE_DEPTH_TEXTURE_PROJ(_CameraDepthTexture, UNITY_PROJ_COORD(i.projPos)));
 				float partZ = i.projPos.z;
 				float fade = saturate (_InvFade * (sceneZ-partZ));
 				i.color.a *= fade;

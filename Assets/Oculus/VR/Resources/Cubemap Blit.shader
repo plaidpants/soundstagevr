@@ -2,7 +2,6 @@
     Properties{
         _MainTex("Base (RGB) Trans (A)", CUBE) = "white" {}
         _face("Face", Int) = 0
-        _linearToSrgb("Perform linear-to-gamma conversion", Int) = 0
         _premultiply("Cubemap Blit", Int) = 0
     }
     SubShader{
@@ -12,64 +11,55 @@
             ZWrite Off
             ColorMask RGBA
 
-			CGPROGRAM
-				#pragma vertex vert
-				#pragma fragment frag
-				
-				#include "UnityCG.cginc"
+            CGPROGRAM
+                #pragma vertex vert
+                #pragma fragment frag
 
-				struct appdata_t
-				{
-					float4 vertex : POSITION;
-					float2 texcoord : TEXCOORD0;
-				};
+                #include "UnityCG.cginc"
 
-				struct v2f
-				{
-					float4 vertex : SV_POSITION;
-					half3 cubedir : TEXCOORD0;
-				};
+                struct appdata_t
+                {
+                    float4 vertex : POSITION;
+                    float2 texcoord : TEXCOORD0;
+                };
 
-				samplerCUBE _MainTex;
-				float4 _MainTex_ST;
-				int _face;
-				int _linearToSrgb;
-				int _premultiply;
+                struct v2f
+                {
+                    float4 vertex : SV_POSITION;
+                    half3 cubedir : TEXCOORD0;
+                };
 
-				v2f vert (appdata_t va)
-				{
-					v2f vo;
-					vo.vertex = UnityObjectToClipPos(va.vertex);
+                samplerCUBE _MainTex;
+                float4 _MainTex_ST;
+                int _face;
+                int _premultiply;
 
-					//Face bases, assuming +x, -x, +z, -z, +y, -y with origin at bottom-left.
-					float3 o[6] = { {1.0, -1.0,  1.0}, {-1.0, -1.0, -1.0}, {-1.0, 1.0,  1.0}, {-1.0, -1.0, -1.0}, {-1.0, -1.0, 1.0}, { 1.0, -1.0, -1.0} };
-					float3 u[6] = { {0.0,  0.0, -1.0}, { 0.0,  0.0,  1.0}, { 1.0, 0.0,  0.0}, { 1.0,  0.0,  0.0}, { 1.0,  0.0, 0.0}, {-1.0,  0.0,  0.0} };
-					float3 v[6] = { {0.0,  1.0,  0.0}, { 0.0,  1.0,  0.0}, { 0.0, 0.0, -1.0}, { 0.0,  0.0,  1.0}, { 0.0,  1.0, 0.0}, { 0.0,  1.0,  0.0} };
+                v2f vert (appdata_t va)
+                {
+                    v2f vo;
+                    vo.vertex = UnityObjectToClipPos(va.vertex);
 
-					//Map the input UV to the corresponding face basis.
-					vo.cubedir = o[_face] + 2.0*va.texcoord.x * u[_face] + 2.0*(1.0 - va.texcoord.y) * v[_face];
+                    //Face bases, assuming +x, -x, +z, -z, +y, -y with origin at bottom-left.
+                    float3 o[6] = { {1.0, -1.0,  1.0}, {-1.0, -1.0, -1.0}, {-1.0, 1.0,  1.0}, {-1.0, -1.0, -1.0}, {-1.0, -1.0, 1.0}, { 1.0, -1.0, -1.0} };
+                    float3 u[6] = { {0.0,  0.0, -1.0}, { 0.0,  0.0,  1.0}, { 1.0, 0.0,  0.0}, { 1.0,  0.0,  0.0}, { 1.0,  0.0, 0.0}, {-1.0,  0.0,  0.0} };
+                    float3 v[6] = { {0.0,  1.0,  0.0}, { 0.0,  1.0,  0.0}, { 0.0, 0.0, -1.0}, { 0.0,  0.0,  1.0}, { 0.0,  1.0, 0.0}, { 0.0,  1.0,  0.0} };
 
-					return vo;
-				}
-				
-				fixed4 frag (v2f vi) : COLOR
-				{
-					fixed4 col = texCUBE(_MainTex, vi.cubedir);
+                    //Map the input UV to the corresponding face basis.
+                    vo.cubedir = o[_face] + 2.0*va.texcoord.x * u[_face] + 2.0*(1.0 - va.texcoord.y) * v[_face];
 
-					if (_linearToSrgb)
-					{
-						float3 S1 = sqrt(col.rgb);
-						float3 S2 = sqrt(S1);
-						float3 S3 = sqrt(S2);
-						col.rgb = 0.662002687 * S1 + 0.684122060 * S2 - 0.323583601 * S3 - 0.0225411470 * col.rgb;
-					}
+                    return vo;
+                }
 
-					if (_premultiply)
-						col.rgb *= col.a;
+                fixed4 frag (v2f vi) : COLOR
+                {
+                    fixed4 col = texCUBE(_MainTex, vi.cubedir);
 
-					return col;
-				}
-			ENDCG
-		}
+                    if (_premultiply)
+                        col.rgb *= col.a;
+
+                    return col;
+                }
+            ENDCG
+        }
     }
 }

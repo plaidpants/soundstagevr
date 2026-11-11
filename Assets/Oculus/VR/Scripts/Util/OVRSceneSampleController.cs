@@ -1,14 +1,22 @@
-/************************************************************************************
-Copyright : Copyright (c) Facebook Technologies, LLC and its affiliates. All rights reserved.
-
-Your use of this SDK or tool is subject to the Oculus SDK License Agreement, available at
-https://developer.oculus.com/licenses/oculussdk/
-
-Unless required by applicable law or agreed to in writing, the Utilities SDK distributed
-under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF
-ANY KIND, either express or implied. See the License for the specific language governing
-permissions and limitations under the License.
-************************************************************************************/
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * All rights reserved.
+ *
+ * Licensed under the Oculus SDK License Agreement (the "License");
+ * you may not use the Oculus SDK except in compliance with the License,
+ * which is provided at the time of installation or download, or which
+ * otherwise accompanies this software in either electronic or hard copy form.
+ *
+ * You may obtain a copy of the License at
+ *
+ * https://developer.oculus.com/licenses/oculussdk/
+ *
+ * Unless required by applicable law or agreed to in writing, the Oculus SDK
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 using UnityEngine;
 using System.Collections;
@@ -16,6 +24,7 @@ using System.Collections;
 /// <summary>
 /// Sample that allows you to play with various VR settings.
 /// </summary>
+[HelpURL("https://developer.oculus.com/reference/unity/latest/class_o_v_r_scene_sample_controller")]
 public class OVRSceneSampleController : MonoBehaviour
 {
     /// <summary>
@@ -51,11 +60,12 @@ public class OVRSceneSampleController : MonoBehaviour
     // of the menu RenderTarget
     OVRGridCube gridCube = null;
 
-#if	SHOW_DK2_VARIABLES
-	private string strVisionMode = "Vision Enabled: ON";
+#if SHOW_DK2_VARIABLES
+    private string strVisionMode = "Vision Enabled: ON";
 #endif
 
     #region MonoBehaviour Message Handlers
+
     /// <summary>
     /// Awake this instance.
     /// </summary>
@@ -104,8 +114,8 @@ public class OVRSceneSampleController : MonoBehaviour
         // Make sure to hide cursor
         if (Application.isEditor == false)
         {
-			Cursor.visible = false;
-			Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+            Cursor.lockState = CursorLockMode.Locked;
         }
 
         // CameraController updates
@@ -133,19 +143,23 @@ public class OVRSceneSampleController : MonoBehaviour
         if (playerController != null)
             UpdateSpeedAndRotationScaleMultiplier();
 
+        //todo: enable for Unity Input System
+#if ENABLE_LEGACY_INPUT_MANAGER
         // Toggle Fullscreen
         if (Input.GetKeyDown(KeyCode.F11))
             Screen.fullScreen = !Screen.fullScreen;
 
         if (Input.GetKeyDown(KeyCode.M))
-			UnityEngine.XR.XRSettings.showDeviceView = !UnityEngine.XR.XRSettings.showDeviceView;
+            UnityEngine.XR.XRSettings.showDeviceView = !UnityEngine.XR.XRSettings.showDeviceView;
 
 #if !UNITY_ANDROID || UNITY_EDITOR
         // Escape Application
         if (Input.GetKeyDown(quitKey))
             Application.Quit();
 #endif
+#endif
     }
+
     #endregion
 
     /// <summary>
@@ -153,11 +167,14 @@ public class OVRSceneSampleController : MonoBehaviour
     /// </summary>
     void UpdateVisionMode()
     {
+        //todo: enable for Unity Input System
+#if ENABLE_LEGACY_INPUT_MANAGER
         if (Input.GetKeyDown(KeyCode.F2))
         {
             visionMode ^= visionMode;
             OVRManager.tracker.isEnabled = visionMode;
         }
+#endif
     }
 
     /// <summary>
@@ -168,6 +185,8 @@ public class OVRSceneSampleController : MonoBehaviour
         float moveScaleMultiplier = 0.0f;
         playerController.GetMoveScaleMultiplier(ref moveScaleMultiplier);
 
+        //todo: enable for Unity Input System
+#if ENABLE_LEGACY_INPUT_MANAGER
         if (Input.GetKeyDown(KeyCode.Alpha7))
         {
             moveScaleMultiplier -= speedRotationIncrement;
@@ -176,12 +195,15 @@ public class OVRSceneSampleController : MonoBehaviour
         {
             moveScaleMultiplier += speedRotationIncrement;
         }
+#endif
 
         playerController.SetMoveScaleMultiplier(moveScaleMultiplier);
 
         float rotationScaleMultiplier = 0.0f;
         playerController.GetRotationScaleMultiplier(ref rotationScaleMultiplier);
 
+        //todo: enable for Unity Input System
+#if ENABLE_LEGACY_INPUT_MANAGER
         if (Input.GetKeyDown(KeyCode.Alpha9))
         {
             rotationScaleMultiplier -= speedRotationIncrement;
@@ -190,6 +212,7 @@ public class OVRSceneSampleController : MonoBehaviour
         {
             rotationScaleMultiplier += speedRotationIncrement;
         }
+#endif
 
         playerController.SetRotationScaleMultiplier(rotationScaleMultiplier);
     }
@@ -199,7 +222,10 @@ public class OVRSceneSampleController : MonoBehaviour
     /// </summary>
     void UpdateRecenterPose()
     {
+        //todo: enable for Unity Input System
+#if ENABLE_LEGACY_INPUT_MANAGER
         if (Input.GetKeyDown(KeyCode.R))
             OVRManager.display.RecenterPose();
+#endif
     }
 }

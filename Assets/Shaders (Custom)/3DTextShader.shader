@@ -12,21 +12,57 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Converted from fixed-function to vertex/fragment for Multiview/single-pass stereo (2026-11).
+// Output is identical to the original fixed-function combiner.
 Shader "GUI/3D Text Shader" {
-	Properties{
+	Properties {
 		_MainTex("Font Texture", 2D) = "white" {}
 		_Color("Text Color", Color) = (1,1,1,1)
 	}
 
-	SubShader{
-		Tags{ "Queue" = "Transparent" "IgnoreProjector" = "True" "RenderType" = "Transparent" }
-		Lighting Off Cull Off ZWrite Off Fog{ Mode Off }
+	SubShader {
+		Tags { "Queue" = "Transparent" "IgnoreProjector" = "True" "RenderType" = "Transparent" }
+		Lighting Off Cull Off ZWrite Off
 		Blend SrcAlpha OneMinusSrcAlpha
-		Pass{
-			Color[_Color]
-			SetTexture[_MainTex]{
-				combine primary, texture * primary
+		Pass {
+			CGPROGRAM
+			#pragma vertex vert
+			#pragma fragment frag
+			#include "UnityCG.cginc"
+
+			sampler2D _MainTex;
+			float4 _MainTex_ST;
+			fixed4 _Color;
+
+			struct appdata_t {
+				float4 vertex : POSITION;
+				float2 texcoord : TEXCOORD0;
+				UNITY_VERTEX_INPUT_INSTANCE_ID
+			};
+
+			struct v2f {
+				float4 vertex : SV_POSITION;
+				float2 texcoord : TEXCOORD0;
+				UNITY_VERTEX_OUTPUT_STEREO
+			};
+
+			v2f vert (appdata_t v) {
+				v2f o;
+				UNITY_SETUP_INSTANCE_ID(v);
+				UNITY_INITIALIZE_OUTPUT(v2f, o);
+				UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
+				o.vertex = UnityObjectToClipPos(v.vertex);
+				o.texcoord = TRANSFORM_TEX(v.texcoord, _MainTex);
+				return o;
 			}
+
+			fixed4 frag (v2f i) : SV_Target {
+				UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
+				fixed4 tex = tex2D(_MainTex, i.texcoord);
+				// original: combine primary, texture * primary  (rgb = colour, a = tex.a * colour.a)
+				return fixed4(_Color.rgb, tex.a * _Color.a);
+			}
+			ENDCG
 		}
 	}
 }

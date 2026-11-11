@@ -67,6 +67,22 @@ public class SENaturalBloomAndDirtyLens : MonoBehaviour
 			DestroyImmediate(material);
 	}
 	
+	// Builds a temporary-RT descriptor that matches the source's layout. Under Multiview /
+	// single-pass stereo the source is a 2-slice texture array, so intermediates must be too.
+	static RenderTexture GetTempLike(RenderTexture source, int width, int height)
+	{
+		RenderTextureDescriptor desc = source.descriptor;
+		desc.width = Mathf.Max(1, width);
+		desc.height = Mathf.Max(1, height);
+		desc.depthBufferBits = 0;
+		desc.msaaSamples = 1;
+		desc.useMipMap = false;
+		desc.autoGenerateMips = false;
+		RenderTexture rt = RenderTexture.GetTemporary(desc);
+		rt.filterMode = FilterMode.Bilinear;
+		return rt;
+	}
+
 	void OnRenderImage(RenderTexture source, RenderTexture destination) 
 	{
 		if (!isSupported)
@@ -97,7 +113,7 @@ public class SENaturalBloomAndDirtyLens : MonoBehaviour
 
 		source.filterMode = FilterMode.Bilinear;
 
-		RenderTexture clampedSource = RenderTexture.GetTemporary(source.width, source.height, 0, source.format);
+		RenderTexture clampedSource = GetTempLike(source, source.width, source.height);
 		Graphics.Blit(source, clampedSource, material, 5);
 
 		int initialDivisor = lowQuality ? 4 : 2;
@@ -116,7 +132,7 @@ public class SENaturalBloomAndDirtyLens : MonoBehaviour
 
 		for (int i = 0; i < octaves; i++)
 		{
-			RenderTexture rt = RenderTexture.GetTemporary(rtWidth, rtHeight, 0, source.format);
+			RenderTexture rt = GetTempLike(source, rtWidth, rtHeight);
 			rt.filterMode = FilterMode.Bilinear;
 
 			Graphics.Blit(downsampled, rt, material, 1);
@@ -131,13 +147,13 @@ public class SENaturalBloomAndDirtyLens : MonoBehaviour
 			{
 
 				//vertical blur
-				RenderTexture rt2 = RenderTexture.GetTemporary(rtWidth, rtHeight, 0, source.format);
+				RenderTexture rt2 = GetTempLike(source, rtWidth, rtHeight);
 				rt2.filterMode = FilterMode.Bilinear;
 				Graphics.Blit(rt, rt2, material, 2);
 				RenderTexture.ReleaseTemporary(rt);
 				rt = rt2;
 
-				rt2 = RenderTexture.GetTemporary(rtWidth, rtHeight, 0, source.format);
+				rt2 = GetTempLike(source, rtWidth, rtHeight);
 				rt2.filterMode = FilterMode.Bilinear;
 				Graphics.Blit(rt, rt2, material, 3);
 				RenderTexture.ReleaseTemporary(rt);
@@ -149,28 +165,28 @@ public class SENaturalBloomAndDirtyLens : MonoBehaviour
 			switch (i)
 			{
 				case 0:
-					material.SetTexture("_Bloom0", rt);
+					Shader.SetGlobalTexture("_Bloom0", rt);
 					break;
 				case 1:
-					material.SetTexture("_Bloom1", rt);
+					Shader.SetGlobalTexture("_Bloom1", rt);
 					break;
 				case 2:
-					material.SetTexture("_Bloom2", rt);
+					Shader.SetGlobalTexture("_Bloom2", rt);
 					break;
 				case 3:
-					material.SetTexture("_Bloom3", rt);
+					Shader.SetGlobalTexture("_Bloom3", rt);
 					break;
 				case 4:
-					material.SetTexture("_Bloom4", rt);
+					Shader.SetGlobalTexture("_Bloom4", rt);
 					break;
 				case 5:
-					material.SetTexture("_Bloom5", rt);
+					Shader.SetGlobalTexture("_Bloom5", rt);
 					break;
 				case 6:
-					material.SetTexture("_Bloom6", rt);
+					Shader.SetGlobalTexture("_Bloom6", rt);
 					break;
 				case 7:
-					material.SetTexture("_Bloom7", rt);
+					Shader.SetGlobalTexture("_Bloom7", rt);
 					break;
 				default: 
 					break;

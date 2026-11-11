@@ -167,6 +167,9 @@ public class waveTranscribeRecorder : signalGenerator {
   double lastIncomingDspTime = -1;
   float[] oldBuffer;
   bool playingLastFrame = false;
+  float[] _scratch_recBuffer; // reused audio-thread scratch (see AudioBufferPool)
+  float[] _scratch_playBuffer; // reused audio-thread scratch (see AudioBufferPool)
+  float[] _scratch_backBuffer; // reused audio-thread scratch (see AudioBufferPool)
   public override void processBuffer(float[] buffer, double dspTime, int channels) {
     if (lastIncomingDspTime == dspTime) {
 
@@ -177,10 +180,10 @@ public class waveTranscribeRecorder : signalGenerator {
     }
     lastIncomingDspTime = dspTime;
 
-    oldBuffer = new float[buffer.Length];
-    float[] recBuffer = new float[buffer.Length];
-    float[] playBuffer = new float[buffer.Length];
-    float[] backBuffer = new float[buffer.Length];
+    AudioBufferPool.GetCleared(ref oldBuffer, buffer.Length);
+    float[] recBuffer = AudioBufferPool.GetCleared(ref _scratch_recBuffer, buffer.Length);
+    float[] playBuffer = AudioBufferPool.GetCleared(ref _scratch_playBuffer, buffer.Length);
+    float[] backBuffer = AudioBufferPool.GetCleared(ref _scratch_backBuffer, buffer.Length);
     if (_deviceInterface.recordTrigger.signal != null) _deviceInterface.recordTrigger.signal.processBuffer(recBuffer, dspTime, channels);
     if (_deviceInterface.playTrigger.signal != null) _deviceInterface.playTrigger.signal.processBuffer(playBuffer, dspTime, channels);
     if (_deviceInterface.backTrigger.signal != null) _deviceInterface.backTrigger.signal.processBuffer(backBuffer, dspTime, channels);

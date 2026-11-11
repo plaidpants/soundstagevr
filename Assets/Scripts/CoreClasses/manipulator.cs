@@ -373,11 +373,11 @@ public class manipulator : MonoBehaviour {
 //    if (masterControl.instance.currentPlatform == masterControl.platform.Vive) val = SteamVR_Controller.Input(controllerIndex).GetAxis(EVRButtonId.k_EButton_Axis1).x;
             if (controllerIndex == 0)
             {
-                val = Input.GetAxis("triggerR");
+                val = QuestInput.GetAxis("triggerR");
             }
             else if (controllerIndex == 1)
             {
-                val = Input.GetAxis("triggerL");
+                val = QuestInput.GetAxis("triggerL");
             }
             else
             {
@@ -439,17 +439,17 @@ public class manipulator : MonoBehaviour {
 
         if (controllerIndex == 0)
         {
-            tOn = Input.GetButtonDown("touchR");
-            tOff = Input.GetButtonUp("touchR");
-            pOn = Input.GetButtonDown("pressR");
-            pOff = Input.GetButtonUp("pressR");
+            tOn = QuestInput.GetButtonDown("touchR");
+            tOff = QuestInput.GetButtonUp("touchR");
+            pOn = QuestInput.GetButtonDown("pressR");
+            pOff = QuestInput.GetButtonUp("pressR");
         }
         else if (controllerIndex == 1)
         {
-            tOn = Input.GetButtonDown("touchL");
-            tOff = Input.GetButtonUp("touchL");
-            pOn = Input.GetButtonDown("pressL");
-            pOff = Input.GetButtonUp("pressL");
+            tOn = QuestInput.GetButtonDown("touchL");
+            tOff = QuestInput.GetButtonUp("touchL");
+            pOn = QuestInput.GetButtonDown("pressL");
+            pOff = QuestInput.GetButtonUp("pressL");
         }
         else
         {
@@ -473,11 +473,11 @@ public class manipulator : MonoBehaviour {
     Vector2 pos; // = SteamVR_Controller.Input(controllerIndex).GetAxis();
         if (controllerIndex == 0)
         {
-            pos = new Vector2(Input.GetAxis("touchAxisXR"), Input.GetAxis("touchAxisYR"));
+            pos = new Vector2(QuestInput.GetAxis("touchAxisXR"), QuestInput.GetAxis("touchAxisYR"));
         }
         else if (controllerIndex == 1)
         {
-            pos = new Vector2(Input.GetAxis("touchAxisXL"), Input.GetAxis("touchAxisYL"));
+            pos = new Vector2(QuestInput.GetAxis("touchAxisXL"), QuestInput.GetAxis("touchAxisYL"));
         }
         else
         {
@@ -507,11 +507,11 @@ public class manipulator : MonoBehaviour {
 //      secondaryUp = SteamVR_Controller.Input(controllerIndex).GetPressUp(SteamVR_Controller.ButtonMask.ApplicationMenu);
                 if (controllerIndex == 0)
                 {
-                    secondaryDown = Input.GetButtonDown("secondaryButtonR");
+                    secondaryDown = QuestInput.GetButtonDown("secondaryButtonR");
                 }
                 else if (controllerIndex == 1)
                 {
-                    secondaryDown = Input.GetButtonDown("secondaryButtonL");
+                    secondaryDown = QuestInput.GetButtonDown("secondaryButtonL");
                 }
                 else
                 {
@@ -520,11 +520,11 @@ public class manipulator : MonoBehaviour {
 
                 if (controllerIndex == 0)
                 {
-                    secondaryUp = Input.GetButtonUp("secondaryButtonR");
+                    secondaryUp = QuestInput.GetButtonUp("secondaryButtonR");
                 }
                 else if (controllerIndex == 1)
                 {
-                    secondaryUp = Input.GetButtonUp("secondaryButtonL");
+                    secondaryUp = QuestInput.GetButtonUp("secondaryButtonL");
                 }
                 else
                 {
@@ -588,11 +588,11 @@ public class manipulator : MonoBehaviour {
             {
                 if (controllerIndex == 0)
                 {
-                    triggerButtonDown = Input.GetAxis("triggerR") > 0.75;
+                    triggerButtonDown = QuestInput.GetAxis("triggerR") > 0.75;
                 }
                 else if (controllerIndex == 1)
                 {
-                    triggerButtonDown = Input.GetAxis("triggerL") > 0.75;
+                    triggerButtonDown = QuestInput.GetAxis("triggerL") > 0.75;
                 }
                 else
                 {
@@ -619,11 +619,11 @@ public class manipulator : MonoBehaviour {
             {
                 if (controllerIndex == 0)
                 {
-                    triggerButtonUp = Input.GetAxis("triggerR") < 0.25;
+                    triggerButtonUp = QuestInput.GetAxis("triggerR") < 0.25;
                 }
                 else if (controllerIndex == 1)
                 {
-                    triggerButtonUp = Input.GetAxis("triggerL") < 0.25;
+                    triggerButtonUp = QuestInput.GetAxis("triggerL") < 0.25;
                 }
                 else
                 {
@@ -667,11 +667,11 @@ public class manipulator : MonoBehaviour {
                 {
                     if (controllerIndex == 0)
                     {
-                        menuButtonDown = Input.GetButtonDown("menuButtonR");
+                        menuButtonDown = QuestInput.GetButtonDown("menuButtonR");
                     }
                     else if (controllerIndex == 1)
                     {
-                        menuButtonDown = Input.GetButtonDown("menuButtonL");
+                        menuButtonDown = QuestInput.GetButtonDown("menuButtonL");
                     }
                     else
                     {
@@ -682,11 +682,11 @@ public class manipulator : MonoBehaviour {
                 Vector2 pos; // = SteamVR_Controller.Input(controllerIndex).GetAxis();
                 if (controllerIndex == 0)
                 {
-                    pos = new Vector2(Input.GetAxis("touchAxisXR"), Input.GetAxis("touchAxisYR"));
+                    pos = new Vector2(QuestInput.GetAxis("touchAxisXR"), QuestInput.GetAxis("touchAxisYR"));
                 }
                 else if (controllerIndex == 1)
                 {
-                    pos = new Vector2(Input.GetAxis("touchAxisXL"), Input.GetAxis("touchAxisYL"));
+                    pos = new Vector2(QuestInput.GetAxis("touchAxisXL"), QuestInput.GetAxis("touchAxisYL"));
                 }
                 else
                 {
@@ -725,11 +725,11 @@ public class manipulator : MonoBehaviour {
                 {
                     if (controllerIndex == 0)
                     {
-                        menuButtonDown = Input.GetButtonDown("menuButtonR");
+                        menuButtonDown = QuestInput.GetButtonDown("menuButtonR");
                     }
                     else if (controllerIndex == 1)
                     {
-                        menuButtonDown = Input.GetButtonDown("menuButtonL");
+                        menuButtonDown = QuestInput.GetButtonDown("menuButtonL");
                     }
                     else
                     {

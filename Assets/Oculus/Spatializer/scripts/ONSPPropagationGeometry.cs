@@ -1,25 +1,30 @@
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * All rights reserved.
+ *
+ * Licensed under the Oculus SDK License Agreement (the "License");
+ * you may not use the Oculus SDK except in compliance with the License,
+ * which is provided at the time of installation or download, or which
+ * otherwise accompanies this software in either electronic or hard copy form.
+ *
+ * You may obtain a copy of the License at
+ *
+ * https://developer.oculus.com/licenses/oculussdk/
+ *
+ * Unless required by applicable law or agreed to in writing, the Oculus SDK
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 /************************************************************************************
-Filename    :   ONSPPropagationGeometry.cs
-Content     :   Geometry Functions
+ * Filename    :   ONSPPropagationGeometry.cs
+ * Content     :   Geometry Functions
                 Attach to a game object with meshes and material scripts to create geometry
                 NOTE: ensure that Oculus Spatialization is enabled for AudioSource components
-Copyright   :   Copyright (c) Facebook Technologies, LLC and its affiliates. All rights reserved.
+ ***********************************************************************************/
 
-Licensed under the Oculus SDK Version 3.5 (the "License"); 
-you may not use the Oculus SDK except in compliance with the License, 
-which is provided at the time of installation or download, or which 
-otherwise accompanies this software in either electronic or hard copy form.
-
-You may obtain a copy of the License at
-
-https://developer.oculus.com/licenses/sdk-3.5/
-
-Unless required by applicable law or agreed to in writing, the Oculus SDK 
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-************************************************************************************/
 #define INCLUDE_TERRAIN_TREES
 
 using UnityEngine;
@@ -32,7 +37,7 @@ public class ONSPPropagationGeometry : MonoBehaviour
     public static string GeometryAssetDirectory = "AudioGeometry";
     public static string GeometryAssetPath { get { return Application.streamingAssetsPath + "/" + GeometryAssetDirectory; } }
     //-------
-    // PUBLIC 
+    // PUBLIC
 
     /// The path to the serialized mesh file that holds the preprocessed mesh geometry.
     public string filePathRelative = "";
@@ -42,7 +47,7 @@ public class ONSPPropagationGeometry : MonoBehaviour
     public bool includeChildMeshes = true;
 
     //-------
-    // PRIVATE 
+    // PRIVATE
     private IntPtr geometryHandle = IntPtr.Zero;
 
     //-------
@@ -70,7 +75,7 @@ public class ONSPPropagationGeometry : MonoBehaviour
     /// Call this function to create geometry handle
     /// </summary>
     void CreatePropagationGeometry()
-    {        
+    {
         // Create Geometry
         if (ONSPPropagation.Interface.CreateAudioGeometry(out geometryHandle) != OSPSuccess)
         {
@@ -127,7 +132,7 @@ public class ONSPPropagationGeometry : MonoBehaviour
     }
 
     //
-    // FUNCTIONS FOR UPLOADING MESHES VIA GAME OBJECT 
+    // FUNCTIONS FOR UPLOADING MESHES VIA GAME OBJECT
     //
 
     static int terrainDecimation = 4;
@@ -150,6 +155,25 @@ public class ONSPPropagationGeometry : MonoBehaviour
     {
         if (!obj.activeInHierarchy)
             return;
+
+        // Check for LOD. If present, use only the highest LOD and don't recurse to children.
+        // Without this, we can accidentally get all LODs merged together.
+        LODGroup lodGroup = obj.GetComponent(typeof(LODGroup)) as LODGroup;
+        if ( lodGroup != null )
+        {
+            LOD [] lods = lodGroup.GetLODs();
+            if ( lods.Length > 0 )
+            {
+                // Get renderers for highest LOD.
+                Renderer [] lodRenderers = lods[0].renderers;
+                if ( lodRenderers.Length > 0 )
+                {
+                    // Use the rendered game object to get the mesh instead, and don't go to children.
+                    obj = lodRenderers[0].gameObject;
+                    includeChildren = false;
+                }
+            }
+        }
 
         MeshFilter[] meshes                 = obj.GetComponents<MeshFilter>();
         Terrain[] terrains                  = obj.GetComponents<Terrain>();
@@ -234,42 +258,6 @@ public class ONSPPropagationGeometry : MonoBehaviour
         List<TerrainMaterial> terrains = new List<TerrainMaterial>();
         traverseMeshHierarchy(meshObject, null, includeChildMeshes, meshes, terrains, ignoreStatic, ref ignoredMeshCount);
 
-#if INCLUDE_TERRAIN_TREES
-        // TODO: expose tree material
-        ONSPPropagationMaterial[] treeMaterials = new ONSPPropagationMaterial[1];
-        treeMaterials[0] = gameObject.AddComponent<ONSPPropagationMaterial>();
-
-#if true
-        treeMaterials[0].SetPreset(ONSPPropagationMaterial.Preset.Foliage);
-#else
-        // Custom material that is highly transmissive
-        treeMaterials[0].absorption.points = new List<ONSPPropagationMaterial.Point>{
-			new ONSPPropagationMaterial.Point(125f,  .03f), 
-            new ONSPPropagationMaterial.Point(250f,  .06f), 
-            new ONSPPropagationMaterial.Point(500f,  .11f), 
-            new ONSPPropagationMaterial.Point(1000f, .17f), 
-            new ONSPPropagationMaterial.Point(2000f, .27f), 
-            new ONSPPropagationMaterial.Point(4000f, .31f) };
-
-        treeMaterials[0].scattering.points = new List<ONSPPropagationMaterial.Point>{
-			new ONSPPropagationMaterial.Point(125f,  .20f), 
-            new ONSPPropagationMaterial.Point(250f,  .3f), 
-            new ONSPPropagationMaterial.Point(500f,  .4f), 
-            new ONSPPropagationMaterial.Point(1000f, .5f), 
-            new ONSPPropagationMaterial.Point(2000f, .7f), 
-            new ONSPPropagationMaterial.Point(4000f, .8f) };
-
-        treeMaterials[0].transmission.points = new List<ONSPPropagationMaterial.Point>(){
-			new ONSPPropagationMaterial.Point(125f,  .95f), 
-            new ONSPPropagationMaterial.Point(250f,  .92f), 
-            new ONSPPropagationMaterial.Point(500f,  .87f), 
-            new ONSPPropagationMaterial.Point(1000f, .81f), 
-            new ONSPPropagationMaterial.Point(2000f, .71f), 
-            new ONSPPropagationMaterial.Point(4000f, .67f) };
-#endif
-
-#endif
-
         //***********************************************************************
         // Count the number of vertices and indices.
 
@@ -282,6 +270,9 @@ public class ONSPPropagationGeometry : MonoBehaviour
         {
             updateCountsForMesh(ref totalVertexCount, ref totalIndexCount, ref totalFaceCount, ref totalMaterialCount, m.meshFilter.sharedMesh);
         }
+
+        // TODO: expose tree material
+        ONSPPropagationMaterial[] treeMaterials = new ONSPPropagationMaterial[1];
 
         for (int i = 0; i < terrains.Count; ++i)
         {
@@ -307,35 +298,74 @@ public class ONSPPropagationGeometry : MonoBehaviour
 
 #if INCLUDE_TERRAIN_TREES
             TreePrototype[] treePrototypes = terrain.treePrototypes;
-            t.treePrototypeMeshes = new Mesh[treePrototypes.Length];
 
-            // assume the sharedMesh with the lowest vertex is the lowest LOD
-            for (int j = 0; j < treePrototypes.Length; ++j)
+            if (treePrototypes.Length != 0)
             {
-                GameObject prefab = treePrototypes[j].prefab;
-                MeshFilter[] meshFilters = prefab.GetComponentsInChildren<MeshFilter>();
-                int minVertexCount = int.MaxValue;
-                int index = -1;
-                for (int k = 0; k < meshFilters.Length; ++k)
+                if (treeMaterials[0] == null)
                 {
-                    int count = meshFilters[k].sharedMesh.vertexCount;
-                    if (count < minVertexCount)
-                    {
-                        minVertexCount = count;
-                        index = k;
-                    }
+                    // Create the tree material
+                    treeMaterials[0] = gameObject.AddComponent<ONSPPropagationMaterial>();
+#if true
+                    treeMaterials[0].SetPreset(ONSPPropagationMaterial.Preset.Foliage);
+#else
+                    // Custom material that is highly transmissive
+                    treeMaterials[0].absorption.points = new List<ONSPPropagationMaterial.Point>{
+                        new ONSPPropagationMaterial.Point(125f,  .03f),
+                        new ONSPPropagationMaterial.Point(250f,  .06f),
+                        new ONSPPropagationMaterial.Point(500f,  .11f),
+                        new ONSPPropagationMaterial.Point(1000f, .17f),
+                        new ONSPPropagationMaterial.Point(2000f, .27f),
+                        new ONSPPropagationMaterial.Point(4000f, .31f) };
+
+                    treeMaterials[0].scattering.points = new List<ONSPPropagationMaterial.Point>{
+                        new ONSPPropagationMaterial.Point(125f,  .20f),
+                        new ONSPPropagationMaterial.Point(250f,  .3f),
+                        new ONSPPropagationMaterial.Point(500f,  .4f),
+                        new ONSPPropagationMaterial.Point(1000f, .5f),
+                        new ONSPPropagationMaterial.Point(2000f, .7f),
+                        new ONSPPropagationMaterial.Point(4000f, .8f) };
+
+                    treeMaterials[0].transmission.points = new List<ONSPPropagationMaterial.Point>(){
+                        new ONSPPropagationMaterial.Point(125f,  .95f),
+                        new ONSPPropagationMaterial.Point(250f,  .92f),
+                        new ONSPPropagationMaterial.Point(500f,  .87f),
+                        new ONSPPropagationMaterial.Point(1000f, .81f),
+                        new ONSPPropagationMaterial.Point(2000f, .71f),
+                        new ONSPPropagationMaterial.Point(4000f, .67f) };
+#endif
                 }
 
-                t.treePrototypeMeshes[j] = meshFilters[index].sharedMesh;
-            }
+                t.treePrototypeMeshes = new Mesh[treePrototypes.Length];
 
-            TreeInstance[] trees = terrain.treeInstances;
-            foreach (TreeInstance tree in trees)
-            {
-                updateCountsForMesh(ref totalVertexCount, ref totalIndexCount, ref totalFaceCount, ref totalMaterialCount, t.treePrototypeMeshes[tree.prototypeIndex]);
-            }
+                // assume the sharedMesh with the lowest vertex is the lowest LOD
+                for (int j = 0; j < treePrototypes.Length; ++j)
+                {
+                    GameObject prefab = treePrototypes[j].prefab;
+                    MeshFilter[] meshFilters = prefab.GetComponentsInChildren<MeshFilter>();
+                    int minVertexCount = int.MaxValue;
+                    int index = -1;
+                    for (int k = 0; k < meshFilters.Length; ++k)
+                    {
+                        int count = meshFilters[k].sharedMesh.vertexCount;
+                        if (count < minVertexCount)
+                        {
+                            minVertexCount = count;
+                            index = k;
+                        }
+                    }
 
-            terrains[i] = t;
+                    t.treePrototypeMeshes[j] = meshFilters[index].sharedMesh;
+                }
+
+                TreeInstance[] trees = terrain.treeInstances;
+                foreach (TreeInstance tree in trees)
+                {
+                    updateCountsForMesh(ref totalVertexCount, ref totalIndexCount, ref totalFaceCount,
+                        ref totalMaterialCount, t.treePrototypeMeshes[tree.prototypeIndex]);
+                }
+
+                terrains[i] = t;
+            }
 #endif
         }
 
@@ -419,12 +449,12 @@ public class ONSPPropagationGeometry : MonoBehaviour
                 {
                     // For each grid cell output two triangles
                     indices[indexOffset + 0] = (vertexOffset + (y * wRes) + x);
-                    indices[indexOffset + 1] = (vertexOffset + (y * wRes) + x + 1);
-                    indices[indexOffset + 2] = (vertexOffset + ((y + 1) * wRes) + x);
+                    indices[indexOffset + 1] = (vertexOffset + ((y + 1) * wRes) + x);
+                    indices[indexOffset + 2] = (vertexOffset + (y * wRes) + x + 1);
 
                     indices[indexOffset + 3] = (vertexOffset + ((y + 1) * wRes) + x);
-                    indices[indexOffset + 4] = (vertexOffset + (y * wRes) + x + 1);
-                    indices[indexOffset + 5] = (vertexOffset + ((y + 1) * wRes) + x + 1);
+                    indices[indexOffset + 4] = (vertexOffset + ((y + 1) * wRes) + x + 1);
+                    indices[indexOffset + 5] = (vertexOffset + (y * wRes) + x + 1);
                     indexOffset += 6;
                 }
             }
@@ -585,8 +615,12 @@ public class ONSPPropagationGeometry : MonoBehaviour
         }
 
         // Create the directory
-        string directoryName = filePathRelative.Substring(0, filePathRelative.LastIndexOf('/'));
-        System.IO.Directory.CreateDirectory(GeometryAssetPath + "/" + directoryName);
+        int directoriesEnd = filePathRelative.LastIndexOf('/');
+        if ( directoriesEnd >= 0 )
+        {
+            string directoryName = filePathRelative.Substring(0, directoriesEnd);
+            System.IO.Directory.CreateDirectory(GeometryAssetPath + "/" + directoryName);
+        }
 
         // Create a temporary geometry.
         IntPtr tempGeometryHandle = IntPtr.Zero;

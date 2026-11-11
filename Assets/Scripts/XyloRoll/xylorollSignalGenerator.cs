@@ -125,11 +125,13 @@ public class xylorollSignalGenerator : signalGenerator {
     for (int i = 0; i < voices.Count; i++) voices[i].key.updateOctave(val);
   }
 
+  float[] _scratch_b1; // reused audio-thread scratch (see AudioBufferPool)
+  float[] _scratch_b2; // reused audio-thread scratch (see AudioBufferPool)
   public override void processBuffer(float[] buffer, double dspTime, int channels) {
     for (int i = 0; i < buffer.Length; i++) buffer[i] = 0;
 
-    float[] b1 = new float[buffer.Length];
-    float[] b2 = new float[buffer.Length];
+    float[] b1 = AudioBufferPool.GetCleared(ref _scratch_b1, buffer.Length);
+    float[] b2 = AudioBufferPool.GetCleared(ref _scratch_b2, buffer.Length);
 
     if (oscInput) {
       for (int i = 0; i < voices.Count; i++) {

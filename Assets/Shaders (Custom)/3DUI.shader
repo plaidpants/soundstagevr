@@ -12,33 +12,57 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-Shader "Unlit/3DUI"
-{
-	Properties
-	{
+// Converted from fixed-function to vertex/fragment for Multiview/single-pass stereo (2026-11).
+// Output is identical to the original fixed-function combiner.
+Shader "Unlit/3DUI" {
+	Properties {
 		_Color("Color Tint", Color) = (1,1,1,1)
-		_MainTex("Base (RGB) Alpha (A)", 2D) = "white"
+		_MainTex("Base (RGB) Alpha (A)", 2D) = "white" {}
 	}
 
-	Category
-	{
-		Lighting Off
-		ZWrite Off
-		Cull Off
+	SubShader {
+		Tags { "Queue" = "Transparent" }
+		Lighting Off ZWrite Off Cull Off
 		Blend SrcAlpha OneMinusSrcAlpha
-		Tags{ Queue = Transparent }
+		Pass {
+			CGPROGRAM
+			#pragma vertex vert
+			#pragma fragment frag
+			#include "UnityCG.cginc"
 
-		SubShader
-		{
+			sampler2D _MainTex;
+			float4 _MainTex_ST;
+			fixed4 _Color;
 
-			Pass
-			{
-				SetTexture[_MainTex]
-				{
-					ConstantColor[_Color]
-					Combine Texture * constant
-				}
+			struct appdata_t {
+				float4 vertex : POSITION;
+				float2 texcoord : TEXCOORD0;
+				UNITY_VERTEX_INPUT_INSTANCE_ID
+			};
+
+			struct v2f {
+				float4 vertex : SV_POSITION;
+				float2 texcoord : TEXCOORD0;
+				UNITY_VERTEX_OUTPUT_STEREO
+			};
+
+			v2f vert (appdata_t v) {
+				v2f o;
+				UNITY_SETUP_INSTANCE_ID(v);
+				UNITY_INITIALIZE_OUTPUT(v2f, o);
+				UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
+				o.vertex = UnityObjectToClipPos(v.vertex);
+				o.texcoord = TRANSFORM_TEX(v.texcoord, _MainTex);
+				return o;
 			}
+
+			fixed4 frag (v2f i) : SV_Target {
+				UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
+				fixed4 tex = tex2D(_MainTex, i.texcoord);
+				// original: Combine Texture * constant
+				return tex * _Color;
+			}
+			ENDCG
 		}
 	}
 }

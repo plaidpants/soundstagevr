@@ -50,11 +50,12 @@ public class clipPlayerSimple : clipPlayer {
     active = false;
   }
 
+  float[] _scratch_seqBuffer; // reused audio-thread scratch (see AudioBufferPool)
   public override void processBuffer(float[] buffer, double dspTime, int channels) {
     if (!loaded) return;
     floatingBufferCount = _lastBuffer;
 
-    float[] seqBuffer = new float[buffer.Length];
+    float[] seqBuffer = AudioBufferPool.GetCleared(ref _scratch_seqBuffer, buffer.Length);
     if (seqGen != null) seqGen.processBuffer(seqBuffer, dspTime, channels);
 
 

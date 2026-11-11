@@ -42,19 +42,22 @@ public class platformSetup : MonoBehaviour {
     }
   }
 
+    // Tracks the last applied state so we only toggle the controller objects when the
+    // input mode actually changes, instead of calling SetActive on both every frame.
+    int lastControllersActive = -1;
+
     void Update()
     {
+        if (manips[0] == null || manips[1] == null) return;
+
         OVRPlugin.Controller control = OVRPlugin.GetActiveController(); //get current controller scheme
-        if ((OVRPlugin.Controller.Hands == control) || (OVRPlugin.Controller.LHand == control) || (OVRPlugin.Controller.RHand == control))
-        { //if current controller is hands disable the controllers
-            manips[0].gameObject.SetActive(false);
-            manips[1].gameObject.SetActive(false);
-        }
-        else
-        {
-            manips[0].gameObject.SetActive(true);
-            manips[1].gameObject.SetActive(true);
-        }
+        bool handsActive = (OVRPlugin.Controller.Hands == control) || (OVRPlugin.Controller.LHand == control) || (OVRPlugin.Controller.RHand == control);
+        int controllersActive = handsActive ? 0 : 1; //if current controller is hands disable the controllers
+        if (controllersActive == lastControllersActive) return;
+        lastControllersActive = controllersActive;
+
+        manips[0].gameObject.SetActive(!handsActive);
+        manips[1].gameObject.SetActive(!handsActive);
     }
 
     void oculusSwitch() {

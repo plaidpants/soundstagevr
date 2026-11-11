@@ -194,12 +194,13 @@ public class sequencerDeviceInterface : deviceInterface {
     runningUpdated = true;
   }
 
+  float[] _scratch_playBuffer; // reused audio-thread scratch (see AudioBufferPool)
   private void OnAudioFilterRead(float[] buffer, int channels) {
     if (externalPulse == null) return;
 
     double dspTime = AudioSettings.dspTime;
 
-    float[] playBuffer = new float[buffer.Length];
+    float[] playBuffer = AudioBufferPool.GetCleared(ref _scratch_playBuffer, buffer.Length);
     externalPulse.processBuffer(playBuffer, dspTime, channels);
 
     for (int i = 0; i < playBuffer.Length; i += channels) {

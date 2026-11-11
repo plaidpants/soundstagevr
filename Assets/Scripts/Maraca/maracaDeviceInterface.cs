@@ -42,11 +42,12 @@ public class maracaDeviceInterface : deviceInterface {
   }
 
   double _phaseB = 0;
+  float[] _scratch_b; // reused audio-thread scratch (see AudioBufferPool)
   private void OnAudioFilterRead(float[] buffer, int channels) {
     if (jackOut.near != null || signal.curShake < .01f) return;
 
     double dspTime = AudioSettings.dspTime;
-    float[] b = new float[buffer.Length];
+    float[] b = AudioBufferPool.GetCleared(ref _scratch_b, buffer.Length);
     signal.processBuffer(b, dspTime, channels);
 
     MaracaProcessAudioBuffer(buffer, b, buffer.Length, channels, ref _phaseB, _sampleDuration);

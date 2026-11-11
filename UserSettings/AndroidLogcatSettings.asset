@@ -1,0 +1,159 @@
+{
+    "m_SelectedDeviceId": "2G0YC1ZF7C0DTL",
+    "m_SelectedProcess": {
+        "deviceId": "2G0YC1ZF7C0DTL",
+        "name": "com.HardLightLabsLLC.SoundStage",
+        "processId": 7126,
+        "exited": false
+    },
+    "m_SelectedPriority": 0,
+    "m_KnownProcessesForSerialization": [
+        {
+            "deviceId": "2G0YC1ZF7C0DTL",
+            "name": "com.HardLightLabsLLC.SoundStage",
+            "processId": 20845,
+            "exited": true
+        },
+        {
+            "deviceId": "2G0YC1ZF7C0DTL",
+            "name": "com.HardLightLabsLLC.SoundStage",
+            "processId": 17249,
+            "exited": true
+        },
+        {
+            "deviceId": "2G0YC1ZF7C0DTL",
+            "name": "com.HardLightLabsLLC.SoundStage",
+            "processId": 18337,
+            "exited": true
+        },
+        {
+            "deviceId": "2G0YC1ZF7C0DTL",
+            "name": "com.HardLightLabsLLC.SoundStage",
+            "processId": 22000,
+            "exited": true
+        },
+        {
+            "deviceId": "2G0YC1ZF7C0DTL",
+            "name": "com.oculus.xrstreamingclient",
+            "processId": 25344,
+            "exited": false
+        },
+        {
+            "deviceId": "2G0YC1ZF7C0DTL",
+            "name": "com.HardLightLabsLLC.SoundStage",
+            "processId": 27414,
+            "exited": false
+        },
+        {
+            "deviceId": "2G0YC1ZF7C0DTL",
+            "name": "com.HardLightLabsLLC.SoundStage",
+            "processId": 29868,
+            "exited": false
+        },
+        {
+            "deviceId": "2G0YC1ZF7C0DTL",
+            "name": "com.HardLightLabsLLC.SoundStage",
+            "processId": 31877,
+            "exited": false
+        },
+        {
+            "deviceId": "2G0YC1ZF7C0DTL",
+            "name": "com.HardLightLabsLLC.SoundStage",
+            "processId": 7126,
+            "exited": false
+        }
+    ],
+    "m_Tags": {
+        "m_Entries": [
+            {
+                "m_Name": "Filter by all listed tags",
+                "m_Selected": false
+            },
+            {
+                "m_Name": "No Filter",
+                "m_Selected": true
+            },
+            {
+                "m_Name": "",
+                "m_Selected": false
+            },
+            {
+                "m_Name": "Tag Control...",
+                "m_Selected": false
+            },
+            {
+                "m_Name": "",
+                "m_Selected": false
+            },
+            {
+                "m_Name": "Unity",
+                "m_Selected": false
+            },
+            {
+                "m_Name": "CRASH",
+                "m_Selected": false
+            }
+        ]
+    },
+    "m_ExtraWindowState": {
+        "Type": 0,
+        "Height": 0.0
+    },
+    "m_MemoryViewerState": {
+        "MemoryWindowWidth": 170.0,
+        "MemoryTypeEnabled": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+        ],
+        "MemoryGroup": 2,
+        "AutoCapture": true
+    },
+    "m_FilterOptions": {
+        "m_Filter": "",
+        "m_UseRegularExpressions": false,
+        "m_MatchCase": false
+    },
+    "m_SymbolPaths": [],
+    "m_CaptureVideoSettings": {
+        "TimeLimitEnabled": false,
+        "TimeLimit": 180,
+        "VideoSizeEnabled": false,
+        "VideoSizeX": 1280,
+        "VideoSizeY": 720,
+        "BitRateEnabled": false,
+        "BitRateK": 20000,
+        "DisplayIdEnabled": false,
+        "DisplayId": ""
+    },
+    "m_ScreenCaptureSettings": {
+        "Mode": 0,
+        "m_LastSaveLocation": [
+            "S:\\Unity Projects\\soundstagevr",
+            "S:\\Unity Projects\\soundstagevr"
+        ]
+    },
+    "m_QueryLayoutSettings": {
+        "LastLayoutSaveLocation": "",
+        "LastScreenshotSaveLocation": ""
+    },
+    "m_InputSettings": {
+        "ShiftModifier": false,
+        "SendText": "",
+        "PosixKillSignal": 0,
+        "TargetProcess": {
+            "deviceId": "",
+            "name": "",
+            "processId": 0,
+            "exited": false
+        }
+    },
+    "m_AutoScroll": 0
+}
