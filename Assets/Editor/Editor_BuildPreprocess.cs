@@ -13,12 +13,15 @@
         public int callbackOrder { get { return 0; } }
         public void OnPreprocessBuild(BuildTarget target, string path) {
      
-            string dataDirectory = Application.dataPath + "/Plugins/Android/Examples/";
+            // Sources live in the project root (outside Assets) so Unity doesn't import the
+            // ~100 MB of sample audio as assets; they only ship inside the .tgz files.
+            string projectRoot = Path.GetDirectoryName(Application.dataPath);
+            string dataDirectory = Path.Combine(projectRoot, "Examples") + "/";
             string fileToCreate = Application.streamingAssetsPath + "/Examples.tgz";
      
             Utility_SharpZipCommands.CreateTarGZ_FromDirectory (fileToCreate, dataDirectory);
 
-            dataDirectory = Application.dataPath + "/Plugins/Android/Samples/";
+            dataDirectory = Path.Combine(projectRoot, "Samples") + "/";
             fileToCreate = Application.streamingAssetsPath + "/Samples.tgz";
      
             Utility_SharpZipCommands.CreateTarGZ_FromDirectory (fileToCreate, dataDirectory);

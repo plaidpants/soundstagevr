@@ -3,7 +3,7 @@
     "m_SelectedProcess": {
         "deviceId": "2G0YC1ZF7C0DTL",
         "name": "com.HardLightLabsLLC.SoundStage",
-        "processId": 7126,
+        "processId": 11398,
         "exited": false
     },
     "m_SelectedPriority": 0,
@@ -60,6 +60,12 @@
             "deviceId": "2G0YC1ZF7C0DTL",
             "name": "com.HardLightLabsLLC.SoundStage",
             "processId": 7126,
+            "exited": false
+        },
+        {
+            "deviceId": "2G0YC1ZF7C0DTL",
+            "name": "com.HardLightLabsLLC.SoundStage",
+            "processId": 11398,
             "exited": false
         }
     ],

@@ -16,7 +16,6 @@ using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
 using static OVRHand;
-using OculusSampleFramework;
 //using System.Linq;
 //using Valve.VR;
 
