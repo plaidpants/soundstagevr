@@ -36,6 +36,8 @@ public class SENaturalBloomAndDirtyLens : MonoBehaviour
 
 	public bool inputIsHDR;
 	public bool lowQuality = false;
+	// Set by passthroughControl: keep the frame's alpha so the bloom works over passthrough.
+	public bool preserveAlpha = false;
 
 	public bool depthBlending = false;
 	public DepthBlendFunction depthBlendFunction = DepthBlendFunction.Exponential;
@@ -108,6 +110,7 @@ public class SENaturalBloomAndDirtyLens : MonoBehaviour
 		material.SetFloat("_DepthScatterFactor", depthScatterFactor * 4.0f - 1.0f);
 		material.SetFloat("_BloomScatterFactor", bloomScatterFactor * 5.0f - 2.5f);
 		material.SetFloat("_LensDirtScatterFactor", lensDirtScatterFactor * 5.0f - 2.5f);
+		material.SetFloat("_PreserveAlpha", preserveAlpha ? 1.0f : 0.0f);
 		material.SetInt("_DepthBlendFunction", depthBlendFunction == DepthBlendFunction.Exponential ? 0 : 1);
 		material.SetMatrix("ProjectionMatrixInverse", cam.projectionMatrix.inverse);
 

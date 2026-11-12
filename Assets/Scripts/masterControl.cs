@@ -58,6 +58,8 @@ public class masterControl : MonoBehaviour {
   double _measurePhase;
 
   public SENaturalBloomAndDirtyLens mainGlowShader;
+  // Set by passthroughControl while passthrough is shown.
+  public bool passthroughActive = false;
   public float glowVal = 1;
 
   public string SaveDir;

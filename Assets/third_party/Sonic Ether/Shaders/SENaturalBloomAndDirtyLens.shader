@@ -42,6 +42,7 @@ Shader "Hidden/SENaturalBloomAndDirtyLens" {
 		uniform float _BloomScatterFactor;
 		uniform float _LensDirtScatterFactor;
 		uniform int _DepthBlendFunction;
+		uniform float _PreserveAlpha; // 1 in passthrough mode: keep scene alpha, glow sets its own
 		
 		float4x4 ProjectionMatrixInverse;
 
@@ -312,9 +313,10 @@ Shader "Hidden/SENaturalBloomAndDirtyLens" {
 //			color.rgb += UNITY_SAMPLE_SCREENSPACE_TEXTURE(_Bloom1, lensCoord9).rgb * 0.2 * 0.0007f;
 //			color.rgb += UNITY_SAMPLE_SCREENSPACE_TEXTURE(_Bloom1, lensCoord10).rgb * 0.2 * 0.0007f;
 
-			// The clamp pass reuses alpha for its fog-factor encoding, so force the final
-			// output opaque; otherwise passthrough/compositor treats the frame as transparent.
-			color.a = 1.0;
+			// Normally output opaque. In passthrough mode keep the scene's alpha (carried
+			// through the clamp pass) and let bright bloom raise it, so glow spills over
+			// the real world instead of the whole frame going opaque or see-through.
+			color.a = (_PreserveAlpha > 0.5) ? saturate(max(color.a, Luminance(color.rgb) * 2.0)) : 1.0;
 			return color;
 		} 
 		
@@ -370,9 +372,10 @@ Shader "Hidden/SENaturalBloomAndDirtyLens" {
 			color.b = lerp(color.b, lensDirtBloom.b, (saturate(lens.b * _LensDirtIntensity)));
 
 			//color.rgb += bloom;
-			// The clamp pass reuses alpha for its fog-factor encoding, so force the final
-			// output opaque; otherwise passthrough/compositor treats the frame as transparent.
-			color.a = 1.0;
+			// Normally output opaque. In passthrough mode keep the scene's alpha (carried
+			// through the clamp pass) and let bright bloom raise it, so glow spills over
+			// the real world instead of the whole frame going opaque or see-through.
+			color.a = (_PreserveAlpha > 0.5) ? saturate(max(color.a, Luminance(color.rgb) * 2.0)) : 1.0;
 			return color;
 		} 
 		
@@ -517,7 +520,8 @@ Shader "Hidden/SENaturalBloomAndDirtyLens" {
 		{
 			UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
 			float4 color = float4(0.0, 0.0, 0.0, 1.0);
-			color.rgb = UNITY_SAMPLE_SCREENSPACE_TEXTURE(_MainTex, i.uv.xy).rgb;
+			float4 src = UNITY_SAMPLE_SCREENSPACE_TEXTURE(_MainTex, i.uv.xy);
+			color.rgb = src.rgb;
 			
 			color.rgb = clamp(color.rgb, float3(0.0, 0.0, 0.0), float3(100000000.0, 100000000.0, 100000000.0));
 
@@ -538,7 +542,9 @@ Shader "Hidden/SENaturalBloomAndDirtyLens" {
 			}
 
 			//color.a = EncDepth(Linear01Depth(depth), color.rgb);
-			color.a = EncDepth(fogFactor, color.rgb);
+			// Alpha only carries the fog encoding when depth blending is on; otherwise
+			// keep the scene alpha so passthrough mode can use it in the final pass.
+			color.a = (_DepthBlendFactor > 0.0) ? EncDepth(fogFactor, color.rgb) : src.a;
 			
 			return color;
 		}

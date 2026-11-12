@@ -24,6 +24,7 @@ public class wirePanelComponentInterface : componentInterface {
   int curSelect = 0;
 
   public uiPanelSinglePress handlepanel, jackpanel, midipanel;
+  uiPanelSinglePress passthroughpanel; // cloned from midipanel at runtime (buttonID 6)
 
   Color colorGreen = Color.HSVToRGB(.4f, 230f / 255, 118f / 255);
   Color colorRed = Color.HSVToRGB(0f, 230f / 255, 118f / 255);
@@ -38,12 +39,34 @@ public class wirePanelComponentInterface : componentInterface {
       panels[i].keyHit(i == curSelect);
     }
 
+    CreatePassthroughButton();
     if (PlayerPrefs.GetInt("midiOut") == 1) {
       string s = "DISABLE MIDI OUT";
       midipanel.label.text = s;
       midipanel.newColor(Color.HSVToRGB(0f, 230f / 255, 118f / 255));
     }
 
+  }
+
+  // Adds a "passthrough" toggle under the MIDI OUT button by cloning it, so the
+  // MenuRoot prefab doesn't need editing. Clicks arrive in hit() with ID 6.
+  void CreatePassthroughButton() {
+    if (passthroughpanel != null || midipanel == null) return;
+    GameObject g = Instantiate(midipanel.gameObject, midipanel.transform.parent, false);
+    g.name = "passthroughPanel";
+    g.transform.localPosition = midipanel.transform.localPosition + new Vector3(0, -0.038f, 0);
+    g.transform.localRotation = midipanel.transform.localRotation;
+    g.transform.localScale = midipanel.transform.localScale;
+    passthroughpanel = g.GetComponent<uiPanelSinglePress>();
+    passthroughpanel.buttonID = 6;
+    UpdatePassthroughLabel();
+  }
+
+  void UpdatePassthroughLabel() {
+    if (passthroughpanel == null) return;
+    bool on = passthroughControl.instance != null && passthroughControl.instance.isOn;
+    passthroughpanel.label.text = on ? "DISABLE PASSTHROUGH" : "ENABLE PASSTHROUGH";
+    passthroughpanel.newColor(on ? colorRed : colorGreen);
   }
 
   void Update() {
@@ -73,9 +96,12 @@ public class wirePanelComponentInterface : componentInterface {
     } else if (ID == 5) {
       bool b = !menuMgr.midiOutEnabled;
       menuMgr.toggleMidiOut(b);
-      string s = b ? "DISABLE MIDI OUT" : "ENABLE MIDE OUT";
+      string s = b ? "DISABLE MIDI OUT" : "ENABLE MIDI OUT";
       midipanel.label.text = s;
       midipanel.newColor(b ? colorRed : colorGreen);
+    } else if (ID == 6) {
+      if (passthroughControl.instance != null) passthroughControl.instance.Toggle();
+      UpdatePassthroughLabel();
     } else {
       curSelect = ID;
       masterControl.instance.updateWireSetting(curSelect);
