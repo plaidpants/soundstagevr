@@ -44,7 +44,6 @@ public class waveTranscribeRecorder : signalGenerator {
   public int period = 512;
   Color32[] wavepixels;
   int curWaveW = 0;
-  int lastWaveH = 0;
   public Color32 waveBG = Color.black;
   public Color32 waveLine = Color.white;
   int columnMult = 1;
@@ -166,7 +165,6 @@ public class waveTranscribeRecorder : signalGenerator {
 
   double lastIncomingDspTime = -1;
   float[] oldBuffer;
-  bool playingLastFrame = false;
   float[] _scratch_recBuffer; // reused audio-thread scratch (see AudioBufferPool)
   float[] _scratch_playBuffer; // reused audio-thread scratch (see AudioBufferPool)
   float[] _scratch_backBuffer; // reused audio-thread scratch (see AudioBufferPool)

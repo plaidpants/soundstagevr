@@ -17,7 +17,6 @@ using System.Collections;
 
 public class menuspawn : MonoBehaviour {
   int controllerIndex = -1;
-  bool active = false;
 
   public GameObject glowNode;
   Material glowRender;

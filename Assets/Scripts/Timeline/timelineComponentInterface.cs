@@ -38,8 +38,6 @@ public class timelineComponentInterface : componentInterface {
   timelineScrollInterface _scrollInterface;
   public sliderNotched unitSlider;
   public basicSwitch overdubSwitch, snapSwitch, loopSwitch, notelockSwitch;
-  float offsetMult = 2;
-  float gridHeight = .3f;
 
   public List<timelineEvent> _tlEvents = new List<timelineEvent>();
   public gridParams _gridParams;

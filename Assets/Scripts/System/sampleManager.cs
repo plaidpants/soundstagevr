@@ -149,9 +149,8 @@ public class sampleManager : MonoBehaviour {
         {
             Directory.CreateDirectory(Directory.GetParent(Application.persistentDataPath).FullName + Path.DirectorySeparatorChar + "Samples");
             //copy tgz to directory where we can extract it
-            WWW www = new WWW(Application.streamingAssetsPath + Path.DirectorySeparatorChar + "Samples.tgz");
-            while (!www.isDone) { }
-            System.IO.File.WriteAllBytes(Directory.GetParent(Application.persistentDataPath).FullName + Path.DirectorySeparatorChar + "Samples.tgz", www.bytes);
+            byte[] tgz = StreamingAssetsLoader.ReadAllBytes(Application.streamingAssetsPath + Path.DirectorySeparatorChar + "Samples.tgz");
+            System.IO.File.WriteAllBytes(Directory.GetParent(Application.persistentDataPath).FullName + Path.DirectorySeparatorChar + "Samples.tgz", tgz);
             //extract it
             Utility_SharpZipCommands.ExtractTGZ(Directory.GetParent(Application.persistentDataPath).FullName + Path.DirectorySeparatorChar + "Samples.tgz", Directory.GetParent(Application.persistentDataPath).FullName + Path.DirectorySeparatorChar + "Samples");
             //delete tgz

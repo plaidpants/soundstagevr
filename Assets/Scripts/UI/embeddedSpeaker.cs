@@ -19,7 +19,7 @@ public class embeddedSpeaker : MonoBehaviour {
   public omniJack speakerOut;
   signalGenerator signal;
   public speaker output;
-  public AudioSource audio;
+  public new AudioSource audio;
   public GameObject speakerRim;
 
   bool secondary = true;
@@ -60,7 +60,6 @@ public class embeddedSpeaker : MonoBehaviour {
     }
   }
 
-  float smoothedPeaks = 0;
   signalGenerator curSignal, prevSignal;
   void Update() {
     if (speakerOut.near == null) {

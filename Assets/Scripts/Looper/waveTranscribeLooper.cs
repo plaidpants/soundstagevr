@@ -26,7 +26,6 @@ public class waveTranscribeLooper : signalGenerator {
 
   public TextMesh saveText;
 
-  int maxDuration = 300;
 
   float[] sampleBuffer;
   int curBufferIndex = 0;
@@ -47,7 +46,6 @@ public class waveTranscribeLooper : signalGenerator {
   public int period = 512;
   Color32[] wavepixels;
   int curWaveW = 0;
-  int lastWaveH = 0;
   public Color32 waveBG = Color.black;
   public Color32 waveBGRec = Color.black;
   public Color32 waveLine = Color.white;
@@ -194,7 +192,6 @@ public class waveTranscribeLooper : signalGenerator {
     resetScrub = true;
   }
 
-  float recordStartPos = 0;
   public void Record() {
     playing = true;
     recording = true;
@@ -213,7 +210,6 @@ public class waveTranscribeLooper : signalGenerator {
 
   double lastIncomingDspTime = -1;
   float[] oldBuffer;
-  bool playingLastFrame = false;
   float[] _scratch_recBuffer; // reused audio-thread scratch (see AudioBufferPool)
   float[] _scratch_playBuffer; // reused audio-thread scratch (see AudioBufferPool)
   public override void processBuffer(float[] buffer, double dspTime, int channels) {

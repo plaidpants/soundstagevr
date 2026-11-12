@@ -70,9 +70,14 @@ public class panosphereDeviceInterface : deviceInterface {
 
   IEnumerator loadImageRoutine(string path) {
     path = "file:///" + path;
-    WWW www = new WWW(path);
-    yield return www;
-    www.LoadImageIntoTexture(tex);
+    using (UnityEngine.Networking.UnityWebRequest req = UnityEngine.Networking.UnityWebRequest.Get(path)) {
+      yield return req.SendWebRequest();
+      if (req.result != UnityEngine.Networking.UnityWebRequest.Result.Success) {
+        Debug.Log("PANO LOAD FAILED: " + path + " " + req.error);
+        yield break;
+      }
+      tex.LoadImage(req.downloadHandler.data);
+    }
     flat.material.mainTexture = tex;
   }
 

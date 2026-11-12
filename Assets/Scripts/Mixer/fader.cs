@@ -17,7 +17,6 @@ using System.Collections;
 using System.Runtime.InteropServices;
 
 public class fader : signalGenerator {
-  int ID = -1;
   float faderLength = 1;
 
   public Transform faderBody, faderSliderBar;

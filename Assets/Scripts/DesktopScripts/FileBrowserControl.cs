@@ -24,7 +24,6 @@ using System.IO;
 public class FileBrowserControl : MonoBehaviour {
   public GameObject prefabBrowser;
   public GameObject fileNotification;
-  private string defaultPath = "/";
   private string[] extensions = { ".wav", ".ogg", ".mp3" };
   private string[] imageExtensions = { ".jpg", ".png" };
   bool soundSamples = true;

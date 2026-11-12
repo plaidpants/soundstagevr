@@ -34,7 +34,6 @@ public class MicrophoneSignalGenerator : signalGenerator {
   public Dictionary<float, float[]> freqBuffers = new Dictionary<float, float[]>();
 
   public float amp = 1;
-  int micChannels = 1;
   public bool active = true;
   int curMicID = 0;
 

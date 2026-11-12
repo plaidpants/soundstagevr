@@ -3,15 +3,16 @@
     using UnityEngine;
     using UnityEditor;
     using UnityEditor.Build;
+    using UnityEditor.Build.Reporting;
     using System.IO;
     using ICSharpCode.SharpZipLib.Core;
     using ICSharpCode.SharpZipLib.Zip;
      
      
-    class CustomBuildPreProcess : IPreprocessBuild
+    class CustomBuildPreProcess : IPreprocessBuildWithReport
     {
         public int callbackOrder { get { return 0; } }
-        public void OnPreprocessBuild(BuildTarget target, string path) {
+        public void OnPreprocessBuild(BuildReport report) {
      
             // Sources live in the project root (outside Assets) so Unity doesn't import the
             // ~100 MB of sample audio as assets; they only ship inside the .tgz files.

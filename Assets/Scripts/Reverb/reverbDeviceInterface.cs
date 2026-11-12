@@ -20,7 +20,6 @@ public class reverbDeviceInterface : deviceInterface {
   dial level;
   slider reverbControl;
   public omniJack input, output;
-  int ID = -1;
 
   public override void Awake() {
     base.Awake();

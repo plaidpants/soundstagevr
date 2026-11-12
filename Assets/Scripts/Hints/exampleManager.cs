@@ -68,9 +68,8 @@ public class exampleManager : MonoBehaviour {
         {
             Directory.CreateDirectory(Directory.GetParent(Application.persistentDataPath).FullName + Path.DirectorySeparatorChar + "Examples");
             //copy tgz to directory where we can extract it
-            WWW www = new WWW(Application.streamingAssetsPath + Path.DirectorySeparatorChar + "Examples.tgz");
-            while (!www.isDone) { }
-            System.IO.File.WriteAllBytes(Directory.GetParent(Application.persistentDataPath).FullName + Path.DirectorySeparatorChar + "Examples.tgz", www.bytes);
+            byte[] tgz = StreamingAssetsLoader.ReadAllBytes(Application.streamingAssetsPath + Path.DirectorySeparatorChar + "Examples.tgz");
+            System.IO.File.WriteAllBytes(Directory.GetParent(Application.persistentDataPath).FullName + Path.DirectorySeparatorChar + "Examples.tgz", tgz);
             //extract it
             Utility_SharpZipCommands.ExtractTGZ(Directory.GetParent(Application.persistentDataPath).FullName + Path.DirectorySeparatorChar + "Examples.tgz", Directory.GetParent(Application.persistentDataPath).FullName + Path.DirectorySeparatorChar + "Examples");
             //delete tgz

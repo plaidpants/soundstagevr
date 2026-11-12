@@ -114,7 +114,6 @@ public class quadSection : manipObject {
     grab_off
   };
 
-  vizstate curvizstate = vizstate.off;
 
   void setVizState(vizstate s) {
     switch (s) {

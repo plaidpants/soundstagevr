@@ -27,7 +27,6 @@ public class prefButton : manipObject {
     Color selectColor = new Color(.85f, .85f, 1);
     Color grabColor = new Color(.85f, .85f, 1);
 
-    bool tipsOn = false;
 
     public override void Awake()
     {

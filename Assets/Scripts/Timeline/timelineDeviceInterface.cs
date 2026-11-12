@@ -28,10 +28,6 @@ public class timelineDeviceInterface : deviceInterface {
 
   List<timelineTrackComponentInterface> _trackInterfaces = new List<timelineTrackComponentInterface>();
 
-  int startTracks = 4;
-  int startunitres = 3;
-  float startwidth = .4f;
-  float startheight = .2f;
   Vector2 startrange = new Vector2(0, 8);
   Vector2 startio = new Vector2(0, 8);
 

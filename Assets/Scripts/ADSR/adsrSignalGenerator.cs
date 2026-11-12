@@ -44,8 +44,6 @@ public class adsrSignalGenerator : signalGenerator {
 
   double lastIncomingDspTime;
   public bool sustaining = false;
-  float sustainTime = 0;
-  double _lastPhase = 0;
 
   float[] pulseBuffer;
 
@@ -70,7 +68,6 @@ public class adsrSignalGenerator : signalGenerator {
     if (on) {
       active = true;
       _phase = 0;
-      sustainTime = 0;
 
       startVal = 0;
 

@@ -10,7 +10,6 @@ public class SENaturalBloomAndDirtyLens : MonoBehaviour
 	public Shader shader;
 	private Material material;
 	private bool isSupported;
-	private float blurSize = 4.0f;
 	Camera cam;
 	
 	
@@ -55,7 +54,7 @@ public class SENaturalBloomAndDirtyLens : MonoBehaviour
 		if (!material && shader)
 			material = new Material(shader);
 
-		if (!SystemInfo.supportsImageEffects || !SystemInfo.supportsRenderTextures || !SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.ARGBHalf))
+		if (!SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.ARGBHalf))
 		{
 			isSupported = false;
 		}

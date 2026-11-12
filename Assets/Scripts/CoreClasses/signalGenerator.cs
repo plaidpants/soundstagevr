@@ -25,7 +25,6 @@ public class signalGenerator : MonoBehaviour
 
     public bool useNativeIfAvailable = true;
 
-    float levelVal = 1;
 
     protected const int MAX_BUFFER_LENGTH = 2048; // Very important to enforce this 
 

@@ -20,7 +20,7 @@ public class speakerDeviceInterface : deviceInterface {
   public omniJack input;
   speaker output;
   public GameObject speakerRim;
-  public AudioSource audio;
+  public new AudioSource audio;
 
   SpeakerData data;
 
