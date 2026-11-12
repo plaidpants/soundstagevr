@@ -1,4 +1,4 @@
-// Copyright 2017 Google LLC
+﻿// Copyright 2017 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,6 +37,12 @@ public class VideoPlayerDeviceInterface : componentInterface {
         //source = GetComponent<AudioSource>();
         vidUI = GetComponentInChildren<VideoPlayerUI>();
         vidPlayer = GetComponentInChildren<VideoPlayer>();
+    }
+
+    RenderTexture vidTexture;
+
+    void OnDestroy() {
+        if (vidTexture != null) vidTexture.Release();
     }
 
     tooltips _tooltip;
@@ -113,9 +119,23 @@ public class VideoPlayerDeviceInterface : componentInterface {
                 yield return new WaitForSeconds(.1f); ;
         }
 
-        vidPlayer.renderMode = UnityEngine.Video.VideoRenderMode.MaterialOverride;
-        vidPlayer.targetMaterialRenderer = vidQuad.GetComponent<Renderer>();
-        vidPlayer.targetMaterialProperty = "_MainTex";
+        // Render into our own RenderTexture instead of MaterialOverride. On Quest (GLES,
+        // multiview) MaterialOverride playback crashed the render thread in
+        // ApiGLES::ClearBufferSubData (matches Unity issue UUM-85194); this takes the
+        // plainer VideoPlayer -> RenderTexture path. Diagnostic logs so the next logcat
+        // shows how far playback got.
+        int w = (int)vidPlayer.width, h = (int)vidPlayer.height;
+        if (w <= 0 || h <= 0) { w = 1280; h = 720; }
+        if (vidTexture == null || vidTexture.width != w || vidTexture.height != h) {
+            if (vidTexture != null) vidTexture.Release();
+            vidTexture = new RenderTexture(w, h, 0, RenderTextureFormat.ARGB32);
+            vidTexture.name = "TooltipVideo";
+            vidTexture.Create();
+        }
+        vidPlayer.renderMode = UnityEngine.Video.VideoRenderMode.RenderTexture;
+        vidPlayer.targetTexture = vidTexture;
+        vidQuad.GetComponent<Renderer>().material.SetTexture("_MainTex", vidTexture);
+        Debug.Log("[VideoPlayer] prepared " + vidFilename + " " + w + "x" + h + ", rendering to RenderTexture");
         //videoSurface.material.mainTexture = movieTexture;.GetComponent<Renderer>();
         //source.clip = movieTexture.audioClip;
         if (playing) {

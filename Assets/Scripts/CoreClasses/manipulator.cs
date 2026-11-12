@@ -76,6 +76,10 @@ public class manipulator : MonoBehaviour {
   bool handsMode = false;
   public void SetHandsMode(bool on) {
     handsMode = on;
+    if (on) {
+      foreach (manipObject o in touchedObjects) if (o != null) TouchTracker.Touch(o, false, this);
+      touchedObjects.Clear();
+    }
     controllerRep.SetActive(controllerVisible && !on);
     if (on) toggleTips(false);
     activeTip.SetActive(on ? false : triggerDown);
@@ -83,7 +87,83 @@ public class manipulator : MonoBehaviour {
     tipR.gameObject.SetActive(!on && !triggerDown);
     if (grabCollider != null) {
       foreach (Renderer r in grabCollider.transform.parent.GetComponentsInChildren<Renderer>(true)) r.enabled = !on;
+      // The controller grab area is a 5 cm capsule along the pointing direction. With
+      // hands that let it latch onto a neighbouring control, so shrink it to a 2 cm
+      // sphere at the pinch.
+      if (controllerGrabHeight < 0) controllerGrabHeight = grabCollider.height;
+      grabCollider.height = on ? grabCollider.radius * 2f : controllerGrabHeight;
+      SetPinchIndicator(on);
     }
+  }
+
+  float controllerGrabHeight = -1;
+
+  // Hands: controls sit right next to the device's move handles, and the first hit used
+  // to win (and then stuck). Prefer an actual control over a handle, and among those the
+  // one nearest the pinch.
+  Transform PickHandCandidate() {
+    Vector3 p = GrabPointWorld;
+    Transform best = null;
+    bool bestIsHandle = true;
+    float bestDist = float.MaxValue;
+    foreach (Transform t in hitTransforms) {
+      if (t == null) continue;
+      manipObject o = t.GetComponent<manipObject>();
+      if (o == null) continue;
+      bool isCurrent = t == selectedTransform;
+      if (!isCurrent && (o.curState == manipObject.manipState.grabbed || o.curState == manipObject.manipState.selected)) continue;
+      bool isHandle = o is handle;
+      float dist = (t.position - p).sqrMagnitude;
+      if (best == null || (bestIsHandle && !isHandle) || (isHandle == bestIsHandle && dist < bestDist)) {
+        best = t; bestIsHandle = isHandle; bestDist = dist;
+      }
+    }
+    return best;
+  }
+
+  // Visible grab area in hands mode: dim when idle, brighter when hovering a control,
+  // bright while grabbing. Matches the collider exactly (same transform, size).
+  public static bool showPinchIndicator = true;
+  GameObject pinchIndicator;
+  Material pinchMat;
+  static readonly Color pinchIdle = new Color(0.03f, 0.06f, 0.12f, 0.5f);
+  static readonly Color pinchHover = new Color(0.08f, 0.16f, 0.30f, 0.5f);
+  static readonly Color pinchGrab = new Color(0.20f, 0.35f, 0.60f, 0.5f);
+  int pinchState = -1;
+
+  void SetPinchIndicator(bool on) {
+    if (!showPinchIndicator || grabCollider == null) return;
+    if (pinchIndicator == null && on) {
+      // Sphere, matching the grab collider in hands mode (capsule with height == 2 * radius).
+      pinchIndicator = GameObject.CreatePrimitive(PrimitiveType.Sphere); // 1 unit across
+      Destroy(pinchIndicator.GetComponent<Collider>());
+      pinchIndicator.name = "pinchIndicator";
+      pinchIndicator.transform.SetParent(grabCollider.transform, false);
+      Renderer r = pinchIndicator.GetComponent<Renderer>();
+      r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+      Shader sh = Shader.Find("Sonic Ether/Particles/Additive");
+      if (sh != null) {
+        pinchMat = new Material(sh);
+        pinchMat.SetFloat("_EmissionGain", 0.3f);
+        r.sharedMaterial = pinchMat;
+      }
+      pinchState = -1;
+    }
+    if (pinchIndicator == null) return;
+    pinchIndicator.SetActive(on);
+    if (on) {
+      float d = grabCollider.radius * 2f;
+      pinchIndicator.transform.localPosition = grabCollider.center;
+      pinchIndicator.transform.localScale = Vector3.one * d;
+    }
+  }
+
+  void UpdatePinchIndicator() {
+    if (pinchMat == null || !handsMode) return;
+    int state = grabbing ? 2 : (selectedObject != null ? 1 : 0);
+    if (state == pinchState) return;
+    pinchState = state;
+    pinchMat.SetColor("_TintColor", state == 2 ? pinchGrab : state == 1 ? pinchHover : pinchIdle);
   }
 
   // Centre of the grab collider (manipCollViz/viz) in world space.
@@ -162,14 +242,18 @@ public class manipulator : MonoBehaviour {
   }
 
   // Routed through TouchTracker so the grab tip and hand fingertips can share keys.
+  // In hands mode the grab point (at the pinch) doesn't play keys by touch: the
+  // fingertips do that, and the pinch point brushing past keys caused stray notes.
+  // It still selects/grabs through OnCollisionStay as before.
+  readonly HashSet<manipObject> touchedObjects = new HashSet<manipObject>();
   void OnCollisionEnter(Collision coll) {
     manipObject o = coll.transform.GetComponent<manipObject>();
-    if (o != null) TouchTracker.Touch(o, true, this);
+    if (o != null && !handsMode && touchedObjects.Add(o)) TouchTracker.Touch(o, true, this);
   }
 
   void OnCollisionExit(Collision coll) {
     manipObject o = coll.transform.GetComponent<manipObject>();
-    if (o != null) TouchTracker.Touch(o, false, this);
+    if (o != null && touchedObjects.Remove(o)) TouchTracker.Touch(o, false, this);
   }
 
 
@@ -261,10 +345,16 @@ public class manipulator : MonoBehaviour {
     }
 
   void LateUpdate() {
+    UpdatePinchIndicator();
     if (grabbing) return;
+    // Hands: once the pinch starts closing, keep the control that was highlighted, so
+    // the fingers moving together can't hop the selection onto a neighbour.
+    if (handsMode && selectedObject != null && HandInput.Get(controllerIndex).pinchIndex > 0.3f) return;
     Transform candidate = null;
 
-    if (selectedObject != null) {
+    if (handsMode) {
+      candidate = PickHandCandidate();
+    } else if (selectedObject != null) {
       if (hitTransforms.Contains(selectedTransform)) candidate = selectedTransform;
     } else {
       foreach (Transform t in hitTransforms) {

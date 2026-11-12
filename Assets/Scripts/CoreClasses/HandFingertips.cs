@@ -1,4 +1,4 @@
-// Copyright 2017-2026 Google LLC / contributors
+﻿// Copyright 2017-2026 Google LLC / contributors
 // Licensed under the Apache License, Version 2.0
 //
 // Lives on a spawned OVR hand (Resources/Hands/*). Once the hand skeleton is up it
@@ -9,7 +9,7 @@ using UnityEngine;
 
 public class HandFingertips : MonoBehaviour {
   public manipulator owner;
-  public float tipRadius = 0.005f; // 8 mm was too easy to hit two keys with
+  public float tipRadius = 0.008f;
   public Transform thumbTip, indexTip;
 
   OVRSkeleton skeleton;
@@ -17,6 +17,22 @@ public class HandFingertips : MonoBehaviour {
 
   void Awake() {
     skeleton = GetComponent<OVRSkeleton>();
+    ApplyGlowMaterial();
+  }
+
+  // The stock hand material (legacy diffuse) renders almost black in this scene. Use the
+  // same additive glow shader as the module displays for faint "ghost" hands. Must be set
+  // before OVRMeshRenderer initialises, since it remembers the original material.
+  public static Color handTint = new Color(0.04f, 0.07f, 0.12f, 0.5f);
+  void ApplyGlowMaterial() {
+    SkinnedMeshRenderer smr = GetComponent<SkinnedMeshRenderer>();
+    Shader sh = Shader.Find("Sonic Ether/Particles/Additive");
+    if (smr == null || sh == null) return;
+    Material m = new Material(sh);
+    m.SetColor("_TintColor", handTint);
+    m.SetFloat("_EmissionGain", 0.2f);
+    smr.sharedMaterial = m;
+    smr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
   }
 
   public bool HasPinchPoint { get { return built && thumbTip != null && indexTip != null; } }

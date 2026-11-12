@@ -1,4 +1,4 @@
-// Copyright 2017-2026 Google LLC / contributors
+﻿// Copyright 2017-2026 Google LLC / contributors
 // Licensed under the Apache License, Version 2.0
 //
 // Hand-tracking input for Quest, read straight from OVRPlugin so it works with or
@@ -26,9 +26,15 @@ public static class HandInput {
   static OVRPlugin.HandState state = new OVRPlugin.HandState();
   static int lastFrame = -1;
 
+  // The active controller only flips to Hands after the first hand input (a pinch),
+  // which left the controller rig stuck on the hands until then. Hand tracking data is
+  // only valid while the runtime is tracking hands (controllers + hands, not concurrent),
+  // so a tracked hand is the faster signal.
   public static bool HandsActive() {
     OVRPlugin.Controller c = OVRPlugin.GetActiveController();
-    return c == OVRPlugin.Controller.Hands || c == OVRPlugin.Controller.LHand || c == OVRPlugin.Controller.RHand;
+    if (c == OVRPlugin.Controller.Hands || c == OVRPlugin.Controller.LHand || c == OVRPlugin.Controller.RHand) return true;
+    Refresh();
+    return hands[0].tracked || hands[1].tracked;
   }
 
   public static Hand Get(int index) {
