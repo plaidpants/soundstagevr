@@ -312,6 +312,9 @@ Shader "Hidden/SENaturalBloomAndDirtyLens" {
 //			color.rgb += UNITY_SAMPLE_SCREENSPACE_TEXTURE(_Bloom1, lensCoord9).rgb * 0.2 * 0.0007f;
 //			color.rgb += UNITY_SAMPLE_SCREENSPACE_TEXTURE(_Bloom1, lensCoord10).rgb * 0.2 * 0.0007f;
 
+			// The clamp pass reuses alpha for its fog-factor encoding, so force the final
+			// output opaque; otherwise passthrough/compositor treats the frame as transparent.
+			color.a = 1.0;
 			return color;
 		} 
 		
@@ -367,6 +370,9 @@ Shader "Hidden/SENaturalBloomAndDirtyLens" {
 			color.b = lerp(color.b, lensDirtBloom.b, (saturate(lens.b * _LensDirtIntensity)));
 
 			//color.rgb += bloom;
+			// The clamp pass reuses alpha for its fog-factor encoding, so force the final
+			// output opaque; otherwise passthrough/compositor treats the frame as transparent.
+			color.a = 1.0;
 			return color;
 		} 
 		

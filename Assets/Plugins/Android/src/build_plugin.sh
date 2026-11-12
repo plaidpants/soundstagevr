@@ -1,17 +1,16 @@
 #!/bin/sh
-echo ""
-echo "Compiling NativeCode.c..."
-
-J:/2020.3.1f1/Editor/Data/PlaybackEngines/AndroidPlayer/NDK/build/ndk-build.cmd NDK_PROJECT_PATH=. NDK_APPLICATION_MK=Application.mk $*
-mv libs/armeabi-v7a/libnative.so ..
-
-echo ""
-echo "Cleaning up / removing build folders..."  #optional..
-rm -rf libs
-rm -rf obj
-
-echo ""
-echo "Done!"
-
-sleep  30
-'libs/armeabi/libnative.so':
+# macOS/Linux equivalent of build_plugin.cmd. Usage: ./build_plugin.sh /path/to/ndk
+set -e
+NDK="${1:-$ANDROID_NDK_ROOT}"
+[ -n "$NDK" ] || { echo "Usage: $0 /path/to/ndk"; exit 1; }
+HOST=$(ls "$NDK/toolchains/llvm/prebuilt" | head -1)
+CLANG="$NDK/toolchains/llvm/prebuilt/$HOST/bin/clang++"
+cd "$(dirname "$0")"
+for pair in arm64-v8a:aarch64-linux-android29 armeabi-v7a:armv7a-linux-androideabi29; do
+  abi=${pair%%:*}; target=${pair#*:}
+  mkdir -p "../libs/$abi"
+  "$CLANG" --target=$target -shared -fPIC -O2 -Wall -s -static-libstdc++ \
+    -Wl,-z,max-page-size=16384 -Wl,--build-id \
+    -o "../libs/$abi/libSoundStageNative.so" main.cpp Filter.cpp -lm
+  echo "built ../libs/$abi/libSoundStageNative.so"
+done

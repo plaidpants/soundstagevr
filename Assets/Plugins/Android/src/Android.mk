@@ -1,13 +1,15 @@
 include $(CLEAR_VARS)
 
-# override strip command to strip all symbols from output library; no need to ship with those..
-# cmd-strip = $(TOOLCHAIN_PREFIX)strip $1 
+# Prefer build_plugin.cmd (calls the NDK's clang directly). ndk-build does not
+# cope with spaces in the project path, e.g. "S:\Unity Projects\...".
 
 LOCAL_ARM_MODE  := arm
 LOCAL_PATH      := $(NDK_PROJECT_PATH)
-LOCAL_MODULE    := libnative
-LOCAL_CFLAGS    := -Werror
+# Module name must match [DllImport("SoundStageNative")] -> libSoundStageNative.so
+LOCAL_MODULE    := SoundStageNative
+LOCAL_CFLAGS    := -O2 -Wall
 LOCAL_SRC_FILES := main.cpp Filter.cpp
-LOCAL_LDLIBS    := -llog
+LOCAL_LDLIBS    := -lm
+LOCAL_LDFLAGS   := -Wl,-z,max-page-size=16384
 
 include $(BUILD_SHARED_LIBRARY)
