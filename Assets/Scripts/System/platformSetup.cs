@@ -1,4 +1,4 @@
-// Copyright 2017 Google LLC
+﻿// Copyright 2017 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -129,25 +129,115 @@ public class platformSetup : MonoBehaviour {
     }
   }
 
-    // Tracks the last applied state so we only toggle the controller objects when the
-    // input mode actually changes, instead of calling SetActive on both every frame.
-    int lastControllersActive = -1;
+    // Tracks the last applied state so we only switch input modes when the mode
+    // actually changes, instead of every frame.
+    int lastHandsActive = -1;
 
     void Update()
     {
         if (manips[0] == null || manips[1] == null) return;
 
-        UpdateControllerCalibration();
+        bool handsActive = HandInput.HandsActive();
+        int h = handsActive ? 1 : 0;
+        if (h != lastHandsActive) {
+            lastHandsActive = h;
+            SetHandsMode(handsActive);
+        }
 
-        OVRPlugin.Controller control = OVRPlugin.GetActiveController(); //get current controller scheme
-        bool handsActive = (OVRPlugin.Controller.Hands == control) || (OVRPlugin.Controller.LHand == control) || (OVRPlugin.Controller.RHand == control);
-        int controllersActive = handsActive ? 0 : 1; //if current controller is hands disable the controllers
-        if (controllersActive == lastControllersActive) return;
-        lastControllersActive = controllersActive;
-
-        manips[0].gameObject.SetActive(!handsActive);
-        manips[1].gameObject.SetActive(!handsActive);
+        if (handsActive) UpdateHandPoses();
+        else UpdateControllerCalibration();
     }
+
+    // ---- Hand tracking (added 2026-11) ----
+    // In hands mode the manipulators stay active (they used to be switched off, which
+    // left hands with no way to interact). Each manipulator is moved from its controller
+    // anchor to the tracking space, takes its rotation from the hand's aim (pointer)
+    // pose, and is shifted so its grab collider sits at the real pinch point (midway
+    // between thumb and index tips). The controller pincers are hidden. Every fingertip
+    // also gets a FingertipPoker, so keys can be played by touching them.
+    // Index pinch = trigger, pinky pinch or the left-hand system menu gesture = menu
+    // (see manipulator.Update / HandInput).
+    // Fallback when the hand skeleton isn't ready: grab point this far in front of
+    // the aim-pose origin, in metres.
+    public float handGrabForward = 0.02f;
+    HandFingertips[] fingertips = new HandFingertips[2];
+
+    Transform trackingSpace;
+    Transform[] manipRoots = new Transform[2];
+    Transform[] controllerParents = new Transform[2];
+    GameObject[] handVisuals = new GameObject[2];
+    bool handsMode = false;
+
+    void SetHandsMode(bool on) {
+        if (on && !FindTrackingSpace()) on = false;
+        handsMode = on;
+        for (int i = 0; i < 2; i++) {
+            if (manipRoots[i] == null) {
+                manipRoots[i] = manips[i].transform.parent;
+                controllerParents[i] = manipRoots[i].parent;
+            }
+            manips[i].gameObject.SetActive(true);
+            manips[i].SetHandsMode(on);
+            manipRoots[i].SetParent(on ? trackingSpace : controllerParents[i], false);
+        }
+        if (on) {
+            SpawnHandVisuals();
+            UpdateHandPoses();
+        } else {
+            ApplyControllerPoseCorrection();
+        }
+        for (int i = 0; i < 2; i++) if (handVisuals[i] != null) handVisuals[i].SetActive(on);
+        Debug.Log("[platformSetup] input mode: " + (on ? "hands" : "controllers"));
+    }
+
+    bool FindTrackingSpace() {
+        if (trackingSpace != null) return true;
+        OVRCameraRig rig = FindObjectOfType<OVRCameraRig>();
+        if (rig != null) trackingSpace = rig.trackingSpace;
+        if (trackingSpace == null) Debug.LogWarning("[platformSetup] no OVRCameraRig tracking space; hands mode disabled");
+        return trackingSpace != null;
+    }
+
+    void SpawnHandVisuals() {
+        OVRCameraRig rig = FindObjectOfType<OVRCameraRig>();
+        if (rig == null) return;
+        string[] names = { "Hands/HandLeft", "Hands/HandRight" };
+        Transform[] anchors = { rig.leftHandAnchor, rig.rightHandAnchor };
+        for (int i = 0; i < 2; i++) {
+            if (handVisuals[i] != null || anchors[i] == null) continue;
+            GameObject prefab = Resources.Load<GameObject>(names[i]);
+            if (prefab == null) { Debug.LogWarning("[platformSetup] missing Resources/" + names[i]); continue; }
+            handVisuals[i] = Instantiate(prefab, anchors[i], false);
+            fingertips[i] = handVisuals[i].AddComponent<HandFingertips>();
+            fingertips[i].owner = manips[i];
+        }
+    }
+
+    void UpdateHandPoses() {
+        if (!handsMode) return;
+        for (int i = 0; i < 2; i++) {
+            HandInput.Hand hand = HandInput.Get(i);
+            if (!hand.inputValid) continue; // hold the last pose while the hand is lost
+            Transform root = manipRoots[i];
+            root.localPosition = hand.pointerPosition;
+            root.localRotation = hand.pointerRotation;
+            // Shift the rig so the manipulator's grab collider lands at the pinch.
+            Vector3 target = (fingertips[i] != null && fingertips[i].HasPinchPoint)
+                ? fingertips[i].PinchPoint
+                : trackingSpace.TransformPoint(hand.pointerPosition + hand.pointerRotation * (Vector3.forward * handGrabForward));
+            root.position += target - manips[i].GrabPointWorld;
+        }
+    }
+
+    // Re-read the hands just before rendering so the manipulators don't lag a frame.
+    void OnBeforeRender() {
+        if (!handsMode) return;
+        HandInput.Refresh(true);
+        UpdateHandPoses();
+    }
+
+    void OnEnable() { Application.onBeforeRender += OnBeforeRender; }
+    void OnDisable() { Application.onBeforeRender -= OnBeforeRender; }
 
     void oculusSwitch() {
     manips[0].invertScale(); // this actually makes the controller model L and R handed.

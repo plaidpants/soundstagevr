@@ -1,4 +1,4 @@
-// Copyright 2017 Google LLC
+﻿// Copyright 2017 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -45,6 +45,8 @@ public class manipulator : MonoBehaviour {
 
     _touchpad.manip = this;
     activeTip.SetActive(false);
+    Transform collViz = transform.Find("manipCollViz/viz");
+    if (collViz != null) grabCollider = collViz.GetComponent<CapsuleCollider>();
 
     glowMenuTransform.position = viveMenuButtonTransform.position;
     glowMenuTransform.rotation = viveMenuButtonTransform.rotation;
@@ -65,7 +67,29 @@ public class manipulator : MonoBehaviour {
   bool controllerVisible = true;
   public void toggleController(bool on) {
     controllerVisible = on;
-    controllerRep.SetActive(on);
+    controllerRep.SetActive(on && !handsMode);
+  }
+
+  // Hand tracking: the controller model is hidden while hands drive this manipulator.
+  // The grab tip pincers and the collider visual are hidden too: with hands the grab
+  // point sits at the real pinch (see platformSetup.UpdateHandPoses).
+  bool handsMode = false;
+  public void SetHandsMode(bool on) {
+    handsMode = on;
+    controllerRep.SetActive(controllerVisible && !on);
+    if (on) toggleTips(false);
+    activeTip.SetActive(on ? false : triggerDown);
+    tipL.gameObject.SetActive(!on && !triggerDown);
+    tipR.gameObject.SetActive(!on && !triggerDown);
+    if (grabCollider != null) {
+      foreach (Renderer r in grabCollider.transform.parent.GetComponentsInChildren<Renderer>(true)) r.enabled = !on;
+    }
+  }
+
+  // Centre of the grab collider (manipCollViz/viz) in world space.
+  CapsuleCollider grabCollider;
+  public Vector3 GrabPointWorld {
+    get { return grabCollider != null ? grabCollider.transform.TransformPoint(grabCollider.center) : transform.position; }
   }
 
   public void SetDeviceIndex(int index) {
@@ -137,14 +161,15 @@ public class manipulator : MonoBehaviour {
     selectedTransform = o.transform;
   }
 
+  // Routed through TouchTracker so the grab tip and hand fingertips can share keys.
   void OnCollisionEnter(Collision coll) {
     manipObject o = coll.transform.GetComponent<manipObject>();
-    if (o != null) o.onTouch(true, this);
+    if (o != null) TouchTracker.Touch(o, true, this);
   }
 
   void OnCollisionExit(Collision coll) {
     manipObject o = coll.transform.GetComponent<manipObject>();
-    if (o != null) o.onTouch(false, this);
+    if (o != null) TouchTracker.Touch(o, false, this);
   }
 
 
@@ -555,23 +580,27 @@ public class manipulator : MonoBehaviour {
 
   public bool triggerDown = false;
     public bool pinchPinkyDown = false;
-    static OVRPlugin.Controller lastControl = OVRPlugin.Controller.None;
+    // Per-manipulator (was static, so only the first manipulator ever saw a mode change).
+    OVRPlugin.Controller lastControl = OVRPlugin.Controller.None;
     void Update() {
  
     updateProngs();
     bool triggerButtonDown, triggerButtonUp, menuButtonDown;
 
         OVRPlugin.Controller currentControl = OVRPlugin.GetActiveController(); //get current controller scheme
-        bool currentControlHands = false;
+        bool currentControlHands = HandInput.HandsActive();
         bool currentControlChanged = false;
         float pinchIndexStrength = 0;
         float pinchPinkyStrength = 0;
-        if ((OVRPlugin.Controller.Hands == currentControl) || (OVRPlugin.Controller.LHand == currentControl) || (OVRPlugin.Controller.RHand == currentControl))
+        bool handLost = false;
+        if (currentControlHands)
         {
-            currentControlHands = true;
-            //pinchIndexStrength = Hands.Instance.RightHand.PinchStrength(OVRPlugin.HandFinger.Index);
-            //pinchPinkyStrength = Hands.Instance.RightHand.PinchStrength(OVRPlugin.HandFinger.Pinky);
-         }
+            HandInput.Hand hand = HandInput.Get(controllerIndex);
+            handLost = !hand.inputValid;
+            pinchIndexStrength = hand.pinchIndex;
+            // Pinky pinch, or the system menu gesture on the left hand, opens the menu.
+            pinchPinkyStrength = hand.menuPressed ? 1f : hand.pinchPinky;
+        }
         if (currentControl != lastControl)
         {
             currentControlChanged = true;
@@ -610,7 +639,8 @@ public class manipulator : MonoBehaviour {
         {
             if (currentControlHands)
             { 
-                triggerButtonUp = pinchIndexStrength < 0.50;
+                // release when the pinch opens or the hand drops out of tracking
+                triggerButtonUp = pinchIndexStrength < 0.50 || handLost || currentControlChanged;
             }
             else if (!currentControlHands && currentControlChanged)
             {
@@ -744,15 +774,19 @@ public class manipulator : MonoBehaviour {
     }
 
     if (triggerButtonDown) {
-      activeTip.SetActive(true);
-      tipL.gameObject.SetActive(false);
-      tipR.gameObject.SetActive(false);
+      if (!handsMode) {
+        activeTip.SetActive(true);
+        tipL.gameObject.SetActive(false);
+        tipR.gameObject.SetActive(false);
+      }
       SetTrigger(true);
     }
     if (triggerButtonUp) {
-      activeTip.SetActive(false);
-      tipL.gameObject.SetActive(true);
-      tipR.gameObject.SetActive(true);
+      if (!handsMode) {
+        activeTip.SetActive(false);
+        tipL.gameObject.SetActive(true);
+        tipR.gameObject.SetActive(true);
+      }
       SetTrigger(false);
     }
 

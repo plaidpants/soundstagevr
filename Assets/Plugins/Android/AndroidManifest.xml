@@ -11,7 +11,11 @@
     </activity>
     <meta-data android:name="unityplayer.SkipPermissionsDialog" android:value="false" />
     <meta-data android:name="com.samsung.android.vr.application.mode" android:value="vr_only" />
+    <meta-data android:name="com.oculus.handtracking.frequency" android:value="HIGH" />
+    <meta-data android:name="com.oculus.handtracking.version" android:value="V2.0" />
     <meta-data android:name="com.oculus.supportedDevices" android:value="quest2|questpro" />
   </application>
+  <uses-feature android:name="oculus.software.handtracking" android:required="false" />
+  <uses-permission android:name="com.oculus.permission.HAND_TRACKING" />
   <uses-feature android:name="android.hardware.vr.headtracking" android:version="1" android:required="true" />
 </manifest>

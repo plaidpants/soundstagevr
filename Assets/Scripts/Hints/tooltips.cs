@@ -1,4 +1,4 @@
-// Copyright 2017 Google LLC
+﻿// Copyright 2017 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -55,6 +55,22 @@ public class tooltips : manipObject {
           ShowTooltips(false);
           break;
         }
+      }
+    }
+  }
+
+  // Only one "?" per device type is shown at a time (otherTipCheck). If the device
+  // carrying it is deleted, hand it on to another device of the same type, otherwise
+  // that type would have no "?" until a new one is spawned.
+  void OnDestroy() {
+    Renderer r = GetComponent<Renderer>();
+    if (r == null || !r.enabled) return;
+    if (masterControl.instance == null || !masterControl.instance.tooltipsOn) return;
+    tooltips[] others = FindObjectsOfType<tooltips>();
+    for (int i = 0; i < others.Length; i++) {
+      if (others[i] != this && others[i].vidFile == vidFile) {
+        others[i].ShowTooltips(true);
+        break;
       }
     }
   }

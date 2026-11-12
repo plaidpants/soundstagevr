@@ -13,66 +13,86 @@
 // limitations under the License.
 
 using UnityEngine;
-using System.Collections;
-using System.Collections.Generic;
-using System.Runtime.InteropServices;
 
+// Oscilloscope display (reworked 2026-11).
+// The audio thread records one height (0..63) per displayed column into a 512-entry
+// ring buffer; each frame the 512 bytes are uploaded as a 512x1 R8 texture and the
+// SoundStage/WaveScope shader draws the trace. Previously the CPU drew a 512x64 RGBA
+// image (native ProcessWaveTexture) and uploaded all 128 KB every frame per oscillator.
 public class waveViz : MonoBehaviour {
-  Texture2D tex;
   public Renderer waverend;
-  int wavewidth = 512;
-  int waveheight = 64;
   public int period = 512;
-  Color32[] wavepixels;
-  int curWaveW = 0;
-  int lastWaveH = 0;
   public Color32 waveBG = Color.black;
   public Color32 waveLine = Color.white;
 
-  [DllImport("SoundStageNative")]
-  public static extern void ProcessWaveTexture(float[] buffer, int length, System.IntPtr pixels, byte Ra, byte Ga, byte Ba, byte Rb, byte Gb, byte Bb,
-    int period, int waveheight, int wavewidth, ref int lastWaveH, ref int curWaveW);
+  const int wavewidth = 512;
+  const int waveheight = 64;
 
-  List<float> bufferDrawList;
+  // written on the audio thread, read on the main thread (tearing is harmless here)
+  readonly byte[] heights = new byte[wavewidth];
+  int curWaveW = 0;
 
-  GCHandle m_WavePixelsHandle;
+  Texture2D heightTex;
+  Material waveMat;
+  int lastUpload = -100;
+
+  static Shader scopeShader;
+  static readonly int idWaveTex = Shader.PropertyToID("_WaveTex");
+  static readonly int idHead = Shader.PropertyToID("_Head");
+  static readonly int idLine = Shader.PropertyToID("_LineColor");
+  static readonly int idBG = Shader.PropertyToID("_BGColor");
 
   void Awake() {
-    bufferDrawList = new List<float>();
-    tex = new Texture2D(wavewidth, waveheight, TextureFormat.RGBA32, false);
-    wavepixels = new Color32[wavewidth * waveheight];
+    heightTex = new Texture2D(wavewidth, 1, TextureFormat.R8, false);
+    heightTex.filterMode = FilterMode.Point;
+    heightTex.wrapMode = TextureWrapMode.Repeat;
+    byte mid = (byte)((waveheight - 1) / 2);   // flat line at rest
+    for (int i = 0; i < wavewidth; i++) heights[i] = mid;
+    heightTex.SetPixelData(heights, 0);
+    heightTex.Apply(false);
+  }
 
-    for (int i = 0; i < wavewidth; i++) {
-      for (int i2 = 0; i2 < waveheight; i2++) {
-        wavepixels[i2 * wavewidth + i] = waveBG;
-      }
+  void Start() {
+    if (scopeShader == null) scopeShader = Resources.Load<Shader>("Shaders/WaveScope");
+    waveMat = waverend.material;
+    if (scopeShader == null) {
+      Debug.LogError("[waveViz] Resources/Shaders/WaveScope shader not found");
+      return;
     }
-
-    m_WavePixelsHandle = GCHandle.Alloc(wavepixels, GCHandleType.Pinned);
+    // Keeps the material's _TintColor / _EmissionGain, so the glow is unchanged.
+    waveMat.shader = scopeShader;
+    waveMat.SetTexture(idWaveTex, heightTex);
+    ApplyColors();
   }
 
   void OnDestroy() {
-    m_WavePixelsHandle.Free();
+    if (heightTex != null) Destroy(heightTex);
   }
 
-  Material waveMat;   // cached: .material in Update returns the instance but costs a lookup each call
-  int lastUpload = -100;
-
-  void Start() {
-    tex.SetPixels32(wavepixels);
-    tex.Apply(false);
-    waveMat = waverend.material;
-    waveMat.mainTexture = tex;
+  void ApplyColors() {
+    waveMat.SetColor(idLine, waveLine);
+    waveMat.SetColor(idBG, waveBG);
   }
 
+  // Audio thread: same sampling as the old native ProcessWaveTexture.
   public void UpdateViz(float[] buffer) {
-    ProcessWaveTexture(buffer, buffer.Length, m_WavePixelsHandle.AddrOfPinnedObject(), waveLine.r, waveLine.g, waveLine.b, waveBG.r, waveBG.g, waveBG.b, period, waveheight, wavewidth, ref lastWaveH, ref curWaveW);
+    int n = buffer.Length / period;
+    int w = curWaveW;
+    for (int i = 0; i < n; i++) {
+      float t = (buffer[i * period] + 1.0f) * .5f;
+      t = t > 1f ? 1f : (t < 0f ? 0f : t);
+      heights[w] = (byte)((waveheight - 1) * t);
+      w = (w + 1) % wavewidth;
+    }
+    curWaveW = w;
   }
 
   void Update() {
-    if (!DisplayUpdate.Due(waverend, ref lastUpload, DisplayUpdate.ScopeInterval)) return;
-    tex.SetPixels32(wavepixels);
-    tex.Apply(false);
-    waveMat.mainTextureOffset = new Vector2((float)curWaveW / wavewidth, 0);
+    if (waveMat == null || scopeShader == null) return;
+    if (!DisplayUpdate.Due(waverend, ref lastUpload, 1)) return;   // 512 bytes: every visible frame is fine
+    heightTex.SetPixelData(heights, 0);
+    heightTex.Apply(false);
+    waveMat.SetFloat(idHead, (float)curWaveW / wavewidth);
+    ApplyColors();   // waveLine changes when the oscillator switches between LFO and audio rate
   }
 }
