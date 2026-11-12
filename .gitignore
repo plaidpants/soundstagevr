@@ -285,3 +285,6 @@ UnityPlayer.dll
 *.VC.db
 *.VC.opendb
 *.VC.VC.opendb
+# Rebuilt from root Samples/ and Examples/ by Editor_BuildPreprocess on every build
+/Assets/StreamingAssets/Samples.tgz
+/Assets/StreamingAssets/Examples.tgz

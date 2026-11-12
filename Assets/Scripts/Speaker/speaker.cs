@@ -26,8 +26,11 @@ public class speaker : MonoBehaviour {
 
   private void OnAudioFilterRead(float[] buffer, int channels) {
     if (incoming == null) return;
+    long start = System.Diagnostics.Stopwatch.GetTimestamp();
     double dspTime = AudioSettings.dspTime;
     incoming.processBuffer(buffer, dspTime, channels);
     if (volume != 1) MultiplyArrayBySingleValue(buffer, buffer.Length, volume);
+    // report this speaker's DSP time to the load monitor (see masterLimiter.cs)
+    AudioLoadMonitor.AddSpeakerTicks(System.Diagnostics.Stopwatch.GetTimestamp() - start, dspTime);
   }
 }
