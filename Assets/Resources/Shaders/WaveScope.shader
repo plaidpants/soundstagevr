@@ -24,6 +24,7 @@ Shader "SoundStage/WaveScope" {
 Properties {
 	_TintColor ("Tint Color", Color) = (0.5,0.5,0.5,0.5)
 	_EmissionGain ("Emission Gain", Range(0, 1)) = 0.3
+	_MaxBright ("Max line brightness (keeps hue)", Float) = 1.5
 	_LineColor ("Line Color", Color) = (1,1,1,1)
 	_BGColor ("Background Color", Color) = (0,0,0,1)
 	_WaveTex ("Wave Heights (R8)", 2D) = "black" {}
@@ -49,6 +50,7 @@ SubShader {
 		half4 _LineColor;
 		half4 _BGColor;
 		float _EmissionGain;
+		float _MaxBright;
 		float _SSEmissionOffset; // global, set by masterControl (log of brightness scale, 0 = unchanged)
 		float _Head;
 		float _Columns;
@@ -101,6 +103,12 @@ SubShader {
 			// factor clamps to 1 (2-3x dimmer, washed out). Multiply it in here instead.
 			half4 glowOut = 2.0f * i.color * _TintColor * tex * (exp(_EmissionGain * 5.0f + _SSEmissionOffset));
 			glowOut.rgb *= glowOut.a;
+			// Keep the line colour: these materials push the line ~10-20x past white, so every
+			// channel clipped and all lines came out white (the looper's orange recording
+			// colour was invisible). Cap the brightest channel at _MaxBright: hue survives and
+			// the bloom still gets values above 1 to glow from.
+			half peak = max(max(glowOut.r, glowOut.g), glowOut.b);
+			glowOut.rgb *= min(1.0, _MaxBright / max(peak, 1e-4));
 			return glowOut;
 		}
 		ENDCG

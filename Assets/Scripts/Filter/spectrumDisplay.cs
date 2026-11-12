@@ -1,4 +1,4 @@
-// Copyright 2017 Google LLC
+﻿// Copyright 2017 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,48 +19,66 @@ public class spectrumDisplay : MonoBehaviour {
   public AudioSource source;
   int texW = 256;
   int texH = 32;
-  Texture2D tex;
   public Renderer texrend;
-  Color32[] texpixels;
 
   bool active = false;
 
   float[] spectrum;
 
+  // Bars are drawn on the GPU (Resources/Shaders/EmissiveColumns) from one byte per
+  // column, instead of filling and uploading a 256x32 RGBA texture (32 KB) every other
+  // frame (2026-11).
+  Texture2D tex;
+  byte[] columns;
+
   void Start() {
     spectrum = new float[texW];
+    columns = new byte[texW * 2];
 
-    tex = new Texture2D(texW, texH, TextureFormat.RGBA32, false);
-    texpixels = new Color32[texW * texH];
+    tex = new Texture2D(texW, 1, TextureFormat.RG16, false, true);
+    tex.filterMode = FilterMode.Point;
+    tex.wrapMode = TextureWrapMode.Clamp;
+    Upload();
 
-    for (int i = 0; i < texpixels.Length; i++) texpixels[i] = new Color32(0, 0, 0, 255);
-    tex.SetPixels32(texpixels);
-    tex.Apply(false);
-
-    texrend.material.mainTexture = tex;
-    texrend.material.SetTexture(Shader.PropertyToID("_Illum"), tex);
-    texrend.material.SetColor("_EmissionColor", Color.HSVToRGB(10 / 400f, 98 / 255f, 1f));
-    texrend.material.SetFloat("_EmissionGain", .4f);
+    Material m = texrend.material;
+    Shader sh = Resources.Load<Shader>("Shaders/EmissiveColumns");
+    if (sh != null) m.shader = sh;
+    else Debug.LogWarning("[spectrumDisplay] missing Resources/Shaders/EmissiveColumns");
+    m.mainTexture = tex;
+    m.SetFloat("_Columns", texW);
+    m.SetFloat("_Rows", texH);
+    m.SetColor("_EmissionColor", Color.HSVToRGB(10 / 400f, 98 / 255f, 1f));
+    m.SetFloat("_EmissionGain", .4f);
+    SetBlack();
   }
 
   const float spectrumMult = 5;
-  void GenerateTex() {
+  void GenerateColumns() {
     for (int i = 0; i < texW; i++) {
-      for (int i2 = 0; i2 < texH; i2++) {
-        byte s = 0;
-        if (spectrum[i] * spectrumMult * texH >= i2) s = 255;
-        texpixels[i2 * texW + i] = new Color32(s, s, s, 255);
-      }
+      // old texture: row i2 lit when spectrum * mult * texH >= i2
+      float v = spectrum[i] * spectrumMult * texH;
+      columns[i * 2] = (byte)Mathf.Clamp(Mathf.FloorToInt(v), 0, 255);
     }
+  }
+
+  // The old "off" state was all black (no bars at all, not even row 0).
+  void SetBlack() {
+    texrend.material.SetFloat("_Active", active ? 1f : 0f);
+  }
+
+  void Upload() {
+    tex.SetPixelData(columns, 0);
+    tex.Apply(false);
   }
 
   public void toggleActive(bool on) {
     active = on;
+    if (tex == null) return;
     if (!active) {
-      for (int i = 0; i < texpixels.Length; i++) texpixels[i] = new Color32(0, 0, 0, 255);
-      tex.SetPixels32(texpixels);
-      tex.Apply(false);
+      System.Array.Clear(columns, 0, columns.Length);
+      Upload();
     }
+    SetBlack();
   }
 
   int lastUpload = -100;
@@ -70,8 +88,7 @@ public class spectrumDisplay : MonoBehaviour {
     if (!DisplayUpdate.Due(texrend, ref lastUpload, DisplayUpdate.ScopeInterval)) return;
 
     source.GetSpectrumData(spectrum, 0, FFTWindow.Rectangular);
-    GenerateTex();
-    tex.SetPixels32(texpixels);
-    tex.Apply(false);
+    GenerateColumns();
+    Upload();
   }
 }

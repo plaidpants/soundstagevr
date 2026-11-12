@@ -1,4 +1,4 @@
-// Copyright 2017 Google LLC
+﻿// Copyright 2017 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -120,8 +120,26 @@ public class maracaUI : manipObject {
       transform.localPosition = Vector3.zero;
       transform.localRotation = Quaternion.identity;
 
-      if (manipulatorObjScript != null) manipulatorObjScript.setVerticalPosition(transform);
-      transform.Rotate(90, 0, 0, Space.Self);
+      // Hands: held along the hand (long axis +Y), gripped 30 percent up from the bottom;
+      // adjustable with the hand tool calibration (PlayerPrefs "handTool.maraca").
+      bool handPlaced = false;
+      if (manipulatorObjScript != null) {
+        float minY, maxY;
+        HandToolExtent(out minY, out maxY);
+        handPlaced = manipulatorObjScript.setVerticalPosition(transform, Mathf.Lerp(minY, maxY, 0.3f), "maraca", maxY, true);
+      }
+      if (!handPlaced) {
+        transform.Rotate(90, 0, 0, Space.Self);
+      }
     }
+  }
+
+  // Long-axis (+Y) extent of the model in the parent's units (for holding it in a hand).
+  void HandToolExtent(out float minY, out float maxY) {
+    MeshFilter mf = GetComponent<MeshFilter>();
+    if (mf == null || mf.sharedMesh == null) { minY = -0.05f; maxY = 0.15f; return; }
+    Bounds b = mf.sharedMesh.bounds;
+    minY = b.min.y * transform.localScale.y;
+    maxY = b.max.y * transform.localScale.y;
   }
 }

@@ -144,7 +144,7 @@ public class platformSetup : MonoBehaviour {
             SetHandsMode(handsActive);
         }
 
-        if (handsActive) UpdateHandPoses();
+        if (handsActive) { UpdateHandPoses(); UpdateToolCalibration(); }
         else UpdateControllerCalibration();
     }
 
@@ -236,6 +236,65 @@ public class platformSetup : MonoBehaviour {
                 : trackingSpace.TransformPoint(hand.pointerPosition + hand.pointerRotation * (Vector3.forward * handGrabForward));
             root.position += target - manips[i].GrabPointWorld;
         }
+    }
+
+    // ---- Hand-held tool calibration (drumsticks / mallets) ----
+    // While one hand holds a stick, pinch the stick with the other hand and move it: the
+    // stick pivots at the holding hand's grip and its head follows the pinching fingers
+    // (direction and how far it sticks out). Let go to save. Stored per kind of stick
+    // (PlayerPrefs "handTool.drumstick" / "handTool.mallet"); mirrored for the other hand.
+    int calibHand = -1;        // hand holding the tool being calibrated
+    bool calibActive = false;  // free hand has fully pinched
+    Vector3 calibDir;
+    float calibGrip;
+
+    void UpdateToolCalibration() {
+        if (calibHand < 0) {
+            for (int i = 0; i < 2; i++) {
+                manipulator holder = manips[i];
+                if (!holder.holdingTool || holder.heldTool == null || holder.heldToolKey == null) continue;
+                int j = 1 - i;
+                if (fingertips[j] == null || !fingertips[j].HasPinchPoint || manips[j].isGrabbing()) continue;
+                HandInput.Hand free = HandInput.Get(j);
+                if (!free.inputValid || free.pinchIndex < 0.3f) continue;
+                Vector3 a = holder.heldTool.position;
+                Vector3 b = a + holder.HeldToolAxis * holder.heldToolLength;
+                Vector3 p = fingertips[j].PinchPoint;
+                Vector3 ab = b - a;
+                float t = Mathf.Clamp01(Vector3.Dot(p - a, ab) / Mathf.Max(ab.sqrMagnitude, 1e-6f));
+                if ((a + ab * t - p).magnitude > 0.04f) continue;
+                calibHand = i;
+                calibActive = false;
+                manips[j].suppressHandTrigger = true; // don't grab anything else with this pinch
+                break;
+            }
+            return;
+        }
+
+        manipulator h = manips[calibHand];
+        int f = 1 - calibHand;
+        HandInput.Hand fh = HandInput.Get(f);
+        bool stillHolding = h.holdingTool && h.heldTool != null && h.heldToolKey != null;
+        if (!stillHolding || !fh.inputValid || fh.pinchIndex < 0.3f) {
+            if (calibActive && stillHolding) manipulator.SaveToolCalibration(h.heldToolKey, calibDir, calibGrip);
+            manips[f].suppressHandTrigger = false;
+            calibHand = -1;
+            calibActive = false;
+            return;
+        }
+        if (fh.pinchIndex >= 0.85f) calibActive = true;
+        if (!calibActive || !fingertips[f].HasPinchPoint) return;
+
+        // Direction in the holding hand's hold frame, stored in right-hand convention
+        // (mirrored for the left hand) so the other hand gets the mirror image.
+        Transform root = h.transform.parent;
+        Vector3 d = fingertips[f].PinchPoint - h.GrabPointWorld;
+        float dist = d.magnitude;
+        if (dist < 0.02f) return;
+        Vector3 inFrame = Quaternion.Inverse(root.rotation) * (d / dist);
+        calibDir = h.IsLeftHand ? manipulator.MirrorX(inFrame) : inFrame;
+        calibGrip = Mathf.Clamp(h.heldToolLength - dist, -0.25f, h.heldToolLength - 0.02f);
+        h.ApplyToolPose(calibDir, calibGrip);
     }
 
     // Re-read the hands just before rendering so the manipulators don't lag a frame.

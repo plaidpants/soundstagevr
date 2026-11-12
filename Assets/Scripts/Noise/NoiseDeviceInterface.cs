@@ -1,4 +1,4 @@
-// Copyright 2017 Google LLC
+﻿// Copyright 2017 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -60,8 +60,11 @@ public class NoiseDeviceInterface : deviceInterface {
     }
   }
 
+  int lastUpload = -100;
   void Update() {
-    if (gen.updated || output.near == null) {
+    // Skip the regenerate + upload when the display isn't visible, and at most every
+    // other frame (2026-11; it ran every frame for every unpatched noise device).
+    if ((gen.updated || output.near == null) && DisplayUpdate.Due(texrend, ref lastUpload, DisplayUpdate.ScopeInterval)) {
       gen.updated = false;
       GenerateRandomTex();
       tex.SetPixels32(texpixels);

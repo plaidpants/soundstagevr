@@ -120,10 +120,17 @@ public class drumstick : manipObject {
   // scale) and ended up inside the hand, so short sticks are pushed forward until the
   // head reaches handReach in front of the grip (the butt then floats past the fingers).
   public static float handReach = 0.20f;
-  float HandGripOffset() {
+  float ToolLength() {
     MeshFilter mf = GetComponent<MeshFilter>();
-    float length = (mf != null && mf.sharedMesh != null) ? mf.sharedMesh.bounds.max.z * transform.localScale.z : 0.279f;
-    return Mathf.Min(0.06f, length - handReach);
+    return (mf != null && mf.sharedMesh != null) ? mf.sharedMesh.bounds.max.z * transform.localScale.z : 0.279f;
+  }
+  float HandGripOffset() {
+    return Mathf.Min(0.06f, ToolLength() - handReach);
+  }
+  // Hand calibration is stored per kind of stick (drum vs xylophone mallet).
+  string toolKey = "drumstick";
+  void Start() {
+    if (masterObj != null && masterObj.GetComponentInParent<xylorollDeviceInterface>() != null) toolKey = "mallet";
   }
 
   Coroutine returnRoutineID;
@@ -219,7 +226,7 @@ public class drumstick : manipObject {
       transform.localPosition = Vector3.zero;
       transform.localRotation = Quaternion.identity;
 
-      if (manipulatorObjScript != null) manipulatorObjScript.setVerticalPosition(transform, HandGripOffset());
+      if (manipulatorObjScript != null) manipulatorObjScript.setVerticalPosition(transform, HandGripOffset(), toolKey, ToolLength());
 
       pads.Clear();
       lastStickPos.Clear();

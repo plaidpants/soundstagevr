@@ -1,4 +1,4 @@
-// Copyright 2017 Google LLC
+﻿// Copyright 2017 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -62,6 +62,7 @@ public class waveViz : MonoBehaviour {
     // Keeps the material's _TintColor / _EmissionGain, so the glow is unchanged.
     waveMat.shader = scopeShader;
     waveMat.SetTexture(idWaveTex, heightTex);
+    waveMat.SetFloat("_MaxBright", ColumnDisplay.maxBright);
     ApplyColors();
   }
 

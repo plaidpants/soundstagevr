@@ -24,7 +24,7 @@ using UnityEngine;
 
 public static class DisplayUpdate {
   public const int ScopeInterval = 2;     // 36 Hz at 72 fps
-  public const int TransportInterval = 4; // 18 Hz: looper/recorder waveforms (scrub head still moves every frame)
+  public const int TransportInterval = 1; // looper/recorder: was 4 (2 MB uploads); now ~2 KB on the GPU path
 
   // True if the display should be redrawn/uploaded this frame.
   public static bool Due(Renderer r, ref int lastFrame, int everyNFrames) {

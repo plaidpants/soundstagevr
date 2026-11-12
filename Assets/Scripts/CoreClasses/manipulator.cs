@@ -203,7 +203,7 @@ public class manipulator : MonoBehaviour {
 
   void Grab(bool on) {
     grabbing = on;
-    if (!on) holdingTool = false;
+    if (!on) { holdingTool = false; heldTool = null; heldToolKey = null; }
     showTip();
 
     if (selectedObject != null) {
@@ -228,7 +228,7 @@ public class manipulator : MonoBehaviour {
   }
 
   void release() {
-    holdingTool = false;
+    holdingTool = false; heldTool = null; heldToolKey = null;
     selectedObject.setState(manipObject.manipState.none);
     toggleController(true);
   }
@@ -543,25 +543,101 @@ public class manipulator : MonoBehaviour {
   // sits at the grab point, pointing along the hand, tilted down by handToolPitch.
   public bool holdingTool = false;
   public static float handToolPitch = 15f;
+  public bool IsHandsMode { get { return handsMode; } }
+  public int ControllerIndex { get { return controllerIndex; } }
+
+  // Held tool (hands calibration, see platformSetup.UpdateToolCalibration).
+  [System.NonSerialized] public Transform heldTool;
+  [System.NonSerialized] public string heldToolKey;   // "drumstick", "mallet" or null
+  [System.NonSerialized] public float heldToolLength; // butt (z = 0) to head, in root units
+  [System.NonSerialized] public bool suppressHandTrigger;
+  [System.NonSerialized] public bool heldToolAxisY;
+  [System.NonSerialized] public Vector3 heldToolUpHint = Vector3.up;
+  public Vector3 HeldToolAxis { get { return heldTool == null ? Vector3.forward : (heldToolAxisY ? heldTool.up : heldTool.forward); } } // the other hand is calibrating with this one
+
+  // Point the held tool along dir (root space) with the point gripOffset along it at the
+  // grab point.
+  // dir is in the hand's hold frame (root rotation: forward along the hand, up = back of
+  // the hand) using the RIGHT hand's convention; it is mirrored (x) for the left hand
+  // here explicitly, so a calibration made in either hand is the mirror image in the
+  // other. (It used to rely on the left rig's mirrored scale (-1,1,1), which came out
+  // pointing down/backwards in the other hand.)
+  public bool IsLeftHand { get { return controllerIndex == 0; } }
+  public static Vector3 MirrorX(Vector3 v) { return new Vector3(-v.x, v.y, v.z); }
+
+  public void ApplyToolPose(Vector3 dir, float gripOffset) {
+    if (heldTool == null || dir.sqrMagnitude < 1e-8f) return;
+    Transform root = transform.parent;
+    Quaternion frame = root.rotation; // hold pose (set by platformSetup), no scale
+    Vector3 worldDir = frame * (IsLeftHand ? MirrorX(dir) : dir).normalized;
+    Vector3 worldUp = Vector3.ProjectOnPlane(frame * heldToolUpHint, worldDir);
+    if (worldUp.sqrMagnitude < 1e-6f) worldUp = Vector3.ProjectOnPlane(frame * Vector3.forward, worldDir);
+    // Build the local rotation from local vectors so it holds under a mirrored parent:
+    // the tool's long axis and up then point exactly along worldDir / worldUp.
+    // InverseTransformVector includes the root's scale (the left rig is mirrored
+    // (-1,1,1)), so the rendered tool really points along worldDir.
+    Vector3 localDir = root.InverseTransformVector(worldDir);
+    Vector3 localUp = root.InverseTransformVector(worldUp);
+    heldTool.localRotation = Quaternion.LookRotation(localDir, localUp) * (heldToolAxisY ? Quaternion.Euler(90, 0, 0) : Quaternion.identity);
+    heldTool.position = GrabPointWorld - worldDir * gripOffset;
+  }
+
+  public static void SaveToolCalibration(string key, Vector3 dir, float grip) {
+    var ci = System.Globalization.CultureInfo.InvariantCulture;
+    PlayerPrefs.SetString("handTool." + key, dir.x.ToString("R", ci) + "," + dir.y.ToString("R", ci) + "," + dir.z.ToString("R", ci) + "," + grip.ToString("R", ci));
+    PlayerPrefs.Save();
+    Debug.Log("[manipulator] hand tool calibration saved for " + key + ": dir=" + dir.ToString("F3") + " grip=" + grip.ToString("F3"));
+  }
+
+  public static bool LoadToolCalibration(string key, ref Vector3 dir, ref float grip) {
+    string v = PlayerPrefs.GetString("handTool." + key, "");
+    string[] p = v.Split(',');
+    if (p.Length != 4) return false;
+    float x, y, z, g;
+    var ci = System.Globalization.CultureInfo.InvariantCulture;
+    if (!float.TryParse(p[0], System.Globalization.NumberStyles.Float, ci, out x) ||
+        !float.TryParse(p[1], System.Globalization.NumberStyles.Float, ci, out y) ||
+        !float.TryParse(p[2], System.Globalization.NumberStyles.Float, ci, out z) ||
+        !float.TryParse(p[3], System.Globalization.NumberStyles.Float, ci, out g)) return false;
+    dir = new Vector3(x, y, z);
+    grip = g;
+    return true;
+  }
 
   // gripOffset given: (hands) place the tool along the hand with that point of its +Z
   // axis at the grab point (drumsticks). Otherwise keep the controller layout, which in
   // hands mode still sits relative to the grab point at the pinch.
-  public void setVerticalPosition(Transform t, float gripOffset = float.NaN) {
+  // Returns true if the tool was placed for hands (callers then skip their controller-
+  // specific Rotate/Translate). axisY: the tool's long axis is +Y (maraca, microphone)
+  // instead of +Z (drumsticks).
+  // pitch: default angle of the long axis (degrees, + = down) when not calibrated.
+  // upHint (hand frame): which way the tool's roll should face (default up).
+  public bool setVerticalPosition(Transform t, float gripOffset = float.NaN, string toolKey = null, float toolLength = 0f, bool axisY = false,
+                                  float pitch = float.NaN, Vector3? upHint = null) {
     tipPackage.gameObject.SetActive(false);
     holdingTool = true;
+    heldTool = t;
+    heldToolKey = toolKey;
+    heldToolLength = toolLength;
+    heldToolAxisY = axisY;
+    heldToolUpHint = upHint ?? Vector3.up;
     if (handsMode && grabCollider != null && !float.IsNaN(gripOffset)) {
-      Transform root = transform.parent;
-      t.localRotation = Quaternion.Euler(handToolPitch, 0, 0);
-      Vector3 grab = root.InverseTransformPoint(GrabPointWorld);
-      t.localPosition = grab - t.localRotation * (Vector3.forward * gripOffset);
-      return;
+      Vector3 dir = Quaternion.Euler(float.IsNaN(pitch) ? handToolPitch : pitch, 0, 0) * Vector3.forward;
+      float grip = gripOffset;
+      bool calibrated = toolKey != null && LoadToolCalibration(toolKey, ref dir, ref grip);
+      ApplyToolPose(dir, grip);
+      Transform r = transform.parent;
+      Debug.Log("[manipulator] " + (IsLeftHand ? "left" : "right") + " hand holds " + (toolKey ?? "tool") +
+                (calibrated ? " (calibrated)" : " (default)") + " dir=" + dir.ToString("F2") + " grip=" + grip.ToString("F3") +
+                " handFwd=" + (r.rotation * Vector3.forward).ToString("F2") + " handUp=" + (r.rotation * Vector3.up).ToString("F2") +
+                " rootScale=" + r.localScale.ToString("F0") + " toolFwd=" + heldTool.forward.ToString("F2"));
+      return true;
     }
-    if (!usingOculus) return;
-    else {
+    if (usingOculus) {
       t.localPosition = oculusParentTarget.localPosition;
       t.localRotation = oculusParentTarget.localRotation;
     }
+    return false;
   }
 
   bool touchpadActive = false;
@@ -707,7 +783,7 @@ public class manipulator : MonoBehaviour {
         {
             HandInput.Hand hand = HandInput.Get(controllerIndex);
             handLost = !hand.inputValid;
-            pinchIndexStrength = hand.pinchIndex;
+            pinchIndexStrength = suppressHandTrigger ? 0f : hand.pinchIndex;
             // Pinky pinch, or the system menu gesture on the left hand, opens the menu.
             pinchPinkyStrength = hand.menuPressed ? 1f : hand.pinchPinky;
         }

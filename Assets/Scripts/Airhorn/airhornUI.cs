@@ -1,4 +1,4 @@
-// Copyright 2017 Google LLC
+﻿// Copyright 2017 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 
 ﻿using UnityEngine;
 using System.Collections;
+using System.Collections.Generic;
 
 public class airhornUI : manipObject {
   public Transform masterObj;
@@ -62,6 +63,63 @@ public class airhornUI : manipObject {
   }
 
   int curSelection = 0;
+
+  // Hands (2026-11): no thumbstick or face button, so
+  //  - press a sound button on the can's top with a fingertip of the other hand
+  //    (selects that sound and plays it while touched), or
+  //  - middle-finger pinch on the holding hand plays the selected sound.
+  public static float handButtonReach = 0.035f; // fingertip within this of the pad centre (m)
+  bool handPressing = false;
+  int handSelection = -1;
+  void Update() {
+    bool hands = curState == manipState.grabbed && manipulatorObjScript != null && manipulatorObjScript.IsHandsMode;
+    if (!hands) {
+      if (handPressing) { setPress(false); handPressing = false; }
+      handSelection = -1;
+      return;
+    }
+
+    Transform pad = touchFeedbackTransform.parent;
+    int touched = -1;
+    Vector2 touchPos = Vector2.zero;
+    for (int h = 0; h < HandFingertips.active.Count && touched < 0; h++) {
+      HandFingertips hf = HandFingertips.active[h];
+      if (hf.owner == manipulatorObjScript) continue; // the holding hand
+      IList<Transform> pts = hf.HitPoints;
+      for (int k = 0; k < pts.Count && k < 5; k++) { // fingertips only (the palm point is last)
+        if (pts[k] == null) continue;
+        // Like hitting a drum: any fingertip within reach of the button pad counts (the
+        // first version required a precise touch on the pad surface and never fired).
+        // Which of the four sounds is picked by the direction from the pad centre.
+        if ((pts[k].position - pad.position).magnitude > handButtonReach) continue;
+        Vector3 local = pad.InverseTransformPoint(pts[k].position);
+        Vector2 p = new Vector2(local.x, local.y);
+        touched = k;
+        touchPos = p.sqrMagnitude > 1e-12f ? p.normalized : Vector2.zero; // magnitude 1: always picks a sound
+        break;
+      }
+    }
+
+    bool press;
+    if (touched >= 0) {
+      setTouch(true);
+      updateTouchPos(touchPos);
+      press = true;
+    } else {
+      HandInput.Hand hand = HandInput.Get(manipulatorObjScript.ControllerIndex);
+      press = hand.pinchMiddle > (handPressing ? 0.5f : 0.85f);
+    }
+
+    if (press && handPressing && handSelection != curSelection) {
+      setPress(false); // moved to another button: retrigger
+      handPressing = false;
+    }
+    if (press != handPressing) {
+      setPress(press);
+      handPressing = press;
+      handSelection = press ? curSelection : -1;
+    }
+  }
   public override void updateTouchPos(Vector2 p) {
     touchFeedbackTransform.localPosition = new Vector3(p.x * .013f, p.y * .013f, -0.0005f);
     if (Vector2.SqrMagnitude(p) < .1f) return;
@@ -137,8 +195,16 @@ public class airhornUI : manipObject {
       transform.localPosition = Vector3.zero;
       transform.localRotation = Quaternion.identity;
 
-      if (manipulatorObjScript != null) manipulatorObjScript.setVerticalPosition(transform);
-      transform.Rotate(45, 0, 0, Space.Self);
+      // Hands: hold the can in the fist, can standing up (long axis +Y), horn (+Z) facing
+      // forward; gripped at the middle of the can. Adjustable with the hand tool
+      // calibration: pinch the top of the can with the other hand and move it
+      // (PlayerPrefs "handTool.airhorn").
+      bool handPlaced = false;
+      if (manipulatorObjScript != null) {
+        float canY = canObject.transform.localPosition.y * transform.localScale.y;
+        handPlaced = manipulatorObjScript.setVerticalPosition(transform, canY, "airhorn", 0f, true, -70f, Vector3.back);
+      }
+      if (!handPlaced) transform.Rotate(45, 0, 0, Space.Self);
     }
   }
 }

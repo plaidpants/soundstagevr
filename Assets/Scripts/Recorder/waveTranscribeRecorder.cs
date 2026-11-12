@@ -1,4 +1,4 @@
-// Copyright 2017 Google LLC
+﻿// Copyright 2017 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,12 +37,11 @@ public class waveTranscribeRecorder : signalGenerator {
   recorderDeviceInterface _deviceInterface;
 
   // WAVE DRAW TOOLS
-  Texture2D tex;
+  ColumnDisplay display; // GPU-drawn waveform (Resources/Shaders/WaveColumns)
   public Renderer waverend;
   int wavewidth = 1024;
   int waveheight = 512;
-  public int period = 512;
-  Color32[] wavepixels;
+  public int period = 512; 
   int curWaveW = 0;
   public Color32 waveBG = Color.black;
   public Color32 waveLine = Color.white;
@@ -58,9 +57,7 @@ public class waveTranscribeRecorder : signalGenerator {
     virtualBufferLength = sampleBuffer.Length;
     _sampleRateOverride = AudioSettings.outputSampleRate;
 
-    tex = new Texture2D(wavewidth, waveheight, TextureFormat.RGBA32, false);
-    wavepixels = new Color32[wavewidth * waveheight];
-    waverend.material.mainTexture = tex;
+    display = new ColumnDisplay(waverend, wavewidth, waveheight, waveLine, waveLine, waveBG, 0);
 
     lastRecSig = new float[] { 0, 0 };
     lastPlaySig = new float[] { 0, 0 };
@@ -73,30 +70,24 @@ public class waveTranscribeRecorder : signalGenerator {
     columnMult = Mathf.CeilToInt((float)virtualBufferLength / (wavewidth - 1));
     recalcTex();
     if (!playing) {
-      tex.SetPixels32(wavepixels);
-      tex.Apply(false);
+      display.Upload();
     }
   }
 
   void recalcTex() {
-    int centerH = waveheight / 2;
 
     for (int i = 0; i < wavewidth; i++) {
       if (columnMult * i < virtualBufferLength) {
         int curH = Mathf.FloorToInt((waveheight - 1) * .5f * Mathf.Clamp01(Mathf.Abs(sampleBuffer[columnMult * i])));
 
-        for (int i2 = 0; i2 < centerH; i2++) {
-          if (i2 < curH) wavepixels[(centerH - i2) * wavewidth + i] = wavepixels[(centerH + i2) * wavewidth + i] = waveLine;
-          else wavepixels[(centerH - i2) * wavewidth + i] = wavepixels[(centerH + i2) * wavewidth + i] = waveBG;
-        }
+        display.SetColumn(i, curH);
       }
     }
   }
 
   void Start() {
     Flush();
-    tex.SetPixels32(wavepixels);
-    tex.Apply(false);
+    display.Upload();
     Vector3 pos = scrubTransform.localPosition;
     pos.x = Mathf.Lerp(scrubRange.x, scrubRange.y, 0);
     scrubTransform.localPosition = pos;
@@ -119,8 +110,7 @@ public class waveTranscribeRecorder : signalGenerator {
     if (!playing) return;
 
     if (DisplayUpdate.Due(waverend, ref lastUpload, DisplayUpdate.TransportInterval)) {
-      tex.SetPixels32(wavepixels);
-      tex.Apply(false);
+      if (display.dirty) display.Upload();
     }
 
     Vector3 pos = scrubTransform.localPosition;
@@ -129,15 +119,10 @@ public class waveTranscribeRecorder : signalGenerator {
   }
 
   public void Flush() {
-    for (int i = 0; i < wavewidth; i++) {
-      for (int i2 = 0; i2 < waveheight; i2++) {
-        wavepixels[i2 * wavewidth + i] = waveBG;
-      }
-    }
+    display.Clear();
 
     sampleBuffer = new float[(int)(maxDuration * _sampleRateOverride) * 2];
-    tex.SetPixels32(wavepixels);
-    tex.Apply(false);
+    display.Upload();
   }
 
   public void Save() {
@@ -241,18 +226,13 @@ public class waveTranscribeRecorder : signalGenerator {
         sampleBuffer[curBufferIndex + 1] = buffer[i + 1];
       }
       if (playing) {
-        int centerH = waveheight / 2;
         if (curBufferIndex % columnMult == 0) {
           curWaveW = curBufferIndex / columnMult;
 
           if (curWaveW < wavewidth) {
             int curH = Mathf.FloorToInt((waveheight - 1) * .5f * Mathf.Clamp01(Mathf.Abs(sampleBuffer[curBufferIndex])));
 
-            for (int i2 = 0; i2 < centerH; i2++) {
-              if (i2 < curH) wavepixels[(centerH - i2) * wavewidth + curWaveW] = wavepixels[(centerH + i2) * wavewidth + curWaveW] = waveLine;
-              else wavepixels[(centerH - i2) * wavewidth + curWaveW] = wavepixels[(centerH + i2) * wavewidth + curWaveW] = waveBG;
-
-            }
+            display.SetColumn(curWaveW, curH, false);
           }
 
         }
