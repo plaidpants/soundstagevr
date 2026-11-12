@@ -112,12 +112,16 @@ public class waveTranscribeRecorder : signalGenerator {
 
   bool resetScrub = false;
   float samplePos = 0;
+  int lastUpload = -100;
+
   void Update() {
     if (resetScrub) scrubReset();
     if (!playing) return;
 
-    tex.SetPixels32(wavepixels);
-    tex.Apply(false);
+    if (DisplayUpdate.Due(waverend, ref lastUpload, DisplayUpdate.TransportInterval)) {
+      tex.SetPixels32(wavepixels);
+      tex.Apply(false);
+    }
 
     Vector3 pos = scrubTransform.localPosition;
     pos.x = Mathf.Lerp(scrubRange.x, scrubRange.y, samplePos);

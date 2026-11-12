@@ -55,10 +55,14 @@ public class waveViz : MonoBehaviour {
     m_WavePixelsHandle.Free();
   }
 
+  Material waveMat;   // cached: .material in Update returns the instance but costs a lookup each call
+  int lastUpload = -100;
+
   void Start() {
     tex.SetPixels32(wavepixels);
     tex.Apply(false);
-    waverend.material.mainTexture = tex;
+    waveMat = waverend.material;
+    waveMat.mainTexture = tex;
   }
 
   public void UpdateViz(float[] buffer) {
@@ -66,8 +70,9 @@ public class waveViz : MonoBehaviour {
   }
 
   void Update() {
+    if (!DisplayUpdate.Due(waverend, ref lastUpload, DisplayUpdate.ScopeInterval)) return;
     tex.SetPixels32(wavepixels);
     tex.Apply(false);
-    waverend.material.mainTextureOffset = new Vector2((float)curWaveW / wavewidth, 0);
+    waveMat.mainTextureOffset = new Vector2((float)curWaveW / wavewidth, 0);
   }
 }

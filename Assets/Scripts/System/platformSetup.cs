@@ -39,16 +39,25 @@ public class platformSetup : MonoBehaviour {
   // ("[platformSetup] controller calibration ...") so they can become the defaults below.
   // A saved calibration (PlayerPrefs) overrides these defaults.
   // Defaults calibrated in passthrough on Quest 3 / Touch Plus (2026-11-11).
-  public Vector3 controllerOffset = new Vector3(0.0f, 0.0483f, 0.0441f);
-  public float controllerPitch = -39.0f;
+  // NonSerialized on purpose: as serialized fields, a scene loaded in the editor while
+  // the defaults were still zero kept those zeros in memory and baked them into builds.
+  static readonly Vector3 DefaultControllerOffset = new Vector3(0.0f, 0.0483f, 0.0441f);
+  const float DefaultControllerPitch = -39.0f;
+  [System.NonSerialized] public Vector3 controllerOffset = DefaultControllerOffset;
+  [System.NonSerialized] public float controllerPitch = DefaultControllerPitch;
   bool calibrating = false;
   float calibLogTimer = 0;
 
   void LoadControllerCalibration() {
+    controllerOffset = DefaultControllerOffset;
+    controllerPitch = DefaultControllerPitch;
+    string source = "defaults";
     if (PlayerPrefs.HasKey("ctrlCalPitch")) {
       controllerOffset = new Vector3(0, PlayerPrefs.GetFloat("ctrlCalY"), PlayerPrefs.GetFloat("ctrlCalZ"));
       controllerPitch = PlayerPrefs.GetFloat("ctrlCalPitch");
+      source = "saved calibration";
     }
+    LogControllerCalibration("applied from " + source);
   }
 
   void ApplyControllerPoseCorrection() {

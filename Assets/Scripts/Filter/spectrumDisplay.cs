@@ -63,8 +63,11 @@ public class spectrumDisplay : MonoBehaviour {
     }
   }
 
+  int lastUpload = -100;
+
   void Update() {
     if (!active) return;
+    if (!DisplayUpdate.Due(texrend, ref lastUpload, DisplayUpdate.ScopeInterval)) return;
 
     source.GetSpectrumData(spectrum, 0, FFTWindow.Rectangular);
     GenerateTex();
