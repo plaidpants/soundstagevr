@@ -1,4 +1,4 @@
-// Copyright 2017 Google LLC
+﻿// Copyright 2017 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -77,6 +77,8 @@ public class masterControl : MonoBehaviour {
 
     glowVal = PlayerPrefs.GetFloat("glowVal");
     setGlowLevel(glowVal);
+    setGlowQuality(PlayerPrefs.GetInt("glowQuality", 2));
+    setEmissionLevel(PlayerPrefs.GetInt("emissionLevel", 0));
 
     if (PlayerPrefs.GetInt("envSound") == 0) {
       MuteBackgroundSFX(true);
@@ -138,6 +140,30 @@ public class masterControl : MonoBehaviour {
     mostRecentDrum = d;
     d.displayDrumsticks(true);
 
+  }
+
+  // Glow quality (2026-11): 2 = high (original 8-octave bloom), 1 = low (5 octaves from
+  // quarter resolution, much cheaper). The glow slider still sets the intensity, and 0
+  // switches the effect off entirely.
+  public int glowQuality = 2;
+  public void setGlowQuality(int q) {
+    glowQuality = Mathf.Clamp(q, 1, 2);
+    PlayerPrefs.SetInt("glowQuality", glowQuality);
+    if (mainGlowShader != null) mainGlowShader.lowQuality = glowQuality == 1;
+    Debug.Log("[masterControl] glow quality " + (glowQuality == 1 ? "LOW" : "HIGH") + ", level " + glowVal.ToString("F2"));
+  }
+
+  // Global brightness of the glowing (emissive) shaders: WaveScope, GlowText,
+  // SEAdditiveReverseCull, SEEmissiveTextured, SEParticlesAdditive all multiply their
+  // exp(_EmissionGain * k) by exp(_SSEmissionOffset). Bright emissive colours clip per
+  // channel on an 8-bit display and go pastel/white; turning this down keeps their hue.
+  public static readonly float[] emissionLevels = { 1f, 0.9f, 0.8f, 0.7f, 0.6f, 0.45f };
+  public int emissionLevelIndex = 0;
+  public void setEmissionLevel(int index) {
+    emissionLevelIndex = ((index % emissionLevels.Length) + emissionLevels.Length) % emissionLevels.Length;
+    PlayerPrefs.SetInt("emissionLevel", emissionLevelIndex);
+    Shader.SetGlobalFloat("_SSEmissionOffset", Mathf.Log(emissionLevels[emissionLevelIndex]));
+    Debug.Log("[masterControl] glow brightness " + Mathf.RoundToInt(emissionLevels[emissionLevelIndex] * 100) + "%");
   }
 
   public void setGlowLevel(float t) {

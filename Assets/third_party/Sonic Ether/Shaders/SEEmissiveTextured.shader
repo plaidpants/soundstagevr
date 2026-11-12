@@ -20,6 +20,7 @@ sampler2D _Illum;
 fixed4 _DiffuseColor;
 fixed4 _EmissionColor;
 float _EmissionGain;
+float _SSEmissionOffset; // global, set by masterControl (log of brightness scale, 0 = unchanged)
 float _EmissionTextureContrast;
 
 struct Input {
@@ -37,7 +38,7 @@ void surf (Input IN, inout SurfaceOutput o) {
 	emissL = pow(emissL, _EmissionTextureContrast);
 	emissTex = emissN * emissL;
 	
-	o.Emission = _EmissionColor * emissTex * (exp(_EmissionGain * 10.0f));
+	o.Emission = _EmissionColor * emissTex * (exp(_EmissionGain * 10.0f + _SSEmissionOffset));
 	o.Alpha = c.a;
 }
 ENDCG

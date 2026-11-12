@@ -10,9 +10,10 @@ Properties {
 
 Category {
 	Tags { "Queue"="Transparent" "IgnoreProjector"="True" "RenderType"="Transparent" }
-	Blend SrcAlpha One
+	Blend One One // was SrcAlpha One; alpha folded into rgb in frag (see below)
 	AlphaTest Greater .01
 	ColorMask RGB
+	Offset -1, -1 // glow shells sit ~1% outside opaque bodies (sequencer cubes); avoids z-fighting on Quest's lower-precision depth
 	Cull Off Lighting Off ZWrite Off Fog { Color (0,0,0,0) }
 	
 	SubShader {
@@ -26,18 +27,18 @@ Category {
 			#include "UnityCG.cginc"
 
 			sampler2D _MainTex;
-			fixed4 _TintColor;
+			half4 _TintColor;
 			
 			struct appdata_t {
 				float4 vertex : POSITION;
-				fixed4 color : COLOR;
+				half4 color : COLOR;
 				float2 texcoord : TEXCOORD0;
 				UNITY_VERTEX_INPUT_INSTANCE_ID
 			};
 
 			struct v2f {
 				float4 vertex : SV_POSITION;
-				fixed4 color : COLOR;
+				half4 color : COLOR;
 				float2 texcoord : TEXCOORD0;
 				#ifdef SOFTPARTICLES_ON
 				float4 projPos : TEXCOORD1;
@@ -66,8 +67,9 @@ Category {
 			UNITY_DECLARE_DEPTH_TEXTURE(_CameraDepthTexture);
 			float _InvFade;
 			float _EmissionGain;
+			float _SSEmissionOffset; // global, set by masterControl (log of brightness scale, 0 = unchanged)
 			
-			fixed4 frag (v2f i) : COLOR
+			half4 frag (v2f i) : COLOR
 			{
 				UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
 				#ifdef SOFTPARTICLES_ON
@@ -77,7 +79,13 @@ Category {
 				i.color.a *= fade;
 				#endif
 				
-				return 2.0f * i.color * _TintColor * tex2D(_MainTex, i.texcoord) * (exp(_EmissionGain * 5.0f));
+				// The output alpha is often > 1 (2 * tint.a * exp(gain*5)). With Blend SrcAlpha One
+				// a float (HDR) target uses it unclamped as the blend factor, which is how the PC
+				// build gets its bright, saturated glow; Quest renders to an 8-bit target where the
+				// factor clamps to 1 (2-3x dimmer, washed out). Multiply it in here instead.
+				half4 glowOut = 2.0f * i.color * _TintColor * tex2D(_MainTex, i.texcoord) * (exp(_EmissionGain * 5.0f + _SSEmissionOffset));
+				glowOut.rgb *= glowOut.a;
+				return glowOut;
 			}
 			ENDCG 
 		}

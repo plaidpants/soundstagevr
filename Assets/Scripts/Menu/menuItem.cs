@@ -1,4 +1,4 @@
-// Copyright 2017 Google LLC
+﻿// Copyright 2017 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -74,6 +74,27 @@ public class menuItem : manipObject {
 
     if (!disabled) symbol.material.SetColor("_TintColor", normalColor);
     else symbol.material.SetColor("_TintColor", disabledColor);
+  }
+
+  // The menu/example-palette previews (InstrumentSelectMat, a very dim additive
+  // material that relies on many overlapping faces) come out ~2-3x fainter on Quest
+  // than on PC. Until the root cause is found, Quest uses a boosted copy.
+  // Gain is in _EmissionGain units: brightness x exp(5 * boost); 0.18 ~ x2.5.
+#if UNITY_ANDROID && !UNITY_EDITOR
+  public static float menuGlowBoost = 0.18f;
+#else
+  public static float menuGlowBoost = 0f;
+#endif
+  static Material boostedMenuMat;
+  static Material GetMenuMat(Material source) {
+    if (source == null || menuGlowBoost <= 0f) return source;
+    if (boostedMenuMat == null) {
+      boostedMenuMat = new Material(source);
+      boostedMenuMat.name = source.name + " (Quest boost)";
+      if (boostedMenuMat.HasProperty("_EmissionGain"))
+        boostedMenuMat.SetFloat("_EmissionGain", source.GetFloat("_EmissionGain") + menuGlowBoost);
+    }
+    return boostedMenuMat;
   }
 
   public override void Awake() {
@@ -152,7 +173,7 @@ public class menuItem : manipObject {
 
     Renderer[] r = g.GetComponentsInChildren<Renderer>();
     for (int i = 0; i < r.Length; i++) {
-      r[i].material = menuMat;
+      r[i].sharedMaterial = GetMenuMat(menuMat);
       if (r[i].bounds.size.sqrMagnitude > size.sqrMagnitude) {
         size = r[i].bounds.size;
         center = r[i].bounds.center;

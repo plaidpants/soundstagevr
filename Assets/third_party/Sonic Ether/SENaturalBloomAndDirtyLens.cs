@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using System.Collections;
 
 [ExecuteInEditMode]
@@ -70,6 +70,8 @@ public class SENaturalBloomAndDirtyLens : MonoBehaviour
 	
 	// Builds a temporary-RT descriptor that matches the source's layout. Under Multiview /
 	// single-pass stereo the source is a 2-slice texture array, so intermediates must be too.
+	static bool loggedSourceFormat = false;
+
 	static RenderTexture GetTempLike(RenderTexture source, int width, int height)
 	{
 		RenderTextureDescriptor desc = source.descriptor;
@@ -102,6 +104,14 @@ public class SENaturalBloomAndDirtyLens : MonoBehaviour
 
 		material.hideFlags = HideFlags.HideAndDontSave;
 
+		if (!loggedSourceFormat)
+		{
+			loggedSourceFormat = true;
+			Debug.Log("[Bloom] source " + source.width + "x" + source.height + " format=" + source.format +
+			          " graphicsFormat=" + source.graphicsFormat + " slices=" + source.volumeDepth +
+			          " depthBits=" + source.depth + " msaa=" + source.antiAliasing + " cameraHDR=" + cam.allowHDR);
+		}
+
 		material.SetFloat("_BloomIntensity", Mathf.Exp(bloomIntensity) - 1.0f);
 		material.SetFloat("_LensDirtIntensity", Mathf.Exp(lensDirtIntensity) - 1.0f);
 		material.SetFloat("_DepthBlendFactor", depthBlending ? Mathf.Pow(depthBlendFactor, 2.0f) : 0.0f);
@@ -115,8 +125,17 @@ public class SENaturalBloomAndDirtyLens : MonoBehaviour
 
 		source.filterMode = FilterMode.Bilinear;
 
-		RenderTexture clampedSource = GetTempLike(source, source.width, source.height);
-		Graphics.Blit(source, clampedSource, material, 5);
+		// The clamp pass is a full-resolution copy whose only jobs are clamping negatives
+		// and encoding the depth-fog factor in alpha. Depth blending is off in SoundStage
+		// and the scene shaders never output negatives, so skip it: one full-res read +
+		// write less per frame on Quest (2026-11).
+		RenderTexture clampedSource = source;
+		bool usedClamp = depthBlending;
+		if (usedClamp)
+		{
+			clampedSource = GetTempLike(source, source.width, source.height);
+			Graphics.Blit(source, clampedSource, material, 5);
+		}
 
 		int initialDivisor = lowQuality ? 4 : 2;
 
@@ -130,7 +149,9 @@ public class SENaturalBloomAndDirtyLens : MonoBehaviour
 
 		int iterations = 1;
 
-		int octaves = lowQuality ? 4 : 8;
+		// Low quality samples _Bloom0-4 in its final pass, so it needs 5 octaves (it used
+		// 4 and read a stale _Bloom4).
+		int octaves = lowQuality ? 5 : 8;
 
 		for (int i = 0; i < octaves; i++)
 		{
@@ -203,7 +224,7 @@ public class SENaturalBloomAndDirtyLens : MonoBehaviour
 
 		material.SetTexture("_LensDirt", lensDirtTexture);
 		Graphics.Blit(clampedSource, destination, material, lowQuality ? 4 : 0);
-		RenderTexture.ReleaseTemporary(clampedSource);
+		if (usedClamp) RenderTexture.ReleaseTemporary(clampedSource);
 
 	}
 }

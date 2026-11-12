@@ -34,7 +34,7 @@ Properties {
 
 SubShader {
 	Tags { "Queue"="Transparent" "IgnoreProjector"="True" "RenderType"="Transparent" }
-	Blend SrcAlpha One
+	Blend One One // was SrcAlpha One; alpha folded into rgb in frag (see below)
 	ColorMask RGB
 	Cull Off Lighting Off ZWrite Off
 
@@ -45,24 +45,25 @@ SubShader {
 		#include "UnityCG.cginc"
 
 		sampler2D _WaveTex;
-		fixed4 _TintColor;
-		fixed4 _LineColor;
-		fixed4 _BGColor;
+		half4 _TintColor;
+		half4 _LineColor;
+		half4 _BGColor;
 		float _EmissionGain;
+		float _SSEmissionOffset; // global, set by masterControl (log of brightness scale, 0 = unchanged)
 		float _Head;
 		float _Columns;
 		float _Rows;
 
 		struct appdata_t {
 			float4 vertex : POSITION;
-			fixed4 color : COLOR;
+			half4 color : COLOR;
 			float2 texcoord : TEXCOORD0;
 			UNITY_VERTEX_INPUT_INSTANCE_ID
 		};
 
 		struct v2f {
 			float4 vertex : SV_POSITION;
-			fixed4 color : COLOR;
+			half4 color : COLOR;
 			float2 uv : TEXCOORD0;
 			UNITY_VERTEX_OUTPUT_STEREO
 		};
@@ -84,7 +85,7 @@ SubShader {
 			return floor(tex2Dlod(_WaveTex, float4(u, 0.5, 0, 0)).r * 255.0 + 0.5);
 		}
 
-		fixed4 frag (v2f i) : SV_Target {
+		half4 frag (v2f i) : SV_Target {
 			UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
 			float u = frac(i.uv.x + _Head);                // same scroll the old texture offset did
 			float column = floor(u * _Columns);
@@ -92,9 +93,15 @@ SubShader {
 			float h0 = heightAt(column - 1.0);
 			float row = floor(i.uv.y * _Rows);
 			bool lit = row >= min(h0, h1) && row <= max(h0, h1);
-			fixed4 tex = lit ? _LineColor : _BGColor;
+			half4 tex = lit ? _LineColor : _BGColor;
 			tex.a = 1;
-			return 2.0f * i.color * _TintColor * tex * (exp(_EmissionGain * 5.0f));
+			// The output alpha is often > 1 (2 * tint.a * exp(gain*5)). With Blend SrcAlpha One
+			// a float (HDR) target uses it unclamped as the blend factor, which is how the PC
+			// build gets its bright, saturated glow; Quest renders to an 8-bit target where the
+			// factor clamps to 1 (2-3x dimmer, washed out). Multiply it in here instead.
+			half4 glowOut = 2.0f * i.color * _TintColor * tex * (exp(_EmissionGain * 5.0f + _SSEmissionOffset));
+			glowOut.rgb *= glowOut.a;
+			return glowOut;
 		}
 		ENDCG
 	}

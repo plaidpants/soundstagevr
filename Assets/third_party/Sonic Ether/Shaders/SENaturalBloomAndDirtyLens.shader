@@ -76,9 +76,9 @@ Shader "Hidden/SENaturalBloomAndDirtyLens" {
 			return o; 
 		}
 		
-		fixed3 Fixed3(float x)
+		half3 Fixed3(float x)
 		{
-			return fixed3(x, x, x);
+			return half3(x, x, x);
 		}
 
 		float Luminance(float3 c)
@@ -135,7 +135,7 @@ Shader "Hidden/SENaturalBloomAndDirtyLens" {
 			// Get various source textures
 			float4 color = UNITY_SAMPLE_SCREENSPACE_TEXTURE(_MainTex, coord);
 			float3 origColor = color.rgb;
-			fixed3 lens = tex2D(_LensDirt, coord).rgb;
+			half3 lens = tex2D(_LensDirt, coord).rgb;
 			float lensLum = dot(lens, Fixed3(0.33333));
 			
 			float4 b0s = UNITY_SAMPLE_SCREENSPACE_TEXTURE(_Bloom0, coord);
@@ -147,14 +147,14 @@ Shader "Hidden/SENaturalBloomAndDirtyLens" {
 			float4 b6s = UNITY_SAMPLE_SCREENSPACE_TEXTURE(_Bloom6, coord);
 			float4 b7s = UNITY_SAMPLE_SCREENSPACE_TEXTURE(_Bloom7, coord);
 
-			fixed3 b0 = b0s.rgb;
-			fixed3 b1 = b1s.rgb;
-			fixed3 b2 = b2s.rgb;
-			fixed3 b3 = b3s.rgb;
-			fixed3 b4 = b4s.rgb;
-			fixed3 b5 = b5s.rgb;
-			fixed3 b6 = b6s.rgb;
-			fixed3 b7 = b7s.rgb;
+			half3 b0 = b0s.rgb;
+			half3 b1 = b1s.rgb;
+			half3 b2 = b2s.rgb;
+			half3 b3 = b3s.rgb;
+			half3 b4 = b4s.rgb;
+			half3 b5 = b5s.rgb;
+			half3 b6 = b6s.rgb;
+			half3 b7 = b7s.rgb;
 
 			float depthp = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, coord);
 			float depth = Linear01Depth(depthp);
@@ -245,7 +245,7 @@ Shader "Hidden/SENaturalBloomAndDirtyLens" {
 
 
 			// Sum up bloom octaves for each type based on weights
-			fixed3 bloom	= b0 * bloomWeights[0]
+			half3 bloom	= b0 * bloomWeights[0]
 							+ b1 * bloomWeights[1]
 							+ b2 * bloomWeights[2]
 							+ b3 * bloomWeights[3]
@@ -257,7 +257,7 @@ Shader "Hidden/SENaturalBloomAndDirtyLens" {
 			bloom *= bloomWeightsInvTotal;
 
 
-			fixed3 fogBloom = b0 * fogBloomWeights[0]
+			half3 fogBloom = b0 * fogBloomWeights[0]
 							+ b1 * fogBloomWeights[1]
 							+ b2 * fogBloomWeights[2]
 							+ b3 * fogBloomWeights[3]
@@ -269,7 +269,7 @@ Shader "Hidden/SENaturalBloomAndDirtyLens" {
 			fogBloom *= fogBloomWeightsInvTotal;
 			
 			
-			fixed3 lensDirtBloom 	= b0 * lensDirtBloomWeights[0]
+			half3 lensDirtBloom 	= b0 * lensDirtBloomWeights[0]
 									+ b1 * lensDirtBloomWeights[1]
 									+ b2 * lensDirtBloomWeights[2]
 									+ b3 * lensDirtBloomWeights[3]
@@ -329,21 +329,21 @@ Shader "Hidden/SENaturalBloomAndDirtyLens" {
 				float2 coord = i.uv.xy;
 			#endif
 			float4 color = UNITY_SAMPLE_SCREENSPACE_TEXTURE(_MainTex, coord);
-			fixed3 lens = tex2D(_LensDirt, coord).rgb;
+			half3 lens = tex2D(_LensDirt, coord).rgb;
 			
-			fixed3 b0 = UNITY_SAMPLE_SCREENSPACE_TEXTURE(_Bloom0, coord).rgb;
-			fixed3 b1 = UNITY_SAMPLE_SCREENSPACE_TEXTURE(_Bloom1, coord).rgb;
-			fixed3 b2 = UNITY_SAMPLE_SCREENSPACE_TEXTURE(_Bloom2, coord).rgb;
-			fixed3 b3 = UNITY_SAMPLE_SCREENSPACE_TEXTURE(_Bloom3, coord).rgb;
-			fixed3 b4 = UNITY_SAMPLE_SCREENSPACE_TEXTURE(_Bloom4, coord).rgb;
-//			fixed3 b5 = UNITY_SAMPLE_SCREENSPACE_TEXTURE(_Bloom5, coord).rgb;
-//			fixed3 b6 = UNITY_SAMPLE_SCREENSPACE_TEXTURE(_Bloom6, coord).rgb;
-//			fixed3 b7 = UNITY_SAMPLE_SCREENSPACE_TEXTURE(_Bloom7, coord).rgb;
+			half3 b0 = UNITY_SAMPLE_SCREENSPACE_TEXTURE(_Bloom0, coord).rgb;
+			half3 b1 = UNITY_SAMPLE_SCREENSPACE_TEXTURE(_Bloom1, coord).rgb;
+			half3 b2 = UNITY_SAMPLE_SCREENSPACE_TEXTURE(_Bloom2, coord).rgb;
+			half3 b3 = UNITY_SAMPLE_SCREENSPACE_TEXTURE(_Bloom3, coord).rgb;
+			half3 b4 = UNITY_SAMPLE_SCREENSPACE_TEXTURE(_Bloom4, coord).rgb;
+//			half3 b5 = UNITY_SAMPLE_SCREENSPACE_TEXTURE(_Bloom5, coord).rgb;
+//			half3 b6 = UNITY_SAMPLE_SCREENSPACE_TEXTURE(_Bloom6, coord).rgb;
+//			half3 b7 = UNITY_SAMPLE_SCREENSPACE_TEXTURE(_Bloom7, coord).rgb;
 			
 //			return float4(b0.rgb, 1.0);
 			
 			
-			fixed3 bloom = b0 * 0.5f
+			half3 bloom = b0 * 0.5f
 						 + b1 * 0.6f
 						 + b2 * 0.6f
 						 + b3 * 0.45f 
@@ -355,7 +355,7 @@ Shader "Hidden/SENaturalBloomAndDirtyLens" {
 			
 			bloom *= 0.3401f;
 			
-			fixed3 lensDirtBloom = b0 * 1.0f 
+			half3 lensDirtBloom = b0 * 1.0f 
 							 + b1 * 0.8f 
 							 + b2 * 0.6f 
 							 + b3 * 0.45f 
@@ -409,8 +409,10 @@ Shader "Hidden/SENaturalBloomAndDirtyLens" {
 		float4 fragDownsample ( v2f_tap i ) : COLOR
 		{
 			UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);				
+			// Was a single tap (early return), which point-samples one of every 4 pixels:
+			// thin bright lines (outlines, scope traces) got skipped or flickered in and out
+			// of the bloom. 4 bilinear taps cover the full 4x4 footprint.
 			float4 color = UNITY_SAMPLE_SCREENSPACE_TEXTURE(_MainTex, i.uv20.xy);
-			return color;
 			color += UNITY_SAMPLE_SCREENSPACE_TEXTURE(_MainTex, i.uv21.xy);
 			color += UNITY_SAMPLE_SCREENSPACE_TEXTURE(_MainTex, i.uv22.xy);
 			color += UNITY_SAMPLE_SCREENSPACE_TEXTURE(_MainTex, i.uv23.xy);

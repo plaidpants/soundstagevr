@@ -1,4 +1,4 @@
-// Copyright 2017 Google LLC
+﻿// Copyright 2017 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,6 +25,8 @@ public class wirePanelComponentInterface : componentInterface {
 
   public uiPanelSinglePress handlepanel, jackpanel, midipanel;
   uiPanelSinglePress passthroughpanel; // cloned from midipanel at runtime (buttonID 6)
+  uiPanelSinglePress glowqualitypanel; // cloned from midipanel at runtime (buttonID 7)
+  uiPanelSinglePress brightnesspanel; // cloned from midipanel at runtime (buttonID 8)
 
   Color colorGreen = Color.HSVToRGB(.4f, 230f / 255, 118f / 255);
   Color colorRed = Color.HSVToRGB(0f, 230f / 255, 118f / 255);
@@ -40,6 +42,8 @@ public class wirePanelComponentInterface : componentInterface {
     }
 
     CreatePassthroughButton();
+    CreateGlowQualityButton();
+    CreateBrightnessButton();
     if (PlayerPrefs.GetInt("midiOut") == 1) {
       string s = "DISABLE MIDI OUT";
       midipanel.label.text = s;
@@ -60,6 +64,44 @@ public class wirePanelComponentInterface : componentInterface {
     passthroughpanel = g.GetComponent<uiPanelSinglePress>();
     passthroughpanel.buttonID = 6;
     UpdatePassthroughLabel();
+  }
+
+  void CreateGlowQualityButton() {
+    if (glowqualitypanel != null || midipanel == null) return;
+    GameObject g = Instantiate(midipanel.gameObject, midipanel.transform.parent, false);
+    g.name = "glowQualityPanel";
+    g.transform.localPosition = midipanel.transform.localPosition + new Vector3(0, -0.076f, 0);
+    g.transform.localRotation = midipanel.transform.localRotation;
+    g.transform.localScale = midipanel.transform.localScale;
+    glowqualitypanel = g.GetComponent<uiPanelSinglePress>();
+    glowqualitypanel.buttonID = 7;
+    UpdateGlowQualityLabel();
+  }
+
+  void CreateBrightnessButton() {
+    if (brightnesspanel != null || midipanel == null) return;
+    GameObject g = Instantiate(midipanel.gameObject, midipanel.transform.parent, false);
+    g.name = "brightnessPanel";
+    g.transform.localPosition = midipanel.transform.localPosition + new Vector3(0, -0.114f, 0);
+    g.transform.localRotation = midipanel.transform.localRotation;
+    g.transform.localScale = midipanel.transform.localScale;
+    brightnesspanel = g.GetComponent<uiPanelSinglePress>();
+    brightnesspanel.buttonID = 8;
+    UpdateBrightnessLabel();
+  }
+
+  void UpdateBrightnessLabel() {
+    if (brightnesspanel == null) return;
+    int pct = Mathf.RoundToInt(masterControl.emissionLevels[masterControl.instance.emissionLevelIndex] * 100);
+    brightnesspanel.label.text = "GLOW BRIGHTNESS: " + pct + "%";
+    brightnesspanel.newColor(colorGreen);
+  }
+
+  void UpdateGlowQualityLabel() {
+    if (glowqualitypanel == null) return;
+    bool high = masterControl.instance.glowQuality == 2;
+    glowqualitypanel.label.text = high ? "GLOW QUALITY: HIGH" : "GLOW QUALITY: LOW";
+    glowqualitypanel.newColor(colorGreen);
   }
 
   void UpdatePassthroughLabel() {
@@ -99,6 +141,12 @@ public class wirePanelComponentInterface : componentInterface {
       string s = b ? "DISABLE MIDI OUT" : "ENABLE MIDI OUT";
       midipanel.label.text = s;
       midipanel.newColor(b ? colorRed : colorGreen);
+    } else if (ID == 8) {
+      masterControl.instance.setEmissionLevel(masterControl.instance.emissionLevelIndex + 1);
+      UpdateBrightnessLabel();
+    } else if (ID == 7) {
+      masterControl.instance.setGlowQuality(masterControl.instance.glowQuality == 2 ? 1 : 2);
+      UpdateGlowQualityLabel();
     } else if (ID == 6) {
       if (passthroughControl.instance != null) passthroughControl.instance.Toggle();
       UpdatePassthroughLabel();
