@@ -203,6 +203,7 @@ public class manipulator : MonoBehaviour {
 
   void Grab(bool on) {
     grabbing = on;
+    if (!on) holdingTool = false;
     showTip();
 
     if (selectedObject != null) {
@@ -227,6 +228,7 @@ public class manipulator : MonoBehaviour {
   }
 
   void release() {
+    holdingTool = false;
     selectedObject.setState(manipObject.manipState.none);
     toggleController(true);
   }
@@ -535,8 +537,26 @@ public class manipulator : MonoBehaviour {
     }
   }
 
-  public void setVerticalPosition(Transform t) {
+  // A held tool (drumstick, maraca, airhorn, microphone) is parented to this
+  // manipulator's root. With hands, platformSetup turns the root with the hand's bones
+  // (see HandFingertips.GetHoldPose) while holdingTool is set, and the tool's grip point
+  // sits at the grab point, pointing along the hand, tilted down by handToolPitch.
+  public bool holdingTool = false;
+  public static float handToolPitch = 15f;
+
+  // gripOffset given: (hands) place the tool along the hand with that point of its +Z
+  // axis at the grab point (drumsticks). Otherwise keep the controller layout, which in
+  // hands mode still sits relative to the grab point at the pinch.
+  public void setVerticalPosition(Transform t, float gripOffset = float.NaN) {
     tipPackage.gameObject.SetActive(false);
+    holdingTool = true;
+    if (handsMode && grabCollider != null && !float.IsNaN(gripOffset)) {
+      Transform root = transform.parent;
+      t.localRotation = Quaternion.Euler(handToolPitch, 0, 0);
+      Vector3 grab = root.InverseTransformPoint(GrabPointWorld);
+      t.localPosition = grab - t.localRotation * (Vector3.forward * gripOffset);
+      return;
+    }
     if (!usingOculus) return;
     else {
       t.localPosition = oculusParentTarget.localPosition;

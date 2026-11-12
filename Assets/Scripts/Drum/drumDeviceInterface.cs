@@ -1,4 +1,4 @@
-// Copyright 2017 Google LLC
+﻿// Copyright 2017 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -71,9 +71,15 @@ public class drumDeviceInterface : deviceInterface {
   }
 
   public override void hit(bool on, int ID = -1) {
+    hitWithVelocity(on, 1f, ID);
+  }
+
+  // velocity 0..1; 1 = the old fixed loudness.
+  public void hitWithVelocity(bool on, float velocity, int ID = -1) {
     if (on) {
+      drumSig.velocity = Mathf.Clamp01(velocity);
       if (sigOut.near == null && sampOut.near == null && !samp.hasTape()) {
-        defaultAudioSource.PlayOneShot(offClip, .4f);
+        defaultAudioSource.PlayOneShot(offClip, .4f * drumSig.velocity);
       }
     }
     drumSig.setKeyActive(on, ID);

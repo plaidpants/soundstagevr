@@ -1,4 +1,4 @@
-// Copyright 2017 Google LLC
+﻿// Copyright 2017 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -105,12 +105,25 @@ public class drumstick : manipObject {
 
       if (posFlat.magnitude < .175f) {
         if (lastStickPos[i].y > -.004f && pos.y <= -.004f) {
-          pads[i].keyHit(true);
+          // Velocity from the tip's downward speed (fork used the change in distance).
+          float speed = (lastStickPos[i].y - pos.y) * pads[i].transform.parent.lossyScale.y / Mathf.Max(Time.deltaTime, 0.001f);
+          pads[i].keyHit(true, drumpad.VelocityFromSpeed(speed));
           if (manipulatorObjScript != null) manipulatorObjScript.bigHaptic(3999, .1f);
         }
       }
       lastStickPos[i] = pos;
     }
+  }
+
+  // Hands: where along the stick (+Z from its butt) the grip sits. Drumsticks (27.9 cm)
+  // are held 6 cm up. The xylophone mallets are much shorter (~13 cm at their prefab
+  // scale) and ended up inside the hand, so short sticks are pushed forward until the
+  // head reaches handReach in front of the grip (the butt then floats past the fingers).
+  public static float handReach = 0.20f;
+  float HandGripOffset() {
+    MeshFilter mf = GetComponent<MeshFilter>();
+    float length = (mf != null && mf.sharedMesh != null) ? mf.sharedMesh.bounds.max.z * transform.localScale.z : 0.279f;
+    return Mathf.Min(0.06f, length - handReach);
   }
 
   Coroutine returnRoutineID;
@@ -206,7 +219,7 @@ public class drumstick : manipObject {
       transform.localPosition = Vector3.zero;
       transform.localRotation = Quaternion.identity;
 
-      if (manipulatorObjScript != null) manipulatorObjScript.setVerticalPosition(transform);
+      if (manipulatorObjScript != null) manipulatorObjScript.setVerticalPosition(transform, HandGripOffset());
 
       pads.Clear();
       lastStickPos.Clear();

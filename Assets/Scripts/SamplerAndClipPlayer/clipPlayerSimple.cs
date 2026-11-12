@@ -1,4 +1,4 @@
-// Copyright 2017 Google LLC
+﻿// Copyright 2017 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -50,6 +50,12 @@ public class clipPlayerSimple : clipPlayer {
     active = false;
   }
 
+  // Drums pass their hit velocity to the sample they trigger.
+  float TriggerVelocity() {
+    drumSignalGenerator drum = seqGen as drumSignalGenerator;
+    return drum != null ? drum.velocity : 1f;
+  }
+
   float[] _scratch_seqBuffer; // reused audio-thread scratch (see AudioBufferPool)
   public override void processBuffer(float[] buffer, double dspTime, int channels) {
     if (!loaded) return;
@@ -60,7 +66,7 @@ public class clipPlayerSimple : clipPlayer {
 
 
     floatingBufferCount = ClipSignalGenerator(buffer, speedBuffer, ampBuffer, seqBuffer, buffer.Length, lastSeqGen, channels, false, false, seqGen != null, floatingBufferCount, sampleBounds,
-   playbackSpeed, m_ClipHandle.AddrOfPinnedObject(), clipChannels, amplitude, true, false, _sampleDuration, bufferCount, ref active);
+   playbackSpeed, m_ClipHandle.AddrOfPinnedObject(), clipChannels, amplitude * TriggerVelocity(), true, false, _sampleDuration, bufferCount, ref active);
 
     _lastBuffer = floatingBufferCount;
   }

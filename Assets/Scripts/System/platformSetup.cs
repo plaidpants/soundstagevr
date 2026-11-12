@@ -210,6 +210,7 @@ public class platformSetup : MonoBehaviour {
             handVisuals[i] = Instantiate(prefab, anchors[i], false);
             fingertips[i] = handVisuals[i].AddComponent<HandFingertips>();
             fingertips[i].owner = manips[i];
+            fingertips[i].isLeft = i == 0;
         }
     }
 
@@ -219,6 +220,14 @@ public class platformSetup : MonoBehaviour {
             HandInput.Hand hand = HandInput.Get(i);
             if (!hand.inputValid) continue; // hold the last pose while the hand is lost
             Transform root = manipRoots[i];
+            // Holding a tool: follow the hand's bones so wrist flicks move it (drumming).
+            if (manips[i].holdingTool && fingertips[i] != null && fingertips[i].HasHoldPose) {
+                Vector3 holdPos; Quaternion holdRot;
+                fingertips[i].GetHoldPose(out holdPos, out holdRot);
+                root.rotation = holdRot;
+                root.position += holdPos - manips[i].GrabPointWorld;
+                continue;
+            }
             root.localPosition = hand.pointerPosition;
             root.localRotation = hand.pointerRotation;
             // Shift the rig so the manipulator's grab collider lands at the pinch.

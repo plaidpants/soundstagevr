@@ -1,4 +1,4 @@
-// Copyright 2017 Google LLC
+﻿// Copyright 2017 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,6 +19,10 @@ using System.Runtime.InteropServices;
 
 public class drumSignalGenerator : signalGenerator
 {
+
+    // Hit strength 0..1 (from millenniummike's fork, "Add velocity into drums and clip
+    // player"): scales the drum's own sample (clipPlayerSimple) and default sound.
+    public float velocity = 1f;
 
     bool newSignal = false;
     bool signalOn = false;
