@@ -23,6 +23,7 @@ Category {
 			#pragma vertex vert
 			#pragma fragment frag
 			#pragma multi_compile_particles
+			#pragma multi_compile_instancing // GPU instancing of shared glow materials (2026-11)
 
 			#include "UnityCG.cginc"
 
