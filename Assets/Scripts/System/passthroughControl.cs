@@ -22,10 +22,9 @@
 //   * hides the ground plane / landscape
 //   * switches the SE bloom to keep the frame's alpha (so the glow spills over the
 //     real world instead of making the frame opaque)
-// Passthrough is started the first time it's turned on and then only shown/hidden via
-// the layer for the rest of the session. Tearing the passthrough system down and
-// re-creating it on every toggle (via OVRManager.isInsightPassthroughEnabled) hung
-// the app after a few toggles.
+// Turning it off removes the layer, then shuts the passthrough system down a second
+// later so the runtime lifts its CPU/GPU cap (see SetPassthrough). An earlier version
+// that tore the system down with the layer still alive hung after a few toggles.
 // The choice is saved in PlayerPrefs("passthrough"). Passthrough needs a 64-bit build.
 
 using UnityEngine;
@@ -73,7 +72,7 @@ public class passthroughControl : MonoBehaviour {
 
     OVRCameraRig rig = FindObjectOfType<OVRCameraRig>();
     if (on) {
-      // Start passthrough once; it stays initialised for the rest of the session.
+      CancelInvoke("ShutdownSystem");
       if (OVRManager.instance != null) OVRManager.instance.isInsightPassthroughEnabled = true;
       if (layer == null && rig != null) {
         layer = rig.gameObject.AddComponent<OVRPassthroughLayer>();
@@ -82,8 +81,16 @@ public class passthroughControl : MonoBehaviour {
         layer.compositionDepth = 0;
       }
     }
-    // Only show/hide the layer; never disable it or shut the system down mid-session.
-    if (layer != null) layer.hidden = !on;
+    // Off: the layer component is disabled first (destroys the compositor layer), and the
+    // passthrough system is shut down a second later. The runtime holds CPU/GPU at 3/2 for
+    // as long as the passthrough feature is running, even with no layer (2026-11 logs), so
+    // only a shutdown gets 4/4 back. Restarting used to hang after a few cycles when the
+    // system was shut down with the layer still alive; the layer now always goes first.
+    // Set shutdownWhenOff = false to go back to keeping the system up all session.
+    if (layer != null) {
+      layer.hidden = !on;
+      layer.enabled = on;
+    }
 
     UpdateCameras(rig, on);
     UpdateEnvironment(on);
@@ -99,14 +106,29 @@ public class passthroughControl : MonoBehaviour {
     // not raise them again when it stops, so re-request ours once passthrough is off.
     if (!on) {
       CancelInvoke("ReapplyPerformance");
-      Invoke("ReapplyPerformance", 0.5f);
-      Invoke("ReapplyPerformance", 2f);
+      CancelInvoke("ShutdownSystem");
+      float wait = 0f;
+      if (shutdownWhenOff && OVRManager.instance != null && OVRManager.instance.isInsightPassthroughEnabled) {
+        Invoke("ShutdownSystem", 1f);
+        wait = 1f;
+      }
+      Invoke("ReapplyPerformance", wait + 0.5f);
+      Invoke("ReapplyPerformance", wait + 2f);
     }
+  }
+
+  public static bool shutdownWhenOff = true;
+
+  void ShutdownSystem() {
+    if (isOn || OVRManager.instance == null) return;
+    OVRManager.instance.isInsightPassthroughEnabled = false;
+    Debug.Log("[passthroughControl] passthrough system shut down");
   }
 
   void ReapplyPerformance() {
     if (masterControl.instance != null && masterControl.instance.passthroughActive) return;
     QuestPerformanceSetup.Apply();
+    Debug.Log("[passthroughControl] re-requested perf levels; now cpu=" + OVRManager.suggestedCpuPerfLevel + " gpu=" + OVRManager.suggestedGpuPerfLevel);
   }
 
   void UpdateCameras(OVRCameraRig rig, bool on) {

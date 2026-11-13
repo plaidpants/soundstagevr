@@ -1,4 +1,4 @@
-// Copyright 2017 Google LLC
+﻿// Copyright 2017 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,6 +42,17 @@ public class cameraDeviceInterface : deviceInterface {
     recMessage.SetActive(false);
     camSetup();
 
+    // The preview camera is rendered by hand in LateUpdate (throttled) instead of every frame.
+    rtCam.enabled = false;
+    rtQuadRenderer = rtQuad.GetComponent<Renderer>();
+    frameOffset = (GetInstanceID() & 0x7fffffff) % 3;
+#if UNITY_ANDROID && !UNITY_EDITOR
+    // "Broadcast" renders a full-screen view for a desktop monitor. The headset has no
+    // such output, so on Quest it was a second full scene render with nobody watching.
+    Camera rc = realCam.GetComponent<Camera>();
+    if (rc != null) rc.enabled = false;
+#endif
+
   }
 
   void Start() {
@@ -53,6 +64,34 @@ public class cameraDeviceInterface : deviceInterface {
     }
     realCam.GetComponent<Skybox>().enabled = sky;
     activated = true;
+  }
+
+  // Preview throttling (2026-11): the camera device drew the whole scene again every
+  // frame; in a 34-device patch that alone took the headset from 72 to 33 fps.
+  // Now the preview renders at previewFrameDivisor of the display rate (24 fps at
+  // 72 Hz), and not at all while its screen is out of view or the preview is off.
+  public static int previewFrameDivisor = 3;
+  Renderer rtQuadRenderer;
+  int frameOffset;
+  Plane[] viewPlanes = new Plane[6];
+
+  void LateUpdate() {
+    if (!preview || rtCam == null || !rtCam.gameObject.activeInHierarchy) return;
+    if (rtCam.targetTexture == null) return;
+    int div = Mathf.Max(1, previewFrameDivisor);
+    if ((Time.frameCount + frameOffset) % div != 0) return;
+    if (!ScreenInView()) return;
+    rtCam.Render();
+  }
+
+  bool ScreenInView() {
+    if (rtQuadRenderer == null || !rtQuadRenderer.gameObject.activeInHierarchy) return false;
+    Camera head = Camera.main;
+    if (head == null) return true;
+    GeometryUtility.CalculateFrustumPlanes(head, viewPlanes);
+    Bounds b = rtQuadRenderer.bounds;
+    b.Expand(0.3f); // margin: the head camera's mono frustum is a little narrower than both eyes
+    return GeometryUtility.TestPlanesAABB(viewPlanes, b);
   }
 
   void OnDestroy() {
