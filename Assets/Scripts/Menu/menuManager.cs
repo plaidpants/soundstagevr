@@ -158,6 +158,13 @@ public class menuManager : MonoBehaviour {
         transform.LookAt(camPos, Vector3.up);
         yield return null;
       }
+      // Items further away than the reveal reaches (the top row, now that Gain and Glide
+      // were added) never appeared; show them now. MIDI OUT (last) stays hidden unless
+      // MIDI out is enabled, as before.
+      foreach (int i in remaining) {
+        if (i == menuItemScripts.Length - 1 && !midiOutEnabled) continue;
+        menuItemScripts[i].Appear(on);
+      }
       trashNode.SetActive(true);
       settingsNode.SetActive(true);
       metronomeNode.SetActive(true);
