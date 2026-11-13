@@ -9,7 +9,7 @@ Material:
   m_Name: OmniJack
   m_Shader: {fileID: 4800000, guid: fb944acb6ea5b6b4e961e6f8feb2b64a, type: 3}
   m_ShaderKeywords: 
-  m_EnableInstancingVariants: 1
+  m_EnableInstancingVariants: 0
   m_LightmapFlags: 5
   m_CustomRenderQueue: 2000
   stringTagMap: {}

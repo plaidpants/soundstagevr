@@ -54,8 +54,11 @@ public class sequencerDeviceInterface : deviceInterface {
 
   public TextMesh[] dimensionDisplays;
 
+  public basicSwitch loopSwitch; // LOOP / ONCE (SequencerLoopSwitch, 2026-11)
+
   public override void Awake() {
     base.Awake();
+    if (loopSwitch == null) loopSwitch = SequencerLoopSwitch.Create(transform);
     cubeList = new List<List<Transform>>();
     jackList = new List<Transform>();
     seqList = new List<sequencer>();
@@ -137,7 +140,8 @@ public class sequencerDeviceInterface : deviceInterface {
 
     int next = (targetStep + s) % dimensions[0];
 
-    if (next == 0 && externalPulse != null && !minicheck) forcePlay(false);
+    bool looping = loopSwitch == null || loopSwitch.switchVal;
+    if (next == 0 && !minicheck && !looping) forcePlay(false); // ONCE: one pass, whether started by PLAY or the input
     else SelectStep(next);
 
 
@@ -454,6 +458,7 @@ public class sequencerDeviceInterface : deviceInterface {
     data.rowSamples = tapeList;
     data.rowMute = rowMute;
     data.swing = swingDial.percent;
+    data.loop = loopSwitch == null || loopSwitch.switchVal;
 
     data.sampleJackOutIDs = new int[samplerList.Count];
     for (int i = 0; i < samplerList.Count; i++) {
@@ -494,6 +499,7 @@ public class sequencerDeviceInterface : deviceInterface {
     beatSlider.setVal(data.speedMult);
 
     swingDial.setPercent(data.swing);
+    if (loopSwitch != null) loopSwitch.setSwitch(data.loop);
 
     for (int i = 0; i < samplerList.Count; i++) {
       samplerList[i].gameObject.GetComponent<miniSamplerComponentInterface>().jackout.ID = data.sampleJackOutIDs[i];
@@ -514,4 +520,5 @@ public class SequencerData : InstrumentData {
   public int[] sampleJackOutIDs;
   public bool[] rowMute;
   public float swing;
+  public bool loop = true; // LOOP / ONCE switch; older saves load as LOOP
 }

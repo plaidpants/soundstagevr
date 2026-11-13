@@ -57,6 +57,7 @@ public class menuItem : manipObject {
     ADSR,
     Gain,  // from ludzeller's fork (2026-11)
     Glide, // from ludzeller's fork (2026-11)
+    CVSequencer, // from ludzeller's fork (2026-11)
     MIDIIN,
     MIDIOUT,
     Max,
@@ -125,6 +126,7 @@ public class menuItem : manipObject {
     if (item == deviceType.MIDIOUT) label.text = "MIDI OUT";
     if (item == deviceType.Sequencer) label.text = "Drum Machine";
     if (item == deviceType.Timeline) label.text = "Sequencer";
+    if (item == deviceType.CVSequencer) label.text = "CV Sequencer";
     label.gameObject.SetActive(false);
     symbol.gameObject.SetActive(false);
     GameObject g = Instantiate(itemPrefab, transform.position, transform.rotation) as GameObject;
@@ -145,6 +147,23 @@ public class menuItem : manipObject {
         }
 
         GameObject seq = Instantiate(g.GetComponent<sequencerDeviceInterface>().samplerPrefab, transform.position, transform.rotation) as GameObject;
+        seq.transform.parent = g.transform;
+        seq.transform.Translate(Vector3.right * .081f, Space.Self);
+        seq.transform.Translate(Vector3.up * i * -.04f, Space.Self);
+      }
+      Destroy(g.transform.Find("stretchNode").gameObject);
+    }
+
+    if (item == deviceType.CVSequencer) {
+      for (int i = 0; i < 2; i++) {
+        for (int i2 = 0; i2 < 4; i2++) {
+          GameObject cube = Instantiate(g.GetComponent<cvSequencerDeviceInterface>().touchDialPrefab, transform.position, transform.rotation) as GameObject;
+          cube.transform.parent = g.transform;
+          cube.transform.Translate(Vector3.right * i2 * -.04f, Space.Self);
+          cube.transform.Translate(Vector3.up * i * -.04f, Space.Self);
+        }
+
+        GameObject seq = Instantiate(g.GetComponent<cvSequencerDeviceInterface>().samplerPrefab, transform.position, transform.rotation) as GameObject;
         seq.transform.parent = g.transform;
         seq.transform.Translate(Vector3.right * .081f, Space.Self);
         seq.transform.Translate(Vector3.up * i * -.04f, Space.Self);
@@ -241,7 +260,7 @@ public class menuItem : manipObject {
     if (item == deviceType.Splitter) {
       g.transform.localPosition = new Vector3(.0185f, 0, .02f);
     }
-    if (item == deviceType.Sequencer) {
+    if (item == deviceType.Sequencer || item == deviceType.CVSequencer) {
       g.transform.localScale = Vector3.one * .166f;
     }
     if (item == deviceType.ControlCube) g.transform.localPosition = new Vector3(0, -.01f, .024f);
