@@ -190,6 +190,8 @@ public class SaveLoadInterface : MonoBehaviour {
 [XmlInclude(typeof(MIDIoutData))]
 [XmlInclude(typeof(TimelineData))]
 [XmlInclude(typeof(ADSRData))]
+[XmlInclude(typeof(GainData))]
+[XmlInclude(typeof(GlideData))]
 public class InstrumentData {
   public int ID;
   public menuItem.deviceType deviceType;

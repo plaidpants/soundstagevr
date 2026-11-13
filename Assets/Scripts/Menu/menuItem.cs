@@ -55,6 +55,8 @@ public class menuItem : manipObject {
     Airhorn,
     Timeline,
     ADSR,
+    Gain,  // from ludzeller's fork (2026-11)
+    Glide, // from ludzeller's fork (2026-11)
     MIDIIN,
     MIDIOUT,
     Max,
