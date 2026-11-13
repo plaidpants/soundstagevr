@@ -19,6 +19,7 @@ public class speakerDeviceInterface : deviceInterface {
   public int ID = -1;
   public omniJack input;
   speaker output;
+  public basicSwitch channelSwitcher; // LEFT ONLY / RIGHT ONLY (ludzeller's fork, 2026-11)
   public GameObject speakerRim;
   public new AudioSource audio;
 
@@ -56,6 +57,8 @@ public class speakerDeviceInterface : deviceInterface {
         output.volume = Mathf.Pow(lastScale + .2f, 2);
       }
     }
+
+    if (channelSwitcher != null) output.leftOn = channelSwitcher.switchVal;
   }
 
   public override InstrumentData GetData() {
@@ -63,6 +66,7 @@ public class speakerDeviceInterface : deviceInterface {
     data.deviceType = menuItem.deviceType.Speaker;
     GetTransformData(data);
     data.jackInID = input.transform.GetInstanceID();
+    if (channelSwitcher != null) data.leftChannel = channelSwitcher.switchVal;
     return data;
   }
 
@@ -75,9 +79,11 @@ public class speakerDeviceInterface : deviceInterface {
 
     ID = data.ID;
     input.ID = data.jackInID;
+    if (channelSwitcher != null) channelSwitcher.setSwitch(data.leftChannel);
   }
 }
 
 public class SpeakerData : InstrumentData {
   public int jackInID;
+  public bool leftChannel = true;
 }

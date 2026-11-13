@@ -20,6 +20,10 @@ public class speaker : MonoBehaviour {
 
   public float volume = 1;
   public signalGenerator incoming;
+  // Stereo setup (ludzeller's fork, 2026-11): a spatialized speaker only plays the left
+  // channel, so "RIGHT ONLY" copies the right channel into it. Two speakers set to
+  // left / right play a stereo signal as a stereo pair.
+  public bool leftOn = true;
 
   [DllImport("SoundStageNative")]
   public static extern void MultiplyArrayBySingleValue(float[] buffer, int length, float val);
@@ -29,6 +33,9 @@ public class speaker : MonoBehaviour {
     long start = System.Diagnostics.Stopwatch.GetTimestamp();
     double dspTime = AudioSettings.dspTime;
     incoming.processBuffer(buffer, dspTime, channels);
+    if (!leftOn && channels == 2) {
+      for (int n = 0; n < buffer.Length; n += 2) buffer[n] = buffer[n + 1];
+    }
     if (volume != 1) MultiplyArrayBySingleValue(buffer, buffer.Length, volume);
     // report this speaker's DSP time to the load monitor (see masterLimiter.cs)
     AudioLoadMonitor.AddSpeakerTicks(System.Diagnostics.Stopwatch.GetTimestamp() - start, dspTime);
