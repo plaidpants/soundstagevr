@@ -1,4 +1,4 @@
-// Copyright 2017 Google LLC
+﻿// Copyright 2017 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -94,6 +94,19 @@ public class passthroughControl : MonoBehaviour {
     }
 
     Debug.Log("[passthroughControl] passthrough " + (on ? "ON" : "OFF"));
+
+    // The runtime caps CPU/GPU levels while passthrough runs (seen 4/4 -> 3/2) and does
+    // not raise them again when it stops, so re-request ours once passthrough is off.
+    if (!on) {
+      CancelInvoke("ReapplyPerformance");
+      Invoke("ReapplyPerformance", 0.5f);
+      Invoke("ReapplyPerformance", 2f);
+    }
+  }
+
+  void ReapplyPerformance() {
+    if (masterControl.instance != null && masterControl.instance.passthroughActive) return;
+    QuestPerformanceSetup.Apply();
   }
 
   void UpdateCameras(OVRCameraRig rig, bool on) {
@@ -114,7 +127,12 @@ public class passthroughControl : MonoBehaviour {
         if (st.sky != null) st.sky.enabled = false;
       } else {
         st.cam.clearFlags = st.flags;
-        st.cam.backgroundColor = st.color;
+        // Opaque in VR mode: the scene's original background alpha is 0 (Unity default).
+        // With the glow (bloom) off nothing forced alpha to 1, so the eye buffer was
+        // see-through and the headset showed the real room as if passthrough were on.
+        Color c = st.color;
+        c.a = 1f;
+        st.cam.backgroundColor = c;
         if (st.sky != null) st.sky.enabled = st.skyEnabled;
       }
     }

@@ -94,6 +94,21 @@ public class SENaturalBloomAndDirtyLens : MonoBehaviour
 			return;
 		}
 
+		// Other cameras (the Camera device) follow the main camera's glow settings: off
+		// when the glow slider is at 0, same intensity and quality otherwise (2026-11; the
+		// camera feed kept full glow even with the environment's glow off).
+		SENaturalBloomAndDirtyLens main = masterControl.instance != null ? masterControl.instance.mainGlowShader : null;
+		if (main != null && main != this)
+		{
+			if (!main.enabled || main.bloomIntensity <= 0.0001f)
+			{
+				Graphics.Blit(source, destination);
+				return;
+			}
+			bloomIntensity = main.bloomIntensity;
+			lowQuality = main.lowQuality;
+		}
+
 
 		#if UNITY_EDITOR
 		if (source.format == RenderTextureFormat.ARGBHalf)
