@@ -80,7 +80,7 @@ public class SceneStats : MonoBehaviour {
                 " devices=" + GameObject.FindGameObjectsWithTag("instrument").Length +
                 " glow=" + (masterControl.instance != null && masterControl.instance.mainGlowShader != null && masterControl.instance.mainGlowShader.enabled ?
                             (masterControl.instance.glowQuality == 2 ? "high" : "low") : "off") +
-                " passthrough=" + (passthroughControl.instance != null && passthroughControl.instance.isOn));
+                " passthrough=" + (passthroughControl.instance != null && passthroughControl.instance.isOn) + " sharedMats=" + MaterialCache.Count);
       timer = 0; frames = 0; frameTimeSum = 0; frameTimeMax = 0;
     }
 

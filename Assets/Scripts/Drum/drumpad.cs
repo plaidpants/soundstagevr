@@ -19,8 +19,7 @@ using System.Collections.Generic;
 public class drumpad : MonoBehaviour {
   public Material onMat;
   Renderer rend;
-  Material offMat;
-  Material glowMat;
+  Material offMat; // shared (MaterialCache, 2026-11)
   deviceInterface _deviceInterface;
   public Transform stickTip;
 
@@ -28,9 +27,7 @@ public class drumpad : MonoBehaviour {
   void Awake() {
     _deviceInterface = transform.parent.GetComponent<deviceInterface>();
     rend = GetComponent<Renderer>();
-    offMat = rend.material;
-    glowMat = new Material(onMat);
-    glowMat.SetColor("_TintColor", glowColor);
+    offMat = rend.sharedMaterial;
   }
 
   void Update() {
@@ -87,7 +84,7 @@ public class drumpad : MonoBehaviour {
   IEnumerator offRoutine() {
     yield return new WaitForSeconds(0.1f);
     _deviceInterface.hit(false);
-    rend.material = offMat;
+    rend.sharedMaterial = offMat;
   }
 
   Coroutine offCoroutine;
@@ -98,7 +95,7 @@ public class drumpad : MonoBehaviour {
       drumDeviceInterface drum = _deviceInterface as drumDeviceInterface;
       if (drum != null) drum.hitWithVelocity(on, velocity);
       else _deviceInterface.hit(on);
-      rend.material = glowMat;
+      rend.sharedMaterial = MaterialCache.Get(onMat, MaterialCache.TintColor, glowColor);
       if (offCoroutine != null) StopCoroutine(offRoutine());
       offCoroutine = StartCoroutine(offRoutine());
     }

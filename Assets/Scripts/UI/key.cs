@@ -1,4 +1,4 @@
-// Copyright 2017 Google LLC
+﻿// Copyright 2017 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,13 +21,10 @@ public class key : manipObject {
   public int keyValue = 0;
   public Material onMat;
   Renderer rend;
-  Material offMat;
-  Material glowMat;
+  Material offMat; // shared (MaterialCache, 2026-11): keys no longer copy materials
   deviceInterface _deviceInterface;
 
   public bool sticky = true;
-
-  Color glowColor = Color.HSVToRGB(.4f, .5f, .1f);
 
   public bool isKeyboard = false;
 
@@ -35,9 +32,7 @@ public class key : manipObject {
     base.Awake();
     _deviceInterface = transform.parent.GetComponent<deviceInterface>();
     rend = GetComponent<Renderer>();
-    offMat = rend.material;
-    glowMat = new Material(onMat);
-    glowMat.SetColor("_TintColor", glowColor);
+    offMat = rend.sharedMaterial;
   }
 
   bool initialized = false;
@@ -46,8 +41,8 @@ public class key : manipObject {
   }
 
   public void setOffMat(Material m) {
-    rend.material = m;
-    offMat = rend.material;
+    rend.sharedMaterial = m;
+    offMat = m;
   }
 
   public bool isHit = false;
@@ -161,26 +156,21 @@ public class key : manipObject {
   void setKeyFeedbackState(keyState s) {
     switch (s) {
       case keyState.off:
-        rend.material = offMat;
+        rend.sharedMaterial = offMat;
         break;
       case keyState.touched:
-        rend.material = glowMat;
         setKeyColor(.65f, .3f);
         break;
       case keyState.grabbedOn:
-        rend.material = glowMat;
         setKeyColor(.4f, .4f);
         break;
       case keyState.grabbedOff:
-        rend.material = glowMat;
         setKeyColor(.65f, .4f);
         break;
       case keyState.selectedOff:
-        rend.material = glowMat;
         setKeyColor(.4f, .3f);
         break;
       case keyState.selectedOn:
-        rend.material = glowMat;
         setKeyColor(.5f, .4f);
         break;
       default:
@@ -189,7 +179,6 @@ public class key : manipObject {
   }
 
   public void setKeyColor(float hue, float gain) {
-    rend.material.SetColor("_TintColor", Color.HSVToRGB(hue, .9f, .5f));
-    rend.material.SetFloat("_EmissionGain", gain);
+    rend.sharedMaterial = MaterialCache.Glow(onMat, Color.HSVToRGB(hue, .9f, .5f), gain);
   }
 }

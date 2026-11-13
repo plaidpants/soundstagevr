@@ -1,4 +1,4 @@
-// Copyright 2017 Google LLC
+﻿// Copyright 2017 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,7 +33,15 @@ public class tape : manipObject {
   public bool previewWhenGrabbed = false;
 
   GameObject highlight;
-  Material highlightMat;
+  Renderer tapeRend, highlightRend;
+  Material tapeBase, highlightBase;
+  const int PaletteSize = 12;
+  static readonly int SpecColorId = Shader.PropertyToID("_SpecColor");
+
+  void SetHighlight(float gain) {
+    highlightRend.sharedMaterial = MaterialCache.Glow(highlightBase, Color.HSVToRGB(tapeHue, .9f, .3f), gain);
+  }
+  float highlightGain = .3f;
   Color tapeColor;
   float tapeHue;
 
@@ -41,10 +49,14 @@ public class tape : manipObject {
     base.Awake();
     gameObject.layer = 13;
     tapeTrans = transform.GetChild(0);
-    mat = tapeTrans.GetComponent<Renderer>().material;
+    // Shared materials (MaterialCache, 2026-11): tape colours come from a 12-hue
+    // palette instead of a random hue, so tapes of the same colour share a material.
+    tapeRend = tapeTrans.GetComponent<Renderer>();
+    tapeBase = tapeRend.sharedMaterial;
     labelMesh = GetComponentInChildren<TextMesh>();
-    labelMesh.GetComponent<Renderer>().material.SetColor("_Color", Color.black);
-    tapeHue = Random.value;
+    Renderer labelRend = labelMesh.GetComponent<Renderer>();
+    labelRend.sharedMaterial = MaterialCache.Colored(labelRend.sharedMaterial, Color.black);
+    tapeHue = Random.Range(0, PaletteSize) / (float)PaletteSize;
     tapeColor = Color.HSVToRGB(tapeHue, .5f, 1);
     SetColor(tapeColor);
     createHandleFeedback();
@@ -77,7 +89,7 @@ public class tape : manipObject {
     tapeHue = h;
     tapeColor = Color.HSVToRGB(tapeHue, .5f, 1);
     SetColor(tapeColor);
-    highlightMat.SetColor("_TintColor", Color.HSVToRGB(tapeHue, .9f, .3f));
+    SetHighlight(highlightGain);
     return tapeColor;
   }
 
@@ -86,22 +98,20 @@ public class tape : manipObject {
 
     MeshFilter m = highlight.AddComponent<MeshFilter>();
 
-    m.mesh = transform.GetChild(0).GetComponent<MeshFilter>().mesh;
-    MeshRenderer r = highlight.AddComponent<MeshRenderer>();
-    r.material = Resources.Load("Materials/Highlight") as Material;
-    highlightMat = r.material;
+    m.sharedMesh = transform.GetChild(0).GetComponent<MeshFilter>().sharedMesh; // was .mesh: a mesh copy per tape
+    highlightRend = highlight.AddComponent<MeshRenderer>();
+    highlightBase = Resources.Load("Materials/Highlight") as Material;
 
     highlight.transform.SetParent(transform, false);
     highlight.transform.localScale = Vector3.one * 2.3f;
-    highlightMat.SetColor("_TintColor", Color.HSVToRGB(tapeHue, .9f, .3f));
-    highlightMat.SetFloat("_EmissionGain", .3f);
+    SetHighlight(.3f);
 
     highlight.SetActive(false);
   }
 
   void SetColor(Color c) {
-    mat.SetColor("_Color", c);
-    mat.SetColor("_SpecColor", c);
+    mat = MaterialCache.Get(MaterialCache.Colored(tapeBase, c), SpecColorId, c);
+    tapeRend.sharedMaterial = mat;
   }
 
   manipulator tempM;
@@ -309,7 +319,8 @@ public class tape : manipObject {
     }
     if (curState == manipState.selected) {
       highlight.SetActive(true);
-      highlightMat.SetFloat("_EmissionGain", .3f);
+      highlightGain = .3f;
+      SetHighlight(highlightGain);
       if (deck == null) preview(true);
     }
 
@@ -317,7 +328,8 @@ public class tape : manipObject {
       if (returnRoutineID != null) StopCoroutine(returnRoutineID);
       highlight.SetActive(true);
       flashEmptySamplers(true);
-      highlightMat.SetFloat("_EmissionGain", .5f);
+      highlightGain = .5f;
+      SetHighlight(highlightGain);
       if (insertCoroutine != null) StopCoroutine(insertCoroutine);
       transform.parent = manipulatorObj.parent;
     }

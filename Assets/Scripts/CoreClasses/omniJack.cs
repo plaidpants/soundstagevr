@@ -1,4 +1,4 @@
-// Copyright 2017 Google LLC
+﻿// Copyright 2017 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,8 +26,31 @@ public class omniJack : manipObject {
   public int ID = -1;
 
   public signalGenerator signal, homesignal;
-  Material mat;
+  // Jack colour comes from a 10-hue palette and uses a shared material (MaterialCache,
+  // 2026-11); the flash animation uses a property block so it doesn't copy the material.
+  Renderer jackRend;
+  Material jackBase;
+  MaterialPropertyBlock flashBlock;
+  static readonly int EmissionColorId = Shader.PropertyToID("_EmissionColor");
   Renderer jackRepRend;
+
+  // 3 reds, 4 greens, 3 blues (the old random ranges were 0-.14, .15-.44, .45-.7).
+  public static readonly float[] paletteHues = { .02f, .07f, .12f, .19f, .27f, .35f, .42f, .49f, .58f, .67f };
+
+  public static float QuantizeHue(float h) {
+    float best = paletteHues[0], bestD = 2f;
+    foreach (float p in paletteHues) {
+      float d = Mathf.Abs(Mathf.DeltaAngle(h * 360f, p * 360f));
+      if (d < bestD) { bestD = d; best = p; }
+    }
+    return best;
+  }
+
+  void SetJackEmission(Color c) {
+    if (jackRend == null) return;
+    if (flashBlock != null) jackRend.SetPropertyBlock(null);
+    jackRend.sharedMaterial = MaterialCache.Get(jackBase, EmissionColorId, c);
+  }
 
   public omniPlug far, near;
 
@@ -39,12 +62,13 @@ public class omniJack : manipObject {
   public override void Awake() {
     base.Awake();
     gameObject.layer = 12; //jacks
-    mat = GetComponent<Renderer>().material;
+    jackRend = GetComponent<Renderer>();
+    jackBase = jackRend.sharedMaterial;
     jackRepRend = plugRep.GetComponent<Renderer>();
     jackTargetHue = findHue();
     jackColor = Color.HSVToRGB(jackTargetHue, 0.8f, 0.5f);
     if (homesignal == null) homesignal = transform.parent.GetComponent<signalGenerator>();
-    mat.SetColor("_EmissionColor", jackColor);
+    SetJackEmission(jackColor);
 
     if (masterControl.instance != null) {
       if (!masterControl.instance.jacksEnabled) GetComponent<Collider>().enabled = false;
@@ -52,7 +76,7 @@ public class omniJack : manipObject {
   }
 
   public void setColor(Color c) {
-    mat.SetColor("_EmissionColor", c);
+    SetJackEmission(c);
   }
 
   public override void setState(manipState state) {
@@ -126,10 +150,11 @@ public class omniJack : manipObject {
   }
 
   float findHue() {
-    if (jackHue == soundUtils.Hue.Red) return Random.value * .14f;
-    else if (jackHue == soundUtils.Hue.Green) return Random.Range(.15f, .44f);
-    else return Random.Range(.45f, .7f);
+    if (jackHue == soundUtils.Hue.Red) return paletteHues[Random.Range(0, 3)];
+    else if (jackHue == soundUtils.Hue.Green) return paletteHues[Random.Range(3, 7)];
+    else return paletteHues[Random.Range(7, 10)];
   }
+
 
   Coroutine dimCoroutine;
   IEnumerator dimRoutine() {
@@ -148,7 +173,7 @@ public class omniJack : manipObject {
   public void flash(Color c) {
     if (flashCoroutine != null)
       StopCoroutine(flashCoroutine);
-    mat.SetColor("_EmissionColor", jackColor);
+    SetJackEmission(jackColor);
     if (c != Color.black) {
       targColor = c;
       flashCoroutine = StartCoroutine(flashRoutine());
@@ -160,7 +185,9 @@ public class omniJack : manipObject {
     float t = 0;
     while (true) {
       t += Time.deltaTime * 6;
-      mat.SetColor("_EmissionColor", Color.Lerp(Color.black, targColor, Mathf.Abs(Mathf.Sin(t))));
+      if (flashBlock == null) flashBlock = new MaterialPropertyBlock();
+      flashBlock.SetColor(EmissionColorId, Color.Lerp(Color.black, targColor, Mathf.Abs(Mathf.Sin(t))));
+      jackRend.SetPropertyBlock(flashBlock);
       yield return null;
     }
   }

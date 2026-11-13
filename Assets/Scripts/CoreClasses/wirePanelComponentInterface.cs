@@ -27,6 +27,7 @@ public class wirePanelComponentInterface : componentInterface {
   uiPanelSinglePress passthroughpanel; // cloned from midipanel at runtime (buttonID 6)
   uiPanelSinglePress glowqualitypanel; // cloned from midipanel at runtime (buttonID 7)
   uiPanelSinglePress brightnesspanel; // cloned from midipanel at runtime (buttonID 8)
+  uiPanelSinglePress msaapanel; // cloned from midipanel at runtime (buttonID 9)
 
   Color colorGreen = Color.HSVToRGB(.4f, 230f / 255, 118f / 255);
   Color colorRed = Color.HSVToRGB(0f, 230f / 255, 118f / 255);
@@ -44,6 +45,7 @@ public class wirePanelComponentInterface : componentInterface {
     CreatePassthroughButton();
     CreateGlowQualityButton();
     CreateBrightnessButton();
+    CreateMsaaButton();
     if (PlayerPrefs.GetInt("midiOut") == 1) {
       string s = "DISABLE MIDI OUT";
       midipanel.label.text = s;
@@ -88,6 +90,25 @@ public class wirePanelComponentInterface : componentInterface {
     brightnesspanel = g.GetComponent<uiPanelSinglePress>();
     brightnesspanel.buttonID = 8;
     UpdateBrightnessLabel();
+  }
+
+  void CreateMsaaButton() {
+    if (msaapanel != null || midipanel == null) return;
+    GameObject g = Instantiate(midipanel.gameObject, midipanel.transform.parent, false);
+    g.name = "msaaPanel";
+    g.transform.localPosition = midipanel.transform.localPosition + new Vector3(0, -0.152f, 0);
+    g.transform.localRotation = midipanel.transform.localRotation;
+    g.transform.localScale = midipanel.transform.localScale;
+    msaapanel = g.GetComponent<uiPanelSinglePress>();
+    msaapanel.buttonID = 9;
+    UpdateMsaaLabel();
+  }
+
+  void UpdateMsaaLabel() {
+    if (msaapanel == null) return;
+    int m = QuestPerformanceSetup.Msaa;
+    msaapanel.label.text = "ANTI-ALIASING: " + (m > 0 ? m + "X" : "OFF");
+    msaapanel.newColor(colorGreen);
   }
 
   void UpdateBrightnessLabel() {
@@ -141,6 +162,9 @@ public class wirePanelComponentInterface : componentInterface {
       string s = b ? "DISABLE MIDI OUT" : "ENABLE MIDI OUT";
       midipanel.label.text = s;
       midipanel.newColor(b ? colorRed : colorGreen);
+    } else if (ID == 9) {
+      QuestPerformanceSetup.CycleMsaa();
+      UpdateMsaaLabel();
     } else if (ID == 8) {
       masterControl.instance.setEmissionLevel(masterControl.instance.emissionLevelIndex + 1);
       UpdateBrightnessLabel();

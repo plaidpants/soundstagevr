@@ -1,4 +1,4 @@
-// Copyright 2017 Google LLC
+﻿// Copyright 2017 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,7 +25,15 @@ public class omniPlug : manipObject {
 
   Color cordColor;
   LineRenderer lr;
-  Material mat;
+  // Plug head + mouseover use shared materials (MaterialCache, 2026-11), hue snapped to
+  // omniJack's 10-colour palette. The cord itself keeps its own material (flow animation).
+  Renderer headRend, overRend;
+  Material headBase, overBase;
+
+  void SetHeadColor(Color c) {
+    headRend.sharedMaterial = MaterialCache.Get(headBase, MaterialCache.TintColor, c);
+    overRend.sharedMaterial = MaterialCache.Get(overBase, MaterialCache.TintColor, c);
+  }
 
   Transform plugTrans;
   List<Vector3> plugPath = new List<Vector3>();
@@ -44,12 +52,14 @@ public class omniPlug : manipObject {
   public override void Awake() {
     base.Awake();
     gameObject.layer = 12; //jacks
-    mat = transform.GetChild(0).GetChild(0).GetComponent<Renderer>().material;
+    headRend = transform.GetChild(0).GetChild(0).GetComponent<Renderer>();
+    headBase = headRend.sharedMaterial;
+    overRend = mouseoverFeedback.GetComponent<Renderer>();
+    overBase = overRend.sharedMaterial;
     lr = GetComponent<LineRenderer>();
     cordColor = new Color(Random.value, Random.value, Random.value);
     lr.material.SetColor("_TintColor", cordColor);
-    mat.SetColor("_TintColor", cordColor);
-    mouseoverFeedback.GetComponent<Renderer>().material.SetColor("_TintColor", cordColor);
+    // (head colour is set in Setup / Activate)
     mouseoverFeedback.SetActive(false);
     plugTrans = transform.GetChild(0);
 
@@ -62,8 +72,7 @@ public class omniPlug : manipObject {
     Color jackColor = Color.HSVToRGB(c, .8f, .5f);
     cordColor = Color.HSVToRGB(c, .8f, .2f);
 
-    mat.SetColor("_TintColor", jackColor);
-    mouseoverFeedback.GetComponent<Renderer>().material.SetColor("_TintColor", jackColor);
+    SetHeadColor(jackColor);
     wireType = masterControl.instance.WireSetting;
     outputPlug = outputting;
     otherPlug = other;
@@ -86,13 +95,12 @@ public class omniPlug : manipObject {
     float h, s, v;
     Color.RGBToHSV(tempColor, out h, out s, out v);
 
-    Color c1 = Color.HSVToRGB(h, .8f, .5f);
+    Color c1 = Color.HSVToRGB(omniJack.QuantizeHue(h), .8f, .5f);
     Color c2 = Color.HSVToRGB(h, .8f, .2f);
 
     cordColor = tempColor;
     lr.material.SetColor("_TintColor", c2);
-    mat.SetColor("_TintColor", c1);
-    mouseoverFeedback.GetComponent<Renderer>().material.SetColor("_TintColor", c1);
+    SetHeadColor(c1);
 
     if (outputPlug) {
 

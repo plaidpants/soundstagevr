@@ -1,4 +1,4 @@
-// Copyright 2017 Google LLC
+﻿// Copyright 2017 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -78,10 +78,41 @@ public class QuestPerformanceSetup : MonoBehaviour {
       }
     }
 
+    ApplyMsaa();
+
     OVRManager.suggestedCpuPerfLevel = cpuLevel;
     OVRManager.suggestedGpuPerfLevel = gpuLevel;
 
     Debug.Log("[QuestPerformanceSetup] FFR=" + OVRManager.foveatedRenderingLevel + " dynamic=" + OVRManager.useDynamicFoveatedRendering +
               " refresh=" + OVRPlugin.systemDisplayFrequency + " cpu=" + cpuLevel + " gpu=" + gpuLevel);
+  }
+
+  // Anti-aliasing setting (settings panel, 2026-11). The scene renders into an
+  // MSAA'd HDR target for the glow, which costs ~6 ms of GPU per frame even with
+  // nothing in view; this lets 4x / 2x / off be compared in the headset.
+  public static readonly int[] msaaLevels = { 4, 2, 0 };
+
+  public static int Msaa {
+    get { return PlayerPrefs.GetInt("msaa", 2); }
+  }
+
+  public static void SetMsaa(int samples) {
+    PlayerPrefs.SetInt("msaa", samples);
+    ApplyMsaa();
+  }
+
+  public static void CycleMsaa() {
+    int cur = System.Array.IndexOf(msaaLevels, Msaa);
+    SetMsaa(msaaLevels[(cur + 1 + msaaLevels.Length) % msaaLevels.Length]);
+  }
+
+  static void ApplyMsaa() {
+    int samples = Msaa;
+    // OVRManager otherwise resets MSAA to the headset's recommended 4x every frame.
+    if (OVRManager.instance != null) OVRManager.instance.useRecommendedMSAALevel = false;
+    QualitySettings.antiAliasing = samples;
+    Camera main = Camera.main;
+    if (main != null) main.allowMSAA = samples > 0;
+    Debug.Log("[QuestPerformanceSetup] MSAA " + (samples > 0 ? samples + "x" : "off"));
   }
 }

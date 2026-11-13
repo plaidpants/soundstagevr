@@ -70,7 +70,7 @@ public class SENaturalBloomAndDirtyLens : MonoBehaviour
 	
 	// Builds a temporary-RT descriptor that matches the source's layout. Under Multiview /
 	// single-pass stereo the source is a 2-slice texture array, so intermediates must be too.
-	static bool loggedSourceFormat = false;
+	static int loggedSourceKey = 0;
 
 	static RenderTexture GetTempLike(RenderTexture source, int width, int height)
 	{
@@ -119,9 +119,11 @@ public class SENaturalBloomAndDirtyLens : MonoBehaviour
 
 		material.hideFlags = HideFlags.HideAndDontSave;
 
-		if (!loggedSourceFormat)
+		// Logged again whenever size / MSAA changes (anti-aliasing setting, 2026-11).
+		int sourceKey = source.width * 31 + source.antiAliasing;
+		if (sourceKey != loggedSourceKey && cam == Camera.main)
 		{
-			loggedSourceFormat = true;
+			loggedSourceKey = sourceKey;
 			Debug.Log("[Bloom] source " + source.width + "x" + source.height + " format=" + source.format +
 			          " graphicsFormat=" + source.graphicsFormat + " slices=" + source.volumeDepth +
 			          " depthBits=" + source.depth + " msaa=" + source.antiAliasing + " cameraHDR=" + cam.allowHDR);

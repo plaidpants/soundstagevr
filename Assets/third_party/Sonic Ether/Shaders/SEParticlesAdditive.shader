@@ -13,7 +13,7 @@ Category {
 	Blend One One // was SrcAlpha One; alpha folded into rgb in frag (see below)
 	AlphaTest Greater .01
 	ColorMask RGB
-	Offset -1, -1 // glow shells sit ~1% outside opaque bodies (sequencer cubes); avoids z-fighting on Quest's lower-precision depth
+	Offset -2, -32 // glow shells sit on or just outside opaque bodies (sequencer cubes, speaker rim); pull them forward to avoid z-fighting
 	Cull Off Lighting Off ZWrite Off Fog { Color (0,0,0,0) }
 	
 	SubShader {

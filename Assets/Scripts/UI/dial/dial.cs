@@ -1,4 +1,4 @@
-// Copyright 2017 Google LLC
+﻿// Copyright 2017 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,9 @@ public class dial : manipObject {
   public float percent = 0f;
 
   glowDisk dialFeedback;
-  Material[] mats;
+  // Shared glow variants from MaterialCache (2026-11) instead of per-dial copies.
+  Renderer[] glowRends;
+  Material[] glowBases;
 
   public Color customColor;
 
@@ -33,10 +35,12 @@ public class dial : manipObject {
     base.Awake();
     littleDisk = transform.Find("littleDisk").gameObject;
 
-    mats = new Material[3];
-    mats[0] = littleDisk.GetComponent<Renderer>().material;
-    mats[1] = transform.parent.Find("glowDisk").GetComponent<Renderer>().material;
-    mats[2] = transform.parent.Find("Label").GetComponent<Renderer>().material;
+    glowRends = new Renderer[3];
+    glowRends[0] = littleDisk.GetComponent<Renderer>();
+    glowRends[1] = transform.parent.Find("glowDisk").GetComponent<Renderer>();
+    glowRends[2] = transform.parent.Find("Label").GetComponent<Renderer>();
+    glowBases = new Material[3];
+    for (int i = 0; i < 3; i++) glowBases[i] = glowRends[i].sharedMaterial;
 
     customColor = Color.HSVToRGB(hue, 227 / 255f, 206 / 255f);
 
@@ -52,25 +56,16 @@ public class dial : manipObject {
       case manipState.none:
         littleDisk.SetActive(false);
 
-        for (int i = 0; i < mats.Length; i++) {
-          mats[i].SetFloat("_EmissionGain", .1f);
-          mats[i].SetColor("_TintColor", c);
-        }
+        setGlow(c, .1f);
         break;
       case manipState.selected:
         littleDisk.SetActive(true);
-        for (int i = 0; i < mats.Length; i++) {
-          mats[i].SetFloat("_EmissionGain", .3f);
-          mats[i].SetColor("_TintColor", c);
-        }
+        setGlow(c, .3f);
         break;
       case manipState.grabbed:
         littleDisk.SetActive(true);
 
-        for (int i = 0; i < mats.Length; i++) {
-          mats[i].SetFloat("_EmissionGain", .25f);
-          mats[i].SetColor("_TintColor", masterControl.instance.tipColor);
-        }
+        setGlow(masterControl.instance.tipColor, .25f);
         break;
       default:
         break;
@@ -78,8 +73,10 @@ public class dial : manipObject {
   }
 
 
-  void updateMatsColor(Color c) {
-    foreach (Material m in mats) m.SetColor("_TintColor", c);
+  void setGlow(Color c, float gain) {
+    for (int i = 0; i < glowRends.Length; i++) {
+      glowRends[i].sharedMaterial = MaterialCache.Glow(glowBases[i], c, gain);
+    }
   }
 
   void Start() {

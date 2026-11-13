@@ -253,6 +253,7 @@ public class menuItem : manipObject {
       g.transform.localRotation = Quaternion.Euler(60, 0, 0);
     }
 
+    MenuPreviewCombiner.Queue(g);
     return g;
   }
 

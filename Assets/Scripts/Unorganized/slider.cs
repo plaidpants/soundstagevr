@@ -1,4 +1,4 @@
-// Copyright 2017 Google LLC
+﻿// Copyright 2017 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,8 +24,7 @@ public class slider : manipObject {
   public Color customColor;
   public Material onMat;
   public Renderer rend;
-  Material offMat;
-  Material glowMat;
+  Material offMat; // shared base; glow variants come from MaterialCache (2026-11)
   public bool labelsPresent = true;
 
   Material[] labels;
@@ -35,12 +34,9 @@ public class slider : manipObject {
   public override void Awake() {
     base.Awake();
     if (rend == null) rend = GetComponent<Renderer>();
-    offMat = rend.material;
+    offMat = rend.sharedMaterial;
     customColor = Color.HSVToRGB(sliderHue, 0.8f, .2f);
 
-    glowMat = new Material(onMat);
-    glowMat.SetFloat("_EmissionGain", .7f);
-    glowMat.SetColor("_TintColor", customColor);
 
     if (labelsPresent) {
       labels = new Material[3];
@@ -96,13 +92,11 @@ public class slider : manipObject {
   public override void setState(manipState state) {
     curState = state;
     if (curState == manipState.none) {
-      rend.material = offMat;
+      rend.sharedMaterial = offMat;
     } else if (curState == manipState.selected) {
-      rend.material = glowMat;
-      glowMat.SetFloat("_EmissionGain", .5f);
+      rend.sharedMaterial = MaterialCache.Glow(onMat, customColor, .5f);
     } else if (curState == manipState.grabbed) {
-      rend.material = glowMat;
-      glowMat.SetFloat("_EmissionGain", .7f);
+      rend.sharedMaterial = MaterialCache.Glow(onMat, customColor, .7f);
       offset = transform.localPosition.x - transform.parent.InverseTransformPoint(manipulatorObj.position).x;
     }
   }

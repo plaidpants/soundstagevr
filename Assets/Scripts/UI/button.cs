@@ -1,4 +1,4 @@
-// Copyright 2017 Google LLC
+﻿// Copyright 2017 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,13 +24,16 @@ public class button : manipObject {
   public bool glowMatOnToggle = true;
   public Material onMat;
   Renderer rend;
-  Material offMat;
-  Material glowMat;
+  // Materials are shared variants from MaterialCache (2026-11): buttons used to copy
+  // their materials, which stopped Unity batching e.g. the sequencer's cells.
+  Material offBase, labelBase;
+  float glowGain;
+  bool highlighted = false;
+  bool showingGlow = false;
   public componentInterface _componentInterface;
   public GameObject selectOverlay;
   public float glowHue = 0;
   Color glowColor = Color.HSVToRGB(0, .5f, .25f);
-  Color offColor;
 
   public bool onlyOn = false;
 
@@ -57,23 +60,38 @@ public class button : manipObject {
     }
 
     rend = GetComponent<Renderer>();
-    offMat = rend.material;
-    offColor = offMat.GetColor("_Color");
-    glowMat = new Material(onMat);
-    glowMat.SetFloat("_EmissionGain", glowEmission);
-    glowMat.SetColor("_TintColor", glowColor);
+    offBase = rend.sharedMaterial;
+    glowGain = glowEmission;
     selectOverlay.SetActive(false);
 
     if (changeOverlayGlow) {
-      selectOverlay.GetComponent<Renderer>().material.SetColor("_TintColor", glowColor);
-      selectOverlay.GetComponent<Renderer>().material.SetFloat("_EmissionGain", glowEmission);
+      Renderer overlay = selectOverlay.GetComponent<Renderer>();
+      overlay.sharedMaterial = MaterialCache.Glow(overlay.sharedMaterial, glowColor, glowEmission);
     }
 
     if (GetComponentInChildren<TextMesh>() != null) labelRend = GetComponentInChildren<TextMesh>().transform.GetComponent<Renderer>();
     if (labelRend != null) {
-      labelRend.material.SetFloat("_EmissionGain", .1f);
-      labelRend.material.SetColor("_TintColor", labelColor);
+      labelBase = labelRend.sharedMaterial;
+      SetLabelGain(.1f);
     }
+  }
+
+  Material OffMat() {
+    return highlighted ? MaterialCache.Colored(offBase, glowColor) : offBase;
+  }
+
+  Material GlowMat() {
+    return MaterialCache.Glow(onMat, glowColor, glowGain);
+  }
+
+  void ShowGlow(bool on) {
+    showingGlow = on;
+    rend.sharedMaterial = on ? GlowMat() : OffMat();
+  }
+
+  void SetLabelGain(float gain) {
+    if (labelRend == null) return;
+    labelRend.sharedMaterial = MaterialCache.Glow(labelBase, labelColor, gain);
   }
 
   void Start() {
@@ -82,13 +100,9 @@ public class button : manipObject {
   }
 
   public void Highlight(bool on) {
-    if (on) {
-      glowMat.SetFloat("_EmissionGain", .9f - .1f);
-      offMat.SetColor("_Color", glowColor);
-    } else {
-      glowMat.SetFloat("_EmissionGain", .7f - .1f);
-      offMat.SetColor("_Color", offColor);
-    }
+    highlighted = on;
+    glowGain = on ? .9f - .1f : .7f - .1f;
+    ShowGlow(showingGlow);
   }
 
   public void Setup(int IDx, int IDy, bool on, Color c) {
@@ -103,7 +117,7 @@ public class button : manipObject {
     glowColor = c;
     keyHit(on);
     startToggled = on;
-    glowMat.SetColor("_TintColor", glowColor);
+    ShowGlow(showingGlow);
   }
 
   public void setOnAtStart(bool on) {
@@ -121,11 +135,11 @@ public class button : manipObject {
       isHit = on;
       toggled = on;
       if (on) {
-        if (glowMatOnToggle) rend.material = glowMat;
-        if (labelRend != null) labelRend.material.SetFloat("_EmissionGain", labelEmission);
+        if (glowMatOnToggle) ShowGlow(true);
+        SetLabelGain(labelEmission);
       } else {
-        if (glowMatOnToggle) rend.material = offMat;
-        if (labelRend != null) labelRend.material.SetFloat("_EmissionGain", .1f);
+        if (glowMatOnToggle) ShowGlow(false);
+        SetLabelGain(.1f);
 
       }
     }
@@ -140,14 +154,14 @@ public class button : manipObject {
       if (singleID) _componentInterface.hit(on, buttonID);
       else _componentInterface.hit(on, button2DID[0], button2DID[1]);
 
-      if (glowMatOnToggle) rend.material = glowMat;
-      if (labelRend != null) labelRend.material.SetFloat("_EmissionGain", labelEmission);
+      if (glowMatOnToggle) ShowGlow(true);
+      SetLabelGain(labelEmission);
     } else {
       if (singleID) _componentInterface.hit(on, buttonID);
       else _componentInterface.hit(on, button2DID[0], button2DID[1]);
 
-      if (glowMatOnToggle) rend.material = offMat;
-      if (labelRend != null) labelRend.material.SetFloat("_EmissionGain", .1f);
+      if (glowMatOnToggle) ShowGlow(false);
+      SetLabelGain(.1f);
     }
 
   }
@@ -158,7 +172,7 @@ public class button : manipObject {
     if (curState == manipState.grabbed && state != curState) {
       if (!isToggle) keyHit(false);
       if (!glowMatOnToggle) {
-        rend.material = offMat;
+        ShowGlow(false);
       }
     }
     curState = state;
@@ -177,7 +191,7 @@ public class button : manipObject {
       } else keyHit(true);
 
       if (!glowMatOnToggle) {
-        rend.material = glowMat;
+        ShowGlow(true);
       }
     }
   }
@@ -188,7 +202,7 @@ public class button : manipObject {
         if (!on) {
           if (!isToggle) keyHit(false);
           if (!glowMatOnToggle) {
-            rend.material = offMat;
+            ShowGlow(false);
           }
         } else {
           if (isToggle) {
@@ -198,7 +212,7 @@ public class button : manipObject {
           } else keyHit(true);
 
           if (!glowMatOnToggle) {
-            rend.material = glowMat;
+            ShowGlow(true);
           }
         }
       }
