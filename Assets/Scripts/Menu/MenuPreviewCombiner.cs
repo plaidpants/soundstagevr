@@ -47,6 +47,15 @@ public class MenuPreviewCombiner : MonoBehaviour {
 
   static void Combine(GameObject root, out int before, out int after) {
     before = 0; after = 0;
+    // Far-LOD renderers (e.g. the tape's tapeLOD1) would double the geometry: hide them
+    // and drop the LODGroups, the preview is always seen up close.
+    foreach (LODGroup lg in root.GetComponentsInChildren<LODGroup>(true)) {
+      LOD[] lods = lg.GetLODs();
+      for (int l = 1; l < lods.Length; l++)
+        foreach (Renderer lr in lods[l].renderers) if (lr != null) lr.enabled = false;
+      Object.Destroy(lg);
+    }
+
     MeshRenderer[] rends = root.GetComponentsInChildren<MeshRenderer>(true);
     Material mat = null;
     List<CombineInstance> parts = new List<CombineInstance>();

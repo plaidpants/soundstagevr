@@ -45,7 +45,7 @@ public class platformSetup : MonoBehaviour {
   const float DefaultControllerPitch = -39.0f;
   [System.NonSerialized] public Vector3 controllerOffset = DefaultControllerOffset;
   [System.NonSerialized] public float controllerPitch = DefaultControllerPitch;
-  bool calibrating = false;
+  public static bool calibrating = false; // static so SnapTurn can stay out of the way
   float calibLogTimer = 0;
 
   void LoadControllerCalibration() {

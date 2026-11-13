@@ -17,6 +17,13 @@ public class ArtificialVRMovement : MonoBehaviour
 
     private bool hasThrownError;
 
+    // Quest (2026-11): read the left thumbstick through OVRInput with a dead zone. The legacy
+    // Input Manager axes ("Horizontal"/"Vertical") could keep reporting a value after the
+    // stick was released, so the player drifted away for a while. Also stays still while the
+    // left hand holds/points at something (devices use the stick) and during calibration.
+    public float deadZone = 0.2f;
+    manipulator leftHand;
+
     // Update is called once per frame
     void Update()
     {
@@ -37,8 +44,19 @@ public class ArtificialVRMovement : MonoBehaviour
 
         Vector3 horizontalMovementVector = Vector3.Cross(verticalMovementVector,-Vector3.up);
 
-        transform.position += verticalMovementVector * Input.GetAxis(verticalAxisName) * Time.deltaTime;
-        transform.position += horizontalMovementVector * Input.GetAxis(horizontalAxisName) * Time.deltaTime;
+        Vector2 stick = OVRInput.Get(OVRInput.Axis2D.PrimaryThumbstick, OVRInput.Controller.LTouch);
+        if (stick.magnitude < deadZone) return;
+        if (platformSetup.calibrating) return;
+        if (leftHand == null)
+        {
+            foreach (manipulator m in FindObjectsOfType<manipulator>()) if (m.IsLeftHand) leftHand = m;
+        }
+        if (leftHand != null && leftHand.IsBusy) return;
+        // rescale so motion starts at zero just outside the dead zone
+        stick = stick.normalized * Mathf.InverseLerp(deadZone, 1f, stick.magnitude);
+
+        transform.position += verticalMovementVector * stick.y * maxSpeed * Time.deltaTime;
+        transform.position += horizontalMovementVector * stick.x * maxSpeed * Time.deltaTime;
     }
 
     void LogError()

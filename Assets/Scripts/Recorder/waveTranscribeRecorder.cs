@@ -74,15 +74,43 @@ public class waveTranscribeRecorder : signalGenerator {
     }
   }
 
+  // Each column shows the peak of all the samples it covers (2026-11). It used to show
+  // one sample per column, so a steady tone aliased into a beating "envelope".
   void recalcTex() {
-
     for (int i = 0; i < wavewidth; i++) {
-      if (columnMult * i < virtualBufferLength) {
-        int curH = Mathf.FloorToInt((waveheight - 1) * .5f * Mathf.Clamp01(Mathf.Abs(sampleBuffer[columnMult * i])));
-
-        display.SetColumn(i, curH);
+      int start = columnMult * i;
+      if (start >= virtualBufferLength) break;
+      int end = Mathf.Min(start + columnMult, virtualBufferLength, sampleBuffer.Length - 1);
+      float peak = 0;
+      for (int n = start - (start & 1); n < end; n += 2) {
+        float a = Mathf.Abs(sampleBuffer[n]), b = Mathf.Abs(sampleBuffer[n + 1]);
+        if (a > peak) peak = a;
+        if (b > peak) peak = b;
       }
+      display.SetColumn(i, ColumnHeight(peak));
     }
+  }
+
+  int ColumnHeight(float peak) {
+    return Mathf.FloorToInt((waveheight - 1) * .5f * Mathf.Clamp01(peak));
+  }
+
+  // running peak of the column being played (audio thread)
+  int peakColumn = -1;
+  float peakValue = 0;
+  bool peakAlt = false;
+
+  void TrackPeak(int index, int mult, bool alt) {
+    int col = index / mult;
+    if (col != peakColumn) {
+      if (peakColumn >= 0 && peakColumn < wavewidth) display.SetColumn(peakColumn, ColumnHeight(peakValue), peakAlt);
+      peakColumn = col;
+      peakValue = 0;
+    }
+    float a = Mathf.Abs(sampleBuffer[index]), b = Mathf.Abs(sampleBuffer[index + 1]);
+    if (a > peakValue) peakValue = a;
+    if (b > peakValue) peakValue = b;
+    peakAlt = alt;
   }
 
   void Start() {
@@ -226,16 +254,8 @@ public class waveTranscribeRecorder : signalGenerator {
         sampleBuffer[curBufferIndex + 1] = buffer[i + 1];
       }
       if (playing) {
-        if (curBufferIndex % columnMult == 0) {
-          curWaveW = curBufferIndex / columnMult;
-
-          if (curWaveW < wavewidth) {
-            int curH = Mathf.FloorToInt((waveheight - 1) * .5f * Mathf.Clamp01(Mathf.Abs(sampleBuffer[curBufferIndex])));
-
-            display.SetColumn(curWaveW, curH, false);
-          }
-
-        }
+        curWaveW = curBufferIndex / columnMult;
+        TrackPeak(curBufferIndex, columnMult, false);
 
         curBufferIndex = (curBufferIndex + 2);
         if (curBufferIndex >= virtualBufferLength) {

@@ -60,6 +60,42 @@ public class tape : manipObject {
     tapeColor = Color.HSVToRGB(tapeHue, .5f, 1);
     SetColor(tapeColor);
     createHandleFeedback();
+    createFarLOD();
+  }
+
+  // Far LOD (2026-11): a 12-triangle box the size of the tape (Resources/Models/tape_lod1) when it is
+  // small on screen; the full 600-triangle tape up close. A 20-tape group was ~12k triangles.
+  public static float lodNearScreenHeight = 0.023f; // full tape above this fraction of screen height (~0.5 m further out than 0.04)
+  public static float lodCullScreenHeight = 0.002f;
+  static Mesh lodMesh;
+  static bool lodMeshLoaded;
+  Renderer lodRend;
+
+  void createFarLOD() {
+    if (!lodMeshLoaded) {
+      lodMeshLoaded = true;
+      lodMesh = Resources.Load<Mesh>("Models/tape_lod1");
+      if (lodMesh == null) Debug.LogWarning("[tape] Resources/Models/tape_lod1 missing");
+    }
+    if (lodMesh == null || tapeRend == null) return;
+
+    GameObject far = new GameObject("tapeLOD1");
+    far.layer = tapeTrans.gameObject.layer;
+    far.transform.SetParent(tapeTrans.parent, false); // sibling, added last (GetChild(0) stays the tape)
+    far.transform.localPosition = tapeTrans.localPosition;
+    far.transform.localRotation = tapeTrans.localRotation;
+    far.transform.localScale = tapeTrans.localScale;
+    far.AddComponent<MeshFilter>().sharedMesh = lodMesh;
+    lodRend = far.AddComponent<MeshRenderer>();
+    lodRend.sharedMaterial = tapeRend.sharedMaterial;
+    lodRend.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+
+    LODGroup group = gameObject.AddComponent<LODGroup>();
+    group.SetLODs(new LOD[] {
+      new LOD(lodNearScreenHeight, new Renderer[] { tapeRend }),
+      new LOD(lodCullScreenHeight, new Renderer[] { lodRend }),
+    });
+    group.RecalculateBounds();
   }
 
   public void setOrigTrans(Vector3 pos, Quaternion rot) {
@@ -112,6 +148,7 @@ public class tape : manipObject {
   void SetColor(Color c) {
     mat = MaterialCache.Get(MaterialCache.Colored(tapeBase, c), SpecColorId, c);
     tapeRend.sharedMaterial = mat;
+    if (lodRend != null) lodRend.sharedMaterial = mat;
   }
 
   manipulator tempM;

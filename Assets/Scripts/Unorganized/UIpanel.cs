@@ -19,7 +19,25 @@ public class UIpanel : manipObject {
 
   public TextMesh label;
   public GameObject outline;
-  public Material textMat;
+  // Text and outline colours go through MaterialPropertyBlocks / shared materials
+  // (2026-11) instead of per-panel material copies (the library ring has ~50 panels).
+  Renderer textRend;
+  static MaterialPropertyBlock block;
+  static readonly int TintId = Shader.PropertyToID("_TintColor");
+  static readonly int ColorId = Shader.PropertyToID("_Color");
+  static readonly int InvFadeId = Shader.PropertyToID("_InvFade");
+
+  protected static void SetBlockColor(Renderer r, int prop, Color c) {
+    if (r == null) return;
+    if (block == null) block = new MaterialPropertyBlock();
+    r.GetPropertyBlock(block);
+    block.SetColor(prop, c);
+    r.SetPropertyBlock(block);
+  }
+
+  protected void SetTextTint(Color c) { SetBlockColor(textRend, TintId, c); }
+  protected void SetOutlineTint(Color c) { SetBlockColor(outlineRender, TintId, c); }
+  protected static void SetBodyColor(Renderer r, Color c) { SetBlockColor(r, ColorId, c); }
   public Color onColor, offColor;
 
   public Renderer outlineRender;
@@ -33,13 +51,12 @@ public class UIpanel : manipObject {
 
     onColor = Color.HSVToRGB(182f / 359, 1f, 118f / 255);
     offColor = Color.HSVToRGB(182f / 359, 0f, 118f / 255);
-    textMat = label.GetComponent<Renderer>().material;
+    textRend = label.GetComponent<Renderer>();
     setTextState(false);
 
     outlineRender = outline.GetComponent<Renderer>();
-    outlineRender.material.SetColor("_TintColor", onColor);
-    outlineRender.material.SetFloat("_EmissionGain", .428f);
-    outlineRender.material.SetFloat("_InvFade", 1f);
+    Material outlineMat = MaterialCache.Glow(outlineRender.sharedMaterial, onColor, .428f);
+    outlineRender.sharedMaterial = MaterialCache.Get(outlineMat, 0, Color.clear, InvFadeId, 1f);
 
     outline.SetActive(false);
 
@@ -55,7 +72,7 @@ public class UIpanel : manipObject {
   }
 
   public virtual void setTextState(bool on) {
-    textMat.SetColor("_TintColor", on ? onColor : offColor);
+    SetTextTint(on ? onColor : offColor);
   }
 
   public override void setState(manipState state) {

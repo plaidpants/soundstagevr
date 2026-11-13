@@ -563,6 +563,8 @@ public class manipulator : MonoBehaviour {
   // other. (It used to rely on the left rig's mirrored scale (-1,1,1), which came out
   // pointing down/backwards in the other hand.)
   public bool IsLeftHand { get { return controllerIndex == 0; } }
+  // true while this hand is holding or pointing at something (its thumbstick may be in use)
+  public bool IsBusy { get { return grabbing || selectedObject != null; } }
   public static Vector3 MirrorX(Vector3 v) { return new Vector3(-v.x, v.y, v.z); }
 
   public void ApplyToolPose(Vector3 dir, float gripOffset) {

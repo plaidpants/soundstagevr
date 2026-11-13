@@ -59,7 +59,7 @@ public class libraryPanel : UIpanel {
   }
 
   public override void setTextState(bool on) {
-    textMat.SetColor("_TintColor", on ? onColor : offColor);
+    SetTextTint(on ? onColor : offColor);
   }
 
   public void setNewID(int id, string s, bool selected = false) {
@@ -123,11 +123,11 @@ public class libraryPanel : UIpanel {
     }
 
     if (active && curState == manipState.none) {
-      rend.material.color = Color.Lerp(Color.clear, panelColor, z);
+      SetBodyColor(rend, Color.Lerp(Color.clear, panelColor, z));
       if (toggled) {
-        textMat.SetColor("_TintColor", Color.Lerp(Color.clear, onColor, z));
-        outlineRender.material.SetColor("_TintColor", Color.Lerp(Color.clear, onColor, z));
-      } else textMat.SetColor("_TintColor", Color.Lerp(Color.clear, offColor, z));
+        SetTextTint(Color.Lerp(Color.clear, onColor, z));
+        SetOutlineTint(Color.Lerp(Color.clear, onColor, z));
+      } else SetTextTint(Color.Lerp(Color.clear, offColor, z));
     }
 
     lastZ = z;

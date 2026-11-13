@@ -92,12 +92,17 @@ public class sprocket : manipObject {
     }
   }
 
+  static MaterialPropertyBlock block;
   void UpdateAlpha(float z) {
     z = Mathf.Clamp01(z / sprocketRadius) + mod;
     if (z > 0) {
       rend.enabled = coll.enabled = true;
-      rend.material.SetFloat("_EmissionGain", glowEmission * z);
-      rend.material.SetColor("_TintColor", Color.Lerp(Color.clear, glowColor, z));
+      // property block instead of a per-sprocket material copy (2026-11)
+      if (block == null) block = new MaterialPropertyBlock();
+      rend.GetPropertyBlock(block);
+      block.SetFloat("_EmissionGain", glowEmission * z);
+      block.SetColor("_TintColor", Color.Lerp(Color.clear, glowColor, z));
+      rend.SetPropertyBlock(block);
     } else {
       rend.enabled = coll.enabled = false;
     }

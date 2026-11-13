@@ -39,13 +39,11 @@ public class clipPlayerComplex : clipPlayer {
   float _lastBuffer = 0;
   float[] lastSeqGen;
 
-  Texture2D tex;
   public Renderer waverend;
   public Color32 waveBG = Color.black;
   public Color32 waveLine = Color.white;
   int wavewidth = 512;
   int waveheight = 64;
-  Color32[] wavepixels;
 
   float[] speedBuffer;
   float[] ampBuffer;
@@ -129,35 +127,29 @@ public class clipPlayerComplex : clipPlayer {
     if (sampleBounds[0] >= sampleBounds[1]) sampleBounds[0] = sampleBounds[1] - 10; // sanity check
   }
 
+  // Waveform drawn by the GPU like the recorder / looper (2026-11): a column texture of
+  // per-column peaks (ColumnDisplay + Resources/Shaders/WaveColumns) instead of a
+  // 512x64 RGBA texture built on the CPU from one sample per column, which aliased.
+  ColumnDisplay display;
+
   public override void DrawClipTex() {
-    tex = new Texture2D(wavewidth, waveheight, TextureFormat.RGBA32, false);
-    wavepixels = new Color32[wavewidth * waveheight];
-
-    for (int i = 0; i < wavewidth; i++) {
-      for (int i2 = 0; i2 < waveheight; i2++) {
-        wavepixels[i2 * wavewidth + i] = waveBG;
-      }
-    }
-
-    int centerH = waveheight / 2;
-    int columnMult = Mathf.CeilToInt((float)clipSamples.Length / (wavewidth - 1));
-
-
-    for (int i = 0; i < wavewidth; i++) {
-
-      if (columnMult * i < clipSamples.Length) {
-        int curH = Mathf.FloorToInt((waveheight - 1) * .5f * Mathf.Clamp01(Mathf.Abs(clipSamples[columnMult * i])));
-
-        for (int i2 = 0; i2 < centerH; i2++) {
-          if (i2 < curH) wavepixels[(centerH - i2) * wavewidth + i] = wavepixels[(centerH + i2) * wavewidth + i] = waveLine;
-          else wavepixels[(centerH - i2) * wavewidth + i] = wavepixels[(centerH + i2) * wavewidth + i] = waveBG;
+    if (display == null) display = new ColumnDisplay(waverend, wavewidth, waveheight, waveLine, waveLine, waveBG, 0);
+    int frames = clipSamples.Length / clipChannels;
+    int perColumn = Mathf.Max(1, Mathf.CeilToInt((float)frames / wavewidth));
+    for (int c = 0; c < wavewidth; c++) {
+      int start = c * perColumn;
+      if (start >= frames) { display.SetColumn(c, 0); continue; }
+      int end = Mathf.Min(start + perColumn, frames);
+      float peak = 0;
+      for (int f = start; f < end; f++) {
+        for (int ch = 0; ch < clipChannels; ch++) {
+          float v = Mathf.Abs(clipSamples[f * clipChannels + ch]);
+          if (v > peak) peak = v;
         }
       }
+      display.SetColumn(c, Mathf.FloorToInt((waveheight - 1) * .5f * Mathf.Clamp01(peak)));
     }
-
-    tex.SetPixels32(wavepixels);
-    tex.Apply(false);
-    waverend.material.mainTexture = tex;
+    display.Upload();
   }
 
   public bool looping = true;
@@ -275,20 +267,20 @@ public class clipPlayerComplex : clipPlayer {
       float amount = (scrubTarg - _lastBuffer) / (buffer.Length / channels);
 
       for (int i = 0; i < buffer.Length; i += channels) {
+        float scrubPos = floatingBufferCount;
         bufferCount = Mathf.RoundToInt(floatingBufferCount);
         floatingBufferCount += amount;
 
         float endAmplitude = amplitude;
         if (ampGen != null) endAmplitude = endAmplitude * ((ampBuffer[i] + 1) / 2f);
-        buffer[i] = lp_filter[0] = lp_filter[0] * .9f + .1f * clipSamples[bufferCount * clipChannels] * endAmplitude;
-        if (clipChannels == 2) buffer[i + 1] = lp_filter[1] = lp_filter[1] * .9f + .1f * clipSamples[bufferCount * clipChannels + 1] * endAmplitude;
-        else buffer[i + 1] = buffer[i];
+        ScrubSample(buffer, i, scrubPos, amount, endAmplitude);
 
         dspTime += _sampleDuration;
       }
     } else {
       float amount = turntableDelta * (float)_sampleRate * channels / buffer.Length;
       for (int i = 0; i < buffer.Length; i += channels) {
+        float scrubPos = floatingBufferCount;
         bufferCount = Mathf.RoundToInt(floatingBufferCount);
         floatingBufferCount += amount;
 
@@ -299,9 +291,7 @@ public class clipPlayerComplex : clipPlayer {
         float endAmplitude = amplitude;
         if (ampGen != null) endAmplitude = endAmplitude * ((ampBuffer[i] + 1) / 2f);
 
-        buffer[i] = lp_filter[0] = lp_filter[0] * .9f + .1f * clipSamples[bufferCount * clipChannels] * endAmplitude;
-        if (clipChannels == 2) buffer[i + 1] = lp_filter[1] = lp_filter[1] * .9f + .1f * clipSamples[bufferCount * clipChannels + 1] * endAmplitude;
-        else buffer[i + 1] = buffer[i];
+        ScrubSample(buffer, i, scrubPos, amount, endAmplitude);
 
         dspTime += _sampleDuration;
       }
@@ -314,4 +304,23 @@ public class clipPlayerComplex : clipPlayer {
   }
 
   float[] lp_filter = new float[] { 0, 0 };
+
+  // Scrub / turntable output (2026-11). It used to take the nearest sample and run it
+  // through a fixed one-pole low-pass (~700 Hz), so even scrubbing at normal speed sounded
+  // muffled. Now it interpolates between samples and only smooths when moving slowly
+  // (where nearest-sample stepping buzzes); at about normal speed it is unfiltered.
+  void ScrubSample(float[] buffer, int i, float pos, float speed, float amp) {
+    float a = Mathf.Lerp(0.15f, 1f, Mathf.Clamp01(Mathf.Abs(speed)));
+    int frames = clipSamples.Length / clipChannels;
+    int i0 = Mathf.Clamp(Mathf.FloorToInt(pos), 0, frames - 1);
+    int i1 = Mathf.Min(i0 + 1, frames - 1);
+    float f = Mathf.Clamp01(pos - Mathf.Floor(pos));
+
+    float l = Mathf.Lerp(clipSamples[i0 * clipChannels], clipSamples[i1 * clipChannels], f) * amp;
+    buffer[i] = lp_filter[0] = lp_filter[0] + a * (l - lp_filter[0]);
+    if (clipChannels == 2) {
+      float r = Mathf.Lerp(clipSamples[i0 * clipChannels + 1], clipSamples[i1 * clipChannels + 1], f) * amp;
+      buffer[i + 1] = lp_filter[1] = lp_filter[1] + a * (r - lp_filter[1]);
+    } else buffer[i + 1] = buffer[i];
+  }
 }

@@ -1,0 +1,69 @@
+; FBX 7.3.0 project file
+; Far LOD for the tape: a box matching tape.fbx bounds (12 tris), loaded by tape.cs. 2026-11.
+FBXHeaderExtension:  {
+	FBXHeaderVersion: 1003
+	FBXVersion: 7300
+}
+GlobalSettings:  {
+	Version: 1000
+	Properties70:  {
+		P: "UpAxis", "int", "Integer", "",1
+		P: "UpAxisSign", "int", "Integer", "",1
+		P: "FrontAxis", "int", "Integer", "",2
+		P: "FrontAxisSign", "int", "Integer", "",1
+		P: "CoordAxis", "int", "Integer", "",0
+		P: "CoordAxisSign", "int", "Integer", "",1
+		P: "OriginalUpAxis", "int", "Integer", "",1
+		P: "OriginalUpAxisSign", "int", "Integer", "",1
+		P: "UnitScaleFactor", "double", "Number", "",1
+		P: "OriginalUnitScaleFactor", "double", "Number", "",1
+	}
+}
+Definitions:  {
+	Version: 100
+	Count: 2
+	ObjectType: "Model" {
+		Count: 1
+	}
+	ObjectType: "Geometry" {
+		Count: 1
+	}
+}
+Objects:  {
+	Geometry: 1000001, "Geometry::pCube1", "Mesh" {
+		Vertices: *24 {
+			a: -2.40861,-1.79231,-0.5,2.40861,-1.79231,-0.5,2.40861,3.38642,-0.5,-2.40861,3.38642,-0.5,-2.40861,-1.79231,0.5,2.40861,-1.79231,0.5,2.40861,3.38642,0.5,-2.40861,3.38642,0.5
+		}
+		PolygonVertexIndex: *36 {
+			a: 0,3,-3,0,2,-2,4,5,-7,4,6,-8,0,1,-6,0,5,-5,3,7,-7,3,6,-3,0,4,-8,0,7,-4,1,2,-7,1,6,-6
+		}
+		GeometryVersion: 124
+		LayerElementNormal: 0 {
+			Version: 101
+			Name: ""
+			MappingInformationType: "ByPolygonVertex"
+			ReferenceInformationType: "Direct"
+			Normals: *108 {
+				a: 0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0
+			}
+		}
+		Layer: 0 {
+			Version: 100
+			LayerElement:  {
+				Type: "LayerElementNormal"
+				TypedIndex: 0
+			}
+		}
+	}
+	Model: 1000002, "Model::pCube1", "Mesh" {
+		Version: 232
+		Properties70:  {
+		}
+		Shading: T
+		Culling: "CullingOff"
+	}
+}
+Connections:  {
+	C: "OO",1000001,1000002
+	C: "OO",1000002,0
+}
