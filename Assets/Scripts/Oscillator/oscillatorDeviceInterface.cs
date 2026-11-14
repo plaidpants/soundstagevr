@@ -27,6 +27,8 @@ public class oscillatorDeviceInterface : deviceInterface {
   public waveViz viz;
   public omniJack signalOutput, freqInput, ampInput;
   public slider waveSlider;
+  public basicSwitch rangeSwitch; // LFO dial LINEAR (up, original) / SLOW (down), see OscillatorRangeSwitch
+  bool slowCurve = false;
 
   // current values
   float freqPercent, ampPercent, wavePercent;
@@ -39,6 +41,7 @@ public class oscillatorDeviceInterface : deviceInterface {
   public override void Awake() {
     base.Awake();
     signal = GetComponent<oscillatorSignalGenerator>();
+    if (rangeSwitch == null) rangeSwitch = OscillatorRangeSwitch.Create(transform);
     active = true;
     viz.period = lfo ? 512 : 1;
     viz.waveLine = lfo ? lfoWaveColor : oscWaveColor;
@@ -53,6 +56,7 @@ public class oscillatorDeviceInterface : deviceInterface {
 
     // update changed inputs
     if (lfo != !lfoSwitch.switchVal) UpdateLFO();
+    if (rangeSwitch != null && slowCurve != !rangeSwitch.switchVal) { slowCurve = !rangeSwitch.switchVal; UpdateFreq(); }
     if (freqPercent != freqDial.percent) UpdateFreq();
     if (ampPercent != ampDial.percent) UpdateAmp();
     if (wavePercent != waveSlider.percent) UpdateWave();
@@ -72,7 +76,8 @@ public class oscillatorDeviceInterface : deviceInterface {
 
   void UpdateFreq() {
     freqPercent = freqDial.percent;
-    if (lfo) signal.frequency = Mathf.Pow(freqPercent, 4) * 10 + 1.0f / 120.0f; // 120s, 0.1s
+    if (lfo && slowCurve) signal.frequency = Mathf.Pow(freqPercent, 4) * 10 + 1.0f / 120.0f; // 120s, 0.1s
+    else if (lfo) signal.frequency = freqPercent * 8; // original
     else signal.frequency = Mathf.Clamp(3520.00f * Mathf.Pow(freqDial.percent, 2), 27.50f, Mathf.Infinity);// Mathf.Pow(freqDial.percent, 2); //signal.frequency = 40 + 10000 * Mathf.Pow(freqDial.percent, 2);
   }
 
@@ -95,6 +100,7 @@ public class oscillatorDeviceInterface : deviceInterface {
     data.amp = ampPercent;
     data.freq = freqPercent;
     data.wave = wavePercent;
+    data.lfoSlow = slowCurve;
 
     data.jackOutID = signalOutput.transform.GetInstanceID();
     data.jackInAmpID = ampInput.transform.GetInstanceID();
@@ -111,6 +117,7 @@ public class oscillatorDeviceInterface : deviceInterface {
     ampDial.setPercent(data.amp);
     waveSlider.setPercent(data.wave);
     lfoSwitch.setSwitch(!data.lfo);
+    if (rangeSwitch != null) rangeSwitch.setSwitch(!data.lfoSlow);
 
     ID = data.ID;
     signalOutput.ID = data.jackOutID;
@@ -124,6 +131,7 @@ public class OscillatorData : InstrumentData {
   public float freq;
   public bool lfo;
   public float wave;
+  public bool lfoSlow; // LFO dial curve; older saves (false) get the original linear dial
   public int jackOutID;
   public int jackInAmpID;
   public int jackInFreqID;

@@ -100,7 +100,14 @@ public class cvSequencerDeviceInterface : deviceInterface {
     dimensionDisplays[1].GetComponent<Renderer>().material.SetFloat("_EmissionGain", .3f);
   }
 
+  // New sequencers start on ONCE (2026-11): that's how one started from the control
+  // input always behaved, so big cabled patches keep working; someone playing it from
+  // the front panel is at the device anyway and can flip it to LOOP. (basicSwitch
+  // turns itself on in its Awake, so this has to wait for Start, and Load wins.)
+  bool loopLoaded = false;
+
   void Start() {
+    if (!loopLoaded && loopSwitch != null) loopSwitch.setSwitch(false);
     _beatManager.setTriggers(executeNextStep, resetSteps);
     _beatManager.updateBeatNoTriplets(beatSpeed);
     _beatManager.updateSwing(swingPercent);
@@ -568,6 +575,7 @@ public class cvSequencerDeviceInterface : deviceInterface {
 
     swingDial.setPercent(data.swing);
     if (loopSwitch != null) loopSwitch.setSwitch(data.loop);
+    loopLoaded = true;
 
     for (int i = 0; i < samplerList.Count; i++) {
       samplerList[i].gameObject.GetComponent<miniSamplerComponentInterface>().jackout.ID = data.sampleJackOutIDs[i];
@@ -599,7 +607,7 @@ public class cvSequencerData : InstrumentData {
   public int[] sampleJackOutIDs;
   public bool[] rowMute;
   public float swing;
-  public bool loop = true; // LOOP / ONCE switch; older saves load as LOOP
+  public bool loop = false; // LOOP / ONCE switch; older saves load as ONCE (how they ran from a cable)
 
   public float[][] dialValues; // [row][step]
   public int[] cvJackOutIDs;

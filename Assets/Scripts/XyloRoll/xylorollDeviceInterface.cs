@@ -100,6 +100,13 @@ public class xylorollDeviceInterface : deviceInterface {
     foreach (Transform c in transform) {
       if (c.localPosition.x < -0.55f && c.GetComponent<drumstick>() == null) parts.Add(c); // speaker, jack, octave slider, toggles...
     }
+    // the help video panel goes with its "?" (it sits further in, over the keys)
+    tooltips tip = GetComponentInChildren<tooltips>(true);
+    if (tip != null && tip.vidContainer != null && parts.Contains(tip.transform)) {
+      Transform v = tip.vidContainer.transform;
+      while (v != null && v.parent != transform) v = v.parent;
+      if (v != null && !parts.Contains(v)) parts.Add(v);
+    }
     highEndParts = parts.ToArray();
     highEndBase = new Vector3[highEndParts.Length];
     for (int i = 0; i < highEndParts.Length; i++) highEndBase[i] = highEndParts[i].localPosition;

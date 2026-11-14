@@ -1,9 +1,9 @@
 // LOOP / ONCE switch for the drum-machine and CV sequencers (2026-11).
 //
 // Started from the control input (a trigger), a sequencer used to play one pass and
-// stop; started with its PLAY button it loops. The switch decides: LOOP (default) keeps
-// looping after an external trigger too, ONCE plays a single pass per trigger (the old
-// external-trigger behaviour).
+// stop; started with its PLAY button it loops. The switch decides for both: LOOP keeps
+// looping, ONCE plays a single pass per trigger or PLAY press. New sequencers and older
+// saves start on ONCE (the old external-trigger behaviour), so cabled patches still work.
 //
 // The switch is normally part of the prefab (added with the editor menu
 // SoundStage > Add LOOP switch to sequencers, then positioned by hand). Prefabs that
