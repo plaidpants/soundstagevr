@@ -58,6 +58,7 @@ public class DeviceLOD : MonoBehaviour {
     List<Renderer> mine = new List<Renderer>();
     foreach (Renderer r in all) {
       if (r == null || owned.Contains(r)) continue;
+      if (GridFarProxy.IsGridPart(r.transform, transform)) continue; // sequencer cells: GridFarProxy
       if (r is ParticleSystemRenderer || r is LineRenderer || r is TrailRenderer) continue;
       mine.Add(r);
       if (!r.enabled || !r.gameObject.activeInHierarchy) continue;

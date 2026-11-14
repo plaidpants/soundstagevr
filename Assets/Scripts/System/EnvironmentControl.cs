@@ -93,16 +93,21 @@ public class EnvironmentControl : MonoBehaviour {
       var spots = new System.Collections.Generic.List<Light>();
       foreach (Light l in landscape.GetComponentsInChildren<Light>(true)) {
         if (l.type != LightType.Spot) continue;
-        // The spotlight sits under the mountains (scaled 1 x 0.3 x 1) with a scale of
-        // 100 x 100 x 333 and a 90 degree tilt, so its world matrix is skewed. Unity's
-        // light culling then misjudges the cone and switched it off when standing in
-        // one spot. Give it an unscaled parent of its own at the same place.
+        // The spotlight sits under the mountains (scaled 1 x 0.3 x 1) with its own
+        // 100 x 100 x 333 scale; give it a plain, unscaled parent at the same place so
+        // the light isn't affected by those scales.
         GameObject holder = new GameObject("StageSpotlight");
         holder.transform.SetPositionAndRotation(l.transform.position, l.transform.rotation);
         l.transform.SetParent(holder.transform, false);
         l.transform.localPosition = Vector3.zero;
         l.transform.localRotation = Quaternion.identity;
         l.transform.localScale = Vector3.one;
+        // The Quest quality level allows ONE per-pixel light per object. With the spot on
+        // Auto, Unity picks per object between it and the stage's directional light by
+        // estimated brightness, and the pick changed as things moved, so the spot flicked
+        // on and off. Important = always per-pixel: steady, at the cost of one extra pass
+        // for each object in its cone (that's what FULL costs).
+        l.renderMode = LightRenderMode.ForcePixel;
         spots.Add(l);
       }
       spotLights = spots.ToArray();

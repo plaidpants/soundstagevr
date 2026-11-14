@@ -118,6 +118,11 @@ public class scaleSequencerDeviceInterface : deviceInterface {
   public override void Awake() {
     base.Awake();
     if (loopSwitch == null) loopSwitch = SequencerLoopSwitch.Create(transform);
+    // far away the grid is drawn as one mesh of plain boxes (System/GridFarProxy.cs)
+    GridFarProxy far = gameObject.AddComponent<GridFarProxy>();
+    far.offMat = touchCubePrefab.GetComponent<Renderer>().sharedMaterial;
+    far.glowBase = touchCubePrefab.GetComponent<button>().onMat;
+    far.playhead = stepSelect != null ? stepSelect.transform : null;
     cubes = new Transform[max][];
     cubeStates = new bool[max][];
     for (int i = 0; i < max; i++) {

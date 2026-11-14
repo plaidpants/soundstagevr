@@ -34,6 +34,7 @@ public class button : manipObject {
   public GameObject selectOverlay;
   public float glowHue = 0;
   Color glowColor = Color.HSVToRGB(0, .5f, .25f);
+  public Color GlowColor { get { return glowColor; } } // GridFarProxy colours far cells with it
 
   public bool onlyOn = false;
 

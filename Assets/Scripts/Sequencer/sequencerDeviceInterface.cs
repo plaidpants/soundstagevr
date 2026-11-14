@@ -59,6 +59,11 @@ public class sequencerDeviceInterface : deviceInterface {
   public override void Awake() {
     base.Awake();
     if (loopSwitch == null) loopSwitch = SequencerLoopSwitch.Create(transform);
+    // far away the grid is drawn as one mesh of plain boxes (System/GridFarProxy.cs)
+    GridFarProxy far = gameObject.AddComponent<GridFarProxy>();
+    far.offMat = touchCubePrefab.GetComponent<Renderer>().sharedMaterial;
+    far.glowBase = touchCubePrefab.GetComponent<button>().onMat;
+    far.playhead = stepSelect != null ? stepSelect.transform : null;
     cubeList = new List<List<Transform>>();
     jackList = new List<Transform>();
     seqList = new List<sequencer>();
@@ -466,6 +471,7 @@ public class sequencerDeviceInterface : deviceInterface {
     data.rowMute = rowMute;
     data.swing = swingDial.percent;
     data.loop = loopSwitch == null || loopSwitch.switchVal;
+    data.loopSpecified = true;
 
     data.sampleJackOutIDs = new int[samplerList.Count];
     for (int i = 0; i < samplerList.Count; i++) {
@@ -528,5 +534,8 @@ public class SequencerData : InstrumentData {
   public int[] sampleJackOutIDs;
   public bool[] rowMute;
   public float swing;
-  public bool loop = false; // LOOP / ONCE switch; older saves load as ONCE (how they ran from a cable)
+  public bool loop = false; // LOOP / ONCE switch (2026-11)
+  // true when the file had a <loop> element; files from before the switch don't, and
+  // SaveLoadInterface.UpgradeOldData then sets LOOP unless the control input is cabled
+  [System.Xml.Serialization.XmlIgnore] public bool loopSpecified;
 }

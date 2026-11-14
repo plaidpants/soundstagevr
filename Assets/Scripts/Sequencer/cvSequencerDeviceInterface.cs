@@ -523,6 +523,7 @@ public class cvSequencerDeviceInterface : deviceInterface {
     data.rowMute = rowMute;
     data.swing = swingDial.percent;
     data.loop = loopSwitch == null || loopSwitch.switchVal;
+    data.loopSpecified = true;
 
     data.sampleJackOutIDs = new int[samplerList.Count];
     for (int i = 0; i < samplerList.Count; i++) {
@@ -607,7 +608,10 @@ public class cvSequencerData : InstrumentData {
   public int[] sampleJackOutIDs;
   public bool[] rowMute;
   public float swing;
-  public bool loop = false; // LOOP / ONCE switch; older saves load as ONCE (how they ran from a cable)
+  public bool loop = false; // LOOP / ONCE switch (2026-11)
+  // true when the file had a <loop> element; files from before the switch don't, and
+  // SaveLoadInterface.UpgradeOldData then sets LOOP unless the control input is cabled
+  [System.Xml.Serialization.XmlIgnore] public bool loopSpecified;
 
   public float[][] dialValues; // [row][step]
   public int[] cvJackOutIDs;

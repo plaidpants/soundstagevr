@@ -63,8 +63,15 @@ public class exampleManager : MonoBehaviour {
 
   void Start() {
 #if UNITY_ANDROID
-        //if Examples doesn't exist, extract default data...
-        if (Directory.Exists(Directory.GetParent(Application.persistentDataPath).FullName + Path.DirectorySeparatorChar + "Examples") == false)
+        // Extract the examples if they're missing, or if they came from a different build
+        // (2026-11: the examples are updated with the app, e.g. sequencer LOOP settings;
+        // they used to be extracted only once, so updates never reached the headset).
+        // Only the Examples folder is rewritten; saves live elsewhere.
+        string examplesDir = Directory.GetParent(Application.persistentDataPath).FullName + Path.DirectorySeparatorChar + "Examples";
+        string stampFile = examplesDir + Path.DirectorySeparatorChar + ".build";
+        string stamp = Application.version + " " + Application.buildGUID;
+        bool current = Directory.Exists(examplesDir) && File.Exists(stampFile) && File.ReadAllText(stampFile) == stamp;
+        if (!current)
         {
             Directory.CreateDirectory(Directory.GetParent(Application.persistentDataPath).FullName + Path.DirectorySeparatorChar + "Examples");
             //copy tgz to directory where we can extract it
@@ -74,6 +81,7 @@ public class exampleManager : MonoBehaviour {
             Utility_SharpZipCommands.ExtractTGZ(Directory.GetParent(Application.persistentDataPath).FullName + Path.DirectorySeparatorChar + "Examples.tgz", Directory.GetParent(Application.persistentDataPath).FullName + Path.DirectorySeparatorChar + "Examples");
             //delete tgz
             File.Delete(Directory.GetParent(Application.persistentDataPath).FullName + Path.DirectorySeparatorChar + "Examples.tgz");
+            File.WriteAllText(stampFile, stamp);
         }
 #endif
 

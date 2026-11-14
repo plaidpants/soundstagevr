@@ -1297,6 +1297,7 @@
         <boolean>false</boolean>
       </rowMute>
       <swing>0.5</swing>
+      <loop>true</loop>
     </Instruments>
     <Instruments xsi:type="TapeGroupData">
       <ID>0</ID>

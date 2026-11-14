@@ -22,7 +22,7 @@ public class masterControl : MonoBehaviour {
 
   public static masterControl instance;
   public UnityEngine.Audio.AudioMixer masterMixer;
-  public static float versionNumber = .76f;
+  public static float versionNumber = .77f; // save-file format; .77 (2026-11): LOOP/ONCE etc., see SaveLoadInterface.UpgradeOldData
 
   public enum platform {
     Vive,
@@ -69,6 +69,7 @@ public class masterControl : MonoBehaviour {
 
   void Awake() {
     instance = this;
+    Debug.Log("[SoundStage] version " + Application.version + " (save format " + versionNumber + ")");
     _measurePhase = 0;
     _sampleDuration = 1.0 / AudioSettings.outputSampleRate;
 

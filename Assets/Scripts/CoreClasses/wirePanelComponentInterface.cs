@@ -52,6 +52,7 @@ public class wirePanelComponentInterface : componentInterface {
     uisoundpanel = CloneButton("uiSoundPanel", 12, 2);
     skypanel = CloneButton("skyPanel", 13, 3);
     UpdateEnvironmentLabels();
+    CreateVersionLabel();
     if (PlayerPrefs.GetInt("midiOut") == 1) {
       string s = "DISABLE MIDI OUT";
       midipanel.label.text = s;
@@ -108,6 +109,20 @@ public class wirePanelComponentInterface : componentInterface {
     msaapanel = g.GetComponent<uiPanelSinglePress>();
     msaapanel.buttonID = 9;
     UpdateMsaaLabel();
+  }
+
+  // App version above the stacked buttons, so it's easy to tell which build is running.
+  void CreateVersionLabel() {
+    Transform src = transform.Find("WireLabel");
+    if (src == null || midipanel == null) return;
+    GameObject g = Instantiate(src.gameObject, src.parent, false);
+    g.name = "versionLabel";
+    Vector3 p = src.localPosition;
+    p.x = (0.1665f + midipanel.transform.localPosition.x) * .5f;
+    p.y = 0.012f + 0.038f * 4;
+    g.transform.localPosition = p;
+    g.transform.localScale = src.localScale * .7f;
+    g.GetComponent<TextMesh>().text = "SOUNDSTAGE " + Application.version;
   }
 
   // The added buttons stack upward from the top of the panel (rows 0,1,2... going up),

@@ -42,10 +42,12 @@ public class SaveLoadInterface : MonoBehaviour {
     masterControl.instance.currentScene = filename;
 
     float v = systemLoad(synthSet.SystemList[0]);
+    UpgradeOldData(synthSet.InstrumentList);
 
     if (v == 0) {
       xmlUpdate _xmlUpdate = new xmlUpdate();
       List<InstrumentData> dataB = _xmlUpdate.UpdateFile(filename);
+      UpgradeOldData(dataB);
       foreach (InstrumentData dB in dataB) {
         GameObject g = Instantiate(instrumentPrefabs[dB.deviceType], Vector3.zero, Quaternion.identity) as GameObject;
         g.GetComponent<deviceInterface>().Load(dB);
@@ -60,6 +62,24 @@ public class SaveLoadInterface : MonoBehaviour {
 
     LoadPlugs();
     ClearSynthSetList();
+  }
+
+  // Settings added after a file was saved get the value that plays it the way it
+  // always played (2026-11, file version .77):
+  //   drum machine / CV sequencer LOOP-ONCE: a sequencer used to loop when started with
+  //   PLAY and play once per trigger from its control input, so it gets LOOP unless
+  //   something is plugged into that input.
+  // (Oscillator LFO range, keyboard octave, keyboard/xyloroll size already default to
+  // the original behaviour.)
+  void UpgradeOldData(List<InstrumentData> list) {
+    HashSet<int> pluggedJacks = new HashSet<int>();
+    foreach (PlugData p in synthSet.PlugList) pluggedJacks.Add(p.connected);
+    foreach (InstrumentData d in list) {
+      SequencerData sd = d as SequencerData;
+      if (sd != null && !sd.loopSpecified) sd.loop = !pluggedJacks.Contains(sd.jackInID);
+      cvSequencerData cd = d as cvSequencerData;
+      if (cd != null && !cd.loopSpecified) cd.loop = !pluggedJacks.Contains(cd.jackInID);
+    }
   }
 
   public bool PreviewLoad(string filename, Transform par) {
