@@ -58,6 +58,7 @@ public class menuItem : manipObject {
     Gain,  // from ludzeller's fork (2026-11)
     Glide, // from ludzeller's fork (2026-11)
     CVSequencer, // from ludzeller's fork (2026-11)
+    ScaleSequencer, // the UNTZtrument step sequencer (2026-11)
     MIDIIN,
     MIDIOUT,
     Max,
@@ -127,6 +128,7 @@ public class menuItem : manipObject {
     if (item == deviceType.Sequencer) label.text = "Drum Machine";
     if (item == deviceType.Timeline) label.text = "Sequencer";
     if (item == deviceType.CVSequencer) label.text = "CV Sequencer";
+    if (item == deviceType.ScaleSequencer) label.text = "Scale Sequencer";
     label.gameObject.SetActive(false);
     symbol.gameObject.SetActive(false);
     GameObject g = Instantiate(itemPrefab, transform.position, transform.rotation) as GameObject;
@@ -151,6 +153,21 @@ public class menuItem : manipObject {
         seq.transform.Translate(Vector3.right * .081f, Space.Self);
         seq.transform.Translate(Vector3.up * i * -.04f, Space.Self);
       }
+      Destroy(g.transform.Find("stretchNode").gameObject);
+    }
+
+    if (item == deviceType.ScaleSequencer) {
+      // its Awake already added the sampler panel etc.; show a small grid
+      for (int i = 0; i < 2; i++) {
+        for (int i2 = 0; i2 < 4; i2++) {
+          GameObject cube = Instantiate(g.GetComponent<scaleSequencerDeviceInterface>().touchCubePrefab, transform.position, transform.rotation) as GameObject;
+          cube.transform.parent = g.transform;
+          cube.transform.Translate(Vector3.right * i2 * -.04f, Space.Self);
+          cube.transform.Translate(Vector3.up * i * -.04f, Space.Self);
+        }
+      }
+      Transform adsrPreview = g.transform.Find("ADSR");
+      if (adsrPreview != null) Destroy(adsrPreview.gameObject);
       Destroy(g.transform.Find("stretchNode").gameObject);
     }
 
@@ -260,7 +277,7 @@ public class menuItem : manipObject {
     if (item == deviceType.Splitter) {
       g.transform.localPosition = new Vector3(.0185f, 0, .02f);
     }
-    if (item == deviceType.Sequencer || item == deviceType.CVSequencer) {
+    if (item == deviceType.Sequencer || item == deviceType.CVSequencer || item == deviceType.ScaleSequencer) {
       g.transform.localScale = Vector3.one * .166f;
     }
     if (item == deviceType.ControlCube) g.transform.localPosition = new Vector3(0, -.01f, .024f);

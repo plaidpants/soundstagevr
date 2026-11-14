@@ -193,6 +193,7 @@ public class SaveLoadInterface : MonoBehaviour {
 [XmlInclude(typeof(GainData))]
 [XmlInclude(typeof(GlideData))]
 [XmlInclude(typeof(cvSequencerData))]
+[XmlInclude(typeof(ScaleSequencerData))]
 public class InstrumentData {
   public int ID;
   public menuItem.deviceType deviceType;

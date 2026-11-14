@@ -22,13 +22,19 @@ public class HandFingertips : MonoBehaviour {
   void OnEnable() { if (!active.Contains(this)) active.Add(this); }
   void OnDisable() { active.Remove(this); }
 
-  public IList<Transform> HitPoints { get { return hitPoints; } }
+  static readonly List<Transform> noPoints = new List<Transform>();
+  // empty while the hand isn't tracked, so drums etc. don't feel a hand lying on the floor
+  public IList<Transform> HitPoints { get { return pokersOn ? hitPoints : noPoints; } }
 
   OVRSkeleton skeleton;
+  OVRHand hand;
   bool built = false;
+  readonly List<GameObject> pokers = new List<GameObject>();
+  bool pokersOn = true;
 
   void Awake() {
     skeleton = GetComponent<OVRSkeleton>();
+    hand = GetComponent<OVRHand>();
     ApplyGlowMaterial();
   }
 
@@ -69,7 +75,18 @@ public class HandFingertips : MonoBehaviour {
   public bool HasPinchPoint { get { return built && thumbTip != null && indexTip != null; } }
   public Vector3 PinchPoint { get { return (thumbTip.position + indexTip.position) * 0.5f; } }
 
+  // While the hand isn't tracked (out of view, or controllers in use) its bones fall back
+  // to a default pose near the floor; switch the pokers off so their spheres don't sit
+  // there and they can't press anything (OnDisable releases what they were touching).
+  void UpdatePokers() {
+    bool on = hand == null || (hand.IsTracked && hand.IsDataValid);
+    if (on == pokersOn) return;
+    pokersOn = on;
+    foreach (GameObject g in pokers) if (g != null) g.SetActive(on);
+  }
+
   void Update() {
+    if (built) UpdatePokers();
     if (built || skeleton == null || !skeleton.IsInitialized || skeleton.Bones == null || owner == null) return;
     foreach (OVRBone b in skeleton.Bones) {
       switch (b.Id) {
@@ -86,7 +103,7 @@ public class HandFingertips : MonoBehaviour {
           break;
         default: continue;
       }
-      FingertipPoker.Create(b.Transform, owner, tipRadius);
+      pokers.Add(FingertipPoker.Create(b.Transform, owner, tipRadius).gameObject);
       hitPoints.Add(b.Transform);
     }
     if (palmCenter != null && wrist != null) {
