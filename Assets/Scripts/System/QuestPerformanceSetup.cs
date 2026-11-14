@@ -84,7 +84,9 @@ public class QuestPerformanceSetup : MonoBehaviour {
     OVRManager.suggestedGpuPerfLevel = gpuLevel;
 
     Debug.Log("[QuestPerformanceSetup] FFR=" + OVRManager.foveatedRenderingLevel + " dynamic=" + OVRManager.useDynamicFoveatedRendering +
-              " refresh=" + OVRPlugin.systemDisplayFrequency + " cpu=" + cpuLevel + " gpu=" + gpuLevel + " api=" + SystemInfo.graphicsDeviceType);
+              " refresh=" + OVRPlugin.systemDisplayFrequency + " cpu=" + cpuLevel + " gpu=" + gpuLevel + " api=" + SystemInfo.graphicsDeviceType +
+              " R11G11B10 target=" + SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.RGB111110Float) +
+              " tier=" + Graphics.activeTier);
   }
 
   // Anti-aliasing setting (settings panel, 2026-11). The scene renders into an

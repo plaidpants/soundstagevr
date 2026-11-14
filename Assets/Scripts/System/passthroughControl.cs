@@ -98,6 +98,7 @@ public class passthroughControl : MonoBehaviour {
     if (masterControl.instance != null) {
       masterControl.instance.passthroughActive = on;
       if (masterControl.instance.mainGlowShader != null) masterControl.instance.mainGlowShader.preserveAlpha = on;
+      masterControl.instance.UpdateCameraHDR();
     }
 
     if (EnvironmentControl.instance != null) EnvironmentControl.instance.Apply(); // off: sky / landscape back to the chosen level; on: spotlight off

@@ -175,6 +175,25 @@ public class masterControl : MonoBehaviour {
     // bloom chain at zero strength. With no OnRenderImage on the camera, Quest renders
     // straight into the eye buffer (cheaper, and foveated rendering takes effect).
     mainGlowShader.enabled = t > 0.001f;
+    UpdateCameraHDR();
+  }
+
+  // Main camera HDR (2026-11). With HDR on, Unity renders the scene into an intermediate
+  // HDR texture even when no image effect runs, then copies it to the eye buffer. Only the
+  // glow needs HDR, so with the glow off the camera is LDR and the scene renders straight
+  // into the eye buffer (no extra copy, and foveated rendering applies).
+  // Keep the Android HDR mode at FP16 (Editor/GlowBufferTools): passthrough needs the
+  // alpha channel, which R11G11B10 lacks, and LDR in passthrough loses the glow.
+  // passthroughControl also calls this when passthrough changes.
+  public void UpdateCameraHDR() {
+    if (mainGlowShader == null) return;
+    Camera cam = mainGlowShader.GetComponent<Camera>();
+    if (cam == null) return;
+    bool hdr = mainGlowShader.enabled;
+    if (cam.allowHDR != hdr) {
+      cam.allowHDR = hdr;
+      Debug.Log("[masterControl] camera HDR " + (hdr ? "on" : "off") + (hdr ? "" : " (glow off)"));
+    }
   }
 
   public bool tooltipsOn = true;
