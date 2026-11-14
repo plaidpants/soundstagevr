@@ -307,7 +307,7 @@ public class tape : manipObject {
       yield return null;
     }
     if (loaderObject != null) Destroy(loaderObject);
-    masterObj.parent.GetComponent<AudioSource>().PlayOneShot(c, .25f);
+    UISound.Play(masterObj.parent.GetComponent<AudioSource>(), c, .25f);
   }
 
   Coroutine _StreamRoutine;

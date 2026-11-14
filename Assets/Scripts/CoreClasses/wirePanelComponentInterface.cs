@@ -28,6 +28,7 @@ public class wirePanelComponentInterface : componentInterface {
   uiPanelSinglePress glowqualitypanel; // cloned from midipanel at runtime (buttonID 7)
   uiPanelSinglePress brightnesspanel; // cloned from midipanel at runtime (buttonID 8)
   uiPanelSinglePress msaapanel; // cloned from midipanel at runtime (buttonID 9)
+  uiPanelSinglePress envpanel, windpanel, uisoundpanel, skypanel; // right column, buttonIDs 10-13
 
   Color colorGreen = Color.HSVToRGB(.4f, 230f / 255, 118f / 255);
   Color colorRed = Color.HSVToRGB(0f, 230f / 255, 118f / 255);
@@ -46,6 +47,11 @@ public class wirePanelComponentInterface : componentInterface {
     CreateGlowQualityButton();
     CreateBrightnessButton();
     CreateMsaaButton();
+    envpanel = CloneButton("environmentPanel", 10, 0);
+    windpanel = CloneButton("windPanel", 11, 1);
+    uisoundpanel = CloneButton("uiSoundPanel", 12, 2);
+    skypanel = CloneButton("skyPanel", 13, 3);
+    UpdateEnvironmentLabels();
     if (PlayerPrefs.GetInt("midiOut") == 1) {
       string s = "DISABLE MIDI OUT";
       midipanel.label.text = s;
@@ -54,13 +60,13 @@ public class wirePanelComponentInterface : componentInterface {
 
   }
 
-  // Adds a "passthrough" toggle under the MIDI OUT button by cloning it, so the
+  // Adds a "passthrough" toggle above the panel by cloning the MIDI OUT button, so the
   // MenuRoot prefab doesn't need editing. Clicks arrive in hit() with ID 6.
   void CreatePassthroughButton() {
     if (passthroughpanel != null || midipanel == null) return;
     GameObject g = Instantiate(midipanel.gameObject, midipanel.transform.parent, false);
     g.name = "passthroughPanel";
-    g.transform.localPosition = midipanel.transform.localPosition + new Vector3(0, -0.038f, 0);
+    g.transform.localPosition = AboveTop(0, midipanel.transform.localPosition.x);
     g.transform.localRotation = midipanel.transform.localRotation;
     g.transform.localScale = midipanel.transform.localScale;
     passthroughpanel = g.GetComponent<uiPanelSinglePress>();
@@ -72,7 +78,7 @@ public class wirePanelComponentInterface : componentInterface {
     if (glowqualitypanel != null || midipanel == null) return;
     GameObject g = Instantiate(midipanel.gameObject, midipanel.transform.parent, false);
     g.name = "glowQualityPanel";
-    g.transform.localPosition = midipanel.transform.localPosition + new Vector3(0, -0.076f, 0);
+    g.transform.localPosition = AboveTop(1, midipanel.transform.localPosition.x);
     g.transform.localRotation = midipanel.transform.localRotation;
     g.transform.localScale = midipanel.transform.localScale;
     glowqualitypanel = g.GetComponent<uiPanelSinglePress>();
@@ -84,7 +90,7 @@ public class wirePanelComponentInterface : componentInterface {
     if (brightnesspanel != null || midipanel == null) return;
     GameObject g = Instantiate(midipanel.gameObject, midipanel.transform.parent, false);
     g.name = "brightnessPanel";
-    g.transform.localPosition = midipanel.transform.localPosition + new Vector3(0, -0.114f, 0);
+    g.transform.localPosition = AboveTop(2, midipanel.transform.localPosition.x);
     g.transform.localRotation = midipanel.transform.localRotation;
     g.transform.localScale = midipanel.transform.localScale;
     brightnesspanel = g.GetComponent<uiPanelSinglePress>();
@@ -96,12 +102,58 @@ public class wirePanelComponentInterface : componentInterface {
     if (msaapanel != null || midipanel == null) return;
     GameObject g = Instantiate(midipanel.gameObject, midipanel.transform.parent, false);
     g.name = "msaaPanel";
-    g.transform.localPosition = midipanel.transform.localPosition + new Vector3(0, -0.152f, 0);
+    g.transform.localPosition = AboveTop(3, midipanel.transform.localPosition.x);
     g.transform.localRotation = midipanel.transform.localRotation;
     g.transform.localScale = midipanel.transform.localScale;
     msaapanel = g.GetComponent<uiPanelSinglePress>();
     msaapanel.buttonID = 9;
     UpdateMsaaLabel();
+  }
+
+  // The added buttons stack upward from the top of the panel (rows 0,1,2... going up),
+  // so they stay clear of the menu gear that sits below the panel.
+  Vector3 AboveTop(int row, float x) {
+    Vector3 p = midipanel.transform.localPosition;
+    p.x = x;
+    p.y = 0.012f + 0.038f * row;
+    return p;
+  }
+
+  // Right-hand column, above the panel
+  uiPanelSinglePress CloneButton(string name, int id, int row) {
+    if (midipanel == null) return null;
+    GameObject g = Instantiate(midipanel.gameObject, midipanel.transform.parent, false);
+    g.name = name;
+    g.transform.localPosition = AboveTop(row, 0.1665f);
+    g.transform.localRotation = midipanel.transform.localRotation;
+    g.transform.localScale = midipanel.transform.localScale;
+    uiPanelSinglePress u = g.GetComponent<uiPanelSinglePress>();
+    u.buttonID = id;
+    return u;
+  }
+
+  void UpdateEnvironmentLabels() {
+    EnvironmentControl env = EnvironmentControl.instance;
+    if (envpanel != null) {
+      int lv = env != null ? env.level : EnvironmentControl.defaultLevel;
+      envpanel.label.text = "ENVIRONMENT: " + EnvironmentControl.levelNames[lv];
+      envpanel.newColor(colorGreen);
+    }
+    if (windpanel != null) {
+      bool on = env != null ? env.WindOn : PlayerPrefs.GetInt("envSound", 1) == 1;
+      windpanel.label.text = on ? "WIND: ON" : "WIND: OFF";
+      windpanel.newColor(on ? colorGreen : colorRed);
+    }
+    if (skypanel != null) {
+      int s = env != null ? env.sky : 0;
+      skypanel.label.text = "SKY: " + EnvironmentControl.skyNames[s];
+      skypanel.newColor(colorGreen);
+    }
+    if (uisoundpanel != null) {
+      bool on = UISound.Enabled;
+      uisoundpanel.label.text = on ? "UI SOUNDS: ON" : "UI SOUNDS: OFF";
+      uisoundpanel.newColor(on ? colorGreen : colorRed);
+    }
   }
 
   void UpdateMsaaLabel() {
@@ -162,6 +214,18 @@ public class wirePanelComponentInterface : componentInterface {
       string s = b ? "DISABLE MIDI OUT" : "ENABLE MIDI OUT";
       midipanel.label.text = s;
       midipanel.newColor(b ? colorRed : colorGreen);
+    } else if (ID == 10) {
+      if (EnvironmentControl.instance != null) EnvironmentControl.instance.Cycle();
+      UpdateEnvironmentLabels();
+    } else if (ID == 11) {
+      if (EnvironmentControl.instance != null) EnvironmentControl.instance.SetWind(!EnvironmentControl.instance.WindOn);
+      UpdateEnvironmentLabels();
+    } else if (ID == 13) {
+      if (EnvironmentControl.instance != null) EnvironmentControl.instance.CycleSky();
+      UpdateEnvironmentLabels();
+    } else if (ID == 12) {
+      UISound.Enabled = !UISound.Enabled;
+      UpdateEnvironmentLabels();
     } else if (ID == 9) {
       QuestPerformanceSetup.CycleMsaa();
       UpdateMsaaLabel();

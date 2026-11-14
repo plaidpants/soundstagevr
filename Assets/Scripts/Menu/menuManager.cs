@@ -108,11 +108,11 @@ public class menuManager : MonoBehaviour {
   }
 
   public void SelectAudio() {
-    _audioSource.PlayOneShot(selectClip, .05f);
+    UISound.Play(_audioSource, selectClip, .05f);
   }
 
   public void GrabAudio() {
-    _audioSource.PlayOneShot(grabClip, .75f);
+    UISound.Play(_audioSource, grabClip, .75f);
   }
 
   public bool midiOutEnabled = false;
@@ -128,7 +128,7 @@ public class menuManager : MonoBehaviour {
   IEnumerator activationRoutine(bool on, Transform pad) {
     float timer = 0;
     if (on) {
-      _audioSource.PlayOneShot(openClip);
+      UISound.Play(_audioSource, openClip);
 
       rootNode.SetActive(true);
       trashNode.SetActive(false);
@@ -169,7 +169,7 @@ public class menuManager : MonoBehaviour {
       settingsNode.SetActive(true);
       metronomeNode.SetActive(true);
     } else {
-      _audioSource.PlayOneShot(closeClip);
+      UISound.Play(_audioSource, closeClip);
       Vector3 startPos = transform.position;
       trashNode.SetActive(false);
       settingsNode.SetActive(false);
@@ -197,8 +197,8 @@ public class menuManager : MonoBehaviour {
     active = on;
     simpleMenu.toggleMenu();
 
-    if (on) _audioSource.PlayOneShot(simpleOpenClip);
-    else _audioSource.PlayOneShot(closeClip);
+    if (on) UISound.Play(_audioSource, simpleOpenClip);
+    else UISound.Play(_audioSource, closeClip);
     if (!active) return;
 
     transform.position = pad.position;

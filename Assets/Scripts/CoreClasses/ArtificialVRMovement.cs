@@ -24,6 +24,12 @@ public class ArtificialVRMovement : MonoBehaviour
     public float deadZone = 0.2f;
     manipulator leftHand;
 
+    // Keep the player on the stage: stick movement can't take the rig further than this
+    // (metres, horizontally) from where it started.
+    public float maxDistance = 12f;
+    Vector3 home;
+    bool homeSet = false;
+
     // Update is called once per frame
     void Update()
     {
@@ -55,8 +61,17 @@ public class ArtificialVRMovement : MonoBehaviour
         // rescale so motion starts at zero just outside the dead zone
         stick = stick.normalized * Mathf.InverseLerp(deadZone, 1f, stick.magnitude);
 
-        transform.position += verticalMovementVector * stick.y * maxSpeed * Time.deltaTime;
-        transform.position += horizontalMovementVector * stick.x * maxSpeed * Time.deltaTime;
+        if (!homeSet) { home = transform.position; homeSet = true; }
+        Vector3 p = transform.position;
+        p += verticalMovementVector * stick.y * maxSpeed * Time.deltaTime;
+        p += horizontalMovementVector * stick.x * maxSpeed * Time.deltaTime;
+        Vector3 off = p - home;
+        Vector3 flat = new Vector3(off.x, 0, off.z);
+        if (flat.magnitude > maxDistance) {
+            flat = flat.normalized * maxDistance;
+            p = new Vector3(home.x + flat.x, p.y, home.z + flat.z);
+        }
+        transform.position = p;
     }
 
     void LogError()

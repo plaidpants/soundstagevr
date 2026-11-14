@@ -34,7 +34,7 @@ public class trashcan : MonoBehaviour {
   }
 
   public void trashEvent() {
-    manager.GetComponent<AudioSource>().PlayOneShot(trashAct, .5f);
+    UISound.Play(manager.GetComponent<AudioSource>(), trashAct, .5f);
     StartCoroutine(flash());
   }
 
@@ -52,9 +52,9 @@ public class trashcan : MonoBehaviour {
   public void setReady(bool on) {
     if (on) {
       mat.SetColor("_TintColor", onColor);
-      manager.GetComponent<AudioSource>().PlayOneShot(trashOn, .15f);
+      UISound.Play(manager.GetComponent<AudioSource>(), trashOn, .15f);
     } else {
-      manager.GetComponent<AudioSource>().PlayOneShot(trashOff, .15f);
+      UISound.Play(manager.GetComponent<AudioSource>(), trashOff, .15f);
       mat.SetColor("_TintColor", offColor);
     }
   }

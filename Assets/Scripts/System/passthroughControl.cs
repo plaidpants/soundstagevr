@@ -100,6 +100,8 @@ public class passthroughControl : MonoBehaviour {
       if (masterControl.instance.mainGlowShader != null) masterControl.instance.mainGlowShader.preserveAlpha = on;
     }
 
+    if (!on && EnvironmentControl.instance != null) EnvironmentControl.instance.Apply(); // sky / landscape back to the chosen level
+
     Debug.Log("[passthroughControl] passthrough " + (on ? "ON" : "OFF"));
 
     // The runtime caps CPU/GPU levels while passthrough runs (seen 4/4 -> 3/2) and does

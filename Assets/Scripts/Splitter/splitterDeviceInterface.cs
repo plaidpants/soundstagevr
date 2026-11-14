@@ -33,6 +33,7 @@ public class splitterDeviceInterface : deviceInterface {
   bool flow = true;
 
   public override void Awake() {
+    base.Awake();
     signal = GetComponent<splitterSignalGenerator>();
     flowSwitch = GetComponentInChildren<basicSwitch>();
     signal.nodes = new List<splitterNodeSignalGenerator>();

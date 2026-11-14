@@ -793,6 +793,7 @@ MonoBehaviour:
   threeDMovement: 0
   offhandMovementHand: {fileID: 1516804425}
   logErrorsAfterInitialFailure: 0
+  deadZone: 0.2
 --- !u!114 &1093965901
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1822,7 +1823,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1000011642857690, guid: 5fcaa2781e944b041aead28e2f499fa3, type: 3}
       propertyPath: m_IsActive
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 4000012037659578, guid: 5fcaa2781e944b041aead28e2f499fa3, type: 3}
       propertyPath: m_RootOrder
