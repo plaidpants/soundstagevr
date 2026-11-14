@@ -191,6 +191,11 @@ public class drumstick : manipObject {
     }
   }
 
+  // move the resting spot sideways (xyloroll resize)
+  public void ShiftRest(float dx) {
+    updateRestingPosition(origPos + Vector3.right * dx, origRot);
+  }
+
   public void updateRestingPosition(Vector3 v, Quaternion r) {
     origPos = v;
     origRot = r;

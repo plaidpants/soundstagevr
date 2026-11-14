@@ -55,6 +55,27 @@ public class xylorollDeviceInterface : deviceInterface {
 
   keyState[] keyStates = new keyState[24];
 
+  // Resizable range (2026-11): drag the handle at the high end to add octaves (higher
+  // notes). 2..5 octaves, limited by the octave slider so the top bar stays at or below
+  // C8 (MIDI convention: bar 0 = MIDI 48 at the middle octave setting).
+  public const int minOctaves = 2;
+  int octaves = 2;
+  const float keySeparation = .042f;
+  const float octaveWidth = 7 * keySeparation;
+  xHandle sizeHandle;
+  float sizeHandleBaseX;
+  Transform[] highEndParts;
+  Vector3[] highEndBase;
+  StretchableHousing[] housing;   // frame / grab nodes, lengthened
+  float stickShift = 0;
+
+  int MaxOctaves {
+    get {
+      int shift = (octaveSlider != null ? octaveSlider.switchVal : 2) - 2; // -2..+2 octaves
+      return Mathf.Clamp(5 - shift, minOctaves, 5);
+    }
+  }
+
   public override void Awake() {
     base.Awake();
     _beatManager = ScriptableObject.CreateInstance<beatTracker>();
@@ -64,13 +85,120 @@ public class xylorollDeviceInterface : deviceInterface {
     inputSwitch = GetComponentInChildren<basicSwitch>();
     signal.spawnVoices(voiceCount, _adsrInterface.volumes, _adsrInterface.durations);
 
-    SpawnKeys();
     oscBank.SetActive(inputVal);
     sampleBank.SetActive(!inputVal);
 
-    _timeline.setStartTracks(24);
+    CaptureLayout();
+    keys = new key[0];
+    keyStates = new keyState[0];
+    SetOctaves(minOctaves);
+    CreateSizeHandle();
+  }
 
-    for (int i = 0; i < 24; i++) keyStates[i] = new keyState(false);
+  void CaptureLayout() {
+    var parts = new List<Transform>();
+    foreach (Transform c in transform) {
+      if (c.localPosition.x < -0.55f && c.GetComponent<drumstick>() == null) parts.Add(c); // speaker, jack, octave slider, toggles...
+    }
+    highEndParts = parts.ToArray();
+    highEndBase = new Vector3[highEndParts.Length];
+    for (int i = 0; i < highEndParts.Length; i++) highEndBase[i] = highEndParts[i].localPosition;
+
+    var hs = new System.Collections.Generic.List<StretchableHousing>();
+    foreach (string n in new string[] { "xyloSide", "xyloSideStretchNode" }) {
+      Transform t = transform.Find(n);
+      if (t != null) hs.Add(new StretchableHousing(t));
+    }
+    housing = hs.ToArray();
+  }
+
+  void ApplyLayout() {
+    float dx = -(octaves - minOctaves) * octaveWidth;
+    for (int i = 0; i < highEndParts.Length; i++) {
+      if (highEndParts[i] == null) continue;
+      Vector3 p = highEndBase[i]; p.x += dx; highEndParts[i].localPosition = p;
+    }
+    for (int i = 0; i < housing.Length; i++) housing[i].SetExtra(-dx);
+    if (sticks != null && dx != stickShift) {
+      foreach (drumstick d in sticks) if (d != null) d.ShiftRest(dx - stickShift);
+      stickShift = dx;
+    }
+  }
+
+  void CreateSizeHandle() {
+    Transform side = transform.Find("xyloSide");
+    Renderer sideRend = side != null ? side.GetComponent<Renderer>() : null;
+    GameObject g = GameObject.CreatePrimitive(PrimitiveType.Cube);
+    g.SetActive(false);
+    g.name = "sizeHandle";
+    g.layer = 9;
+    g.transform.SetParent(transform, false);
+    float leftmost = 0;
+    foreach (Vector3 v in highEndBase) leftmost = Mathf.Min(leftmost, v.x);
+    sizeHandleBaseX = leftmost - 0.045f;
+    g.transform.localPosition = new Vector3(sizeHandleBaseX, 0f, -0.05f);
+    g.transform.localScale = new Vector3(0.02f, 0.03f, 0.12f);
+    Renderer r = g.GetComponent<Renderer>();
+    if (sideRend != null) r.sharedMaterial = sideRend.sharedMaterial;
+    sizeHandle = g.AddComponent<xHandle>();
+    sizeHandle.onMat = seqEnableButton != null && seqEnableButton.onMat != null ? seqEnableButton.onMat : r.sharedMaterial;
+    sizeHandle.rend = r;
+    g.SetActive(true);
+    UpdateHandleBounds();
+  }
+
+  void UpdateHandleBounds() {
+    if (sizeHandle == null) return;
+    sizeHandle.xBounds = new Vector2(sizeHandleBaseX - (MaxOctaves - minOctaves) * octaveWidth - 0.02f, sizeHandleBaseX + 0.02f);
+  }
+
+  void UpdateSizeHandle() {
+    if (sizeHandle == null) return;
+    UpdateHandleBounds();
+    float target = sizeHandleBaseX - (octaves - minOctaves) * octaveWidth;
+    if (sizeHandle.curState == manipObject.manipState.grabbed) {
+      int want = minOctaves + Mathf.RoundToInt((sizeHandleBaseX - sizeHandle.transform.localPosition.x) / octaveWidth);
+      want = Mathf.Clamp(want, minOctaves, MaxOctaves);
+      if (want != octaves) { SetOctaves(want); sizeHandle.pulse(); }
+    } else {
+      if (octaves > MaxOctaves) SetOctaves(MaxOctaves); // octave slider moved up
+      Vector3 p = sizeHandle.transform.localPosition;
+      if (Mathf.Abs(p.x - target) > 0.0005f) { p.x = target; sizeHandle.transform.localPosition = p; }
+    }
+  }
+
+  // rebuild the bars for n octaves (12n bars)
+  void SetOctaves(int n) {
+    n = Mathf.Clamp(n, minOctaves, 5);
+    int newCount = 12 * n;
+
+    // let go of notes on bars that are going away
+    for (int i = selectedKeys.Count - 1; i >= 0; i--) {
+      if (selectedKeys[i] >= newCount) {
+        int id = selectedKeys[i];
+        selectedKeys.RemoveAt(i);
+        signal.updateVoices(id, false);
+        if (_midiOut != null) _midiOut.OutputNote(false, id);
+      }
+    }
+    for (int i = newCount; i < keys.Length; i++) if (keys[i] != null) Destroy(keys[i].gameObject);
+
+    key[] old = keys;
+    keys = new key[newCount];
+    for (int i = 0; i < newCount; i++) keys[i] = i < old.Length ? old[i] : null;
+
+    keyState[] oldStates = keyStates;
+    keyStates = new keyState[newCount];
+    for (int i = 0; i < newCount; i++) keyStates[i] = i < oldStates.Length ? oldStates[i] : new keyState(false);
+
+    octaves = n;
+    keyCount = newCount;
+    SpawnKeys();
+    ApplyLayout();
+    if (_timeline != null) {
+      if (_timeline.IsSetUp) _timeline.updateTrackCount(keyCount);
+      else _timeline.setStartTracks(keyCount);
+    }
   }
 
   void Start() {
@@ -79,12 +207,17 @@ public class xylorollDeviceInterface : deviceInterface {
   }
 
   void SpawnKeys() {
-    keys = new key[keyCount];
-    float separation = .042f;
+    float separation = keySeparation;
     int whiteCount = 0;
     for (int i = 0; i < keyCount; i++) {
-      GameObject g = Instantiate(keyPrefab, transform, false) as GameObject;
       float s = Mathf.Lerp(1, .7f, (float)i / keyCount);
+      bool black = i % 12 == 1 || i % 12 == 3 || i % 12 == 6 || i % 12 == 8 || i % 12 == 10;
+      if (keys[i] != null) { // existing bar: just re-taper
+        keys[i].transform.localScale = new Vector3(1.1f, 1, s);
+        if (!black) whiteCount++;
+        continue;
+      }
+      GameObject g = Instantiate(keyPrefab, transform, false) as GameObject;
 
       keys[i] = g.GetComponent<key>();
 
@@ -103,6 +236,7 @@ public class xylorollDeviceInterface : deviceInterface {
   }
 
   void Update() {
+    UpdateSizeHandle();
     if (inputVal != inputSwitch.switchVal) {
       inputVal = inputSwitch.switchVal;
       signal.oscInput = inputVal;
@@ -137,7 +271,7 @@ public class xylorollDeviceInterface : deviceInterface {
     if (ID < 0) {
       if (on) midiLowDesired = true;
 
-    } else if (ID > 23) {
+    } else if (ID > keyCount - 1) {
       if (on) midiHighDesired = true;
     } else {
       asynchKeyHit(on, ID, keyInput.midi);
@@ -150,6 +284,7 @@ public class xylorollDeviceInterface : deviceInterface {
 
 
   public void asynchKeyHit(bool on, int ID, keyInput k) {
+    if (ID < 0 || ID >= keyCount || ID >= keyStates.Length) return; // e.g. sequencer notes above a shrunk range
     if (k == keyInput.midi) keyStates[ID].midiState = on;
     else if (k == keyInput.seq) keyStates[ID].seqState = on;
     coreSignalHit(on, ID);
@@ -229,6 +364,7 @@ public class xylorollDeviceInterface : deviceInterface {
 
   public override void hit(bool on, int ID = -1) {
     if (ID >= 0) {
+      if (ID >= keyCount || ID >= keyStates.Length) return;
       keyStates[ID].touchState = on;
       coreSignalHit(on, ID);
     } else {
@@ -330,6 +466,7 @@ public class xylorollDeviceInterface : deviceInterface {
   }
 
   void OnDestroy() {
+    if (housing != null) foreach (StretchableHousing h in housing) h.Destroy();
     Destroy(_beatManager);
     for (int i = 0; i < sticks.Length; i++) Destroy(sticks[i].gameObject);
     StopAllCoroutines();
@@ -345,6 +482,7 @@ public class xylorollDeviceInterface : deviceInterface {
       data.ADSRdata[i] = _adsrInterface.xyHandles[i].percent;
     }
     data.octaveSetting = octaveSlider.switchVal;
+    data.octaves = octaves;
 
     data.seqon = seqEnableButton.isHit;
     data.arpon = arpEnableButton.isHit;
@@ -397,6 +535,7 @@ public class xylorollDeviceInterface : deviceInterface {
     _adsrInterface.setDefaults = false;
 
     octaveSlider.setVal(data.octaveSetting);
+    if (data.octaves > minOctaves) SetOctaves(Mathf.Min(data.octaves, MaxOctaves)); // before the timeline data
 
     seqEnableButton.startToggled = data.seqon;
     arpEnableButton.startToggled = data.arpon;
@@ -438,6 +577,7 @@ public class xylorollDeviceInterface : deviceInterface {
         selectedKeys = data.selectedKeys;
 
         // restore the selected keys highlight states
+        selectedKeys.RemoveAll(k => k < 0 || k >= keyCount);
         for (int i = 0; i < selectedKeys.Count; i++)
         {
             keys[selectedKeys[i]].phantomHit(true);
@@ -449,6 +589,7 @@ public class xylorollDeviceInterface : deviceInterface {
 public class XyloRollData : InstrumentData {
   public Vector2[] ADSRdata;
   public int octaveSetting;
+  public int octaves = 2; // range in octaves (2-5); older saves are 2
 
   public int seqInID;
 

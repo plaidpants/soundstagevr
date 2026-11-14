@@ -77,6 +77,9 @@ public class timelineComponentInterface : componentInterface {
     startheight = h;
   }
 
+  bool setupDone = false;
+  public bool IsSetUp { get { return setupDone; } }
+
   public void setStartTracks(int n) {
     startTracks = n;
   }
@@ -110,6 +113,7 @@ public class timelineComponentInterface : componentInterface {
 
   public void Setup(int _tracks, int _unitResolution, float _width, float _height, Vector2 _range, Vector2 _io) {
     _gridParams = new gridParams(_tracks, _unitResolution, _width, _height, _range, _io);
+    setupDone = true;
     setGridHandles();
     updateHeight();
     updateGrid(_range, _width);
