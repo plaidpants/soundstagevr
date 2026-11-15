@@ -11,13 +11,16 @@ using System.Collections.Generic;
 using Mirror;
 using UnityEngine;
 
-public struct NetToolMsg : NetworkMessage { public int netId; public int index; public bool held; public Vector3 pos; public Quaternion rot; }
+public struct NetToolMsg : NetworkMessage {
+  public int netId; public int index; public double time; public bool held; public Vector3 pos; public Quaternion rot;
+  public sbyte press; public byte sel; // air horn: -1 nothing, 0 / 1 sound off / on (sound sel)
+}
 
 public class NetTools : MonoBehaviour {
   static NetTools instance;
 
   public static bool IsTool(manipObject m) {
-    return m is drumstick || m is maracaUI || m is microphoneGrip;
+    return m is drumstick || m is maracaUI || m is microphoneGrip || m is airhornUI;
   }
 
   // ---------- local: the NetPlayer reports what each hand holds ----------
@@ -38,12 +41,20 @@ public class NetTools : MonoBehaviour {
     lastHeld[hand] = held;
   }
 
-  static void Send(manipObject tool, bool held) {
+  // airhornUI.setPress: a sound played / stopped by the player holding it here
+  public static void AirhornPress(airhornUI a, bool on, int sel) {
+    if (!NetSync.Active || a.curState != manipObject.manipState.grabbed) return;
+    Send(a, true, (sbyte)(on ? 1 : 0), (byte)sel);
+  }
+
+  static int warned;
+  static void Send(manipObject tool, bool held, sbyte press = -1, byte sel = 0) {
     if (tool == null) return;
+    if (!NetDevice.toolOwner.ContainsKey(tool) && warned++ < 5) Debug.Log("[NetTools] held " + tool.GetType().Name + " belongs to no known device: not sent");
     if (!NetDevice.toolOwner.TryGetValue(tool, out NetDevice dev) || dev == null || dev.netId == 0 || dev.tools == null) return;
     int index = dev.tools.IndexOf(tool);
     if (index < 0) return;
-    NetToolMsg msg = new NetToolMsg { netId = dev.netId, index = index, held = held, pos = tool.transform.position, rot = tool.transform.rotation };
+    NetToolMsg msg = new NetToolMsg { netId = dev.netId, index = index, time = NetworkTime.time, held = held, pos = tool.transform.position, rot = tool.transform.rotation, press = press, sel = sel };
     NetSync.SendTool(msg);
   }
 
@@ -52,7 +63,7 @@ public class NetTools : MonoBehaviour {
   class Puppet {
     public Transform t;
     public Vector3 restPos; public Quaternion restRot; // local, on the device
-    public Vector3 pos; public Quaternion rot;          // world, while held
+    public readonly PosePredictor predict = new PosePredictor(); // world, while held
     public bool held;
     public manipObject tool;
   }
@@ -76,9 +87,18 @@ public class NetTools : MonoBehaviour {
       NetSync.SetGrabBlocked(new[] { tool }, true); // can't be taken out of their hand
       instance.puppets[key] = p;
     }
+    if (m.press >= 0) {
+      airhornUI horn = p.tool as airhornUI;
+      if (horn != null && horn._deviceInterface != null) horn._deviceInterface.PlaySample(m.press == 1, m.sel);
+      return; // a sound, not a pose
+    }
+    maracaUI maraca = p.tool as maracaUI;
+    if (maraca != null) maraca.SetNetHeld(m.held); // shaken by the other player: it sounds here too
+    if (m.held) {
+      if (!p.predict.Has) p.predict.Feed(p.t.position, p.t.rotation, m.time - .001, false);
+      p.predict.Feed(m.pos, m.rot, m.time);
+    } else p.predict.Reset();
     p.held = m.held;
-    p.pos = m.pos;
-    p.rot = m.rot;
     if (m.held && !p.t.gameObject.activeInHierarchy) p.t.gameObject.SetActive(true);
   }
 
@@ -90,9 +110,9 @@ public class NetTools : MonoBehaviour {
       if (p.t == null) { (done ??= new List<long>()).Add(kv.Key); continue; }
       if (!NetSync.Active) p.held = false; // session ended: put it back
       if (p.held) {
-        p.t.position = Vector3.Lerp(p.t.position, p.pos, k);
-        p.t.rotation = Quaternion.Slerp(p.t.rotation, p.rot, k);
+        p.predict.Apply(p.t, Time.deltaTime);
       } else {
+        if (p.tool is maracaUI mu) mu.SetNetHeld(false);
         p.t.localPosition = Vector3.Lerp(p.t.localPosition, p.restPos, k);
         p.t.localRotation = Quaternion.Slerp(p.t.localRotation, p.restRot, k);
         if ((p.t.localPosition - p.restPos).sqrMagnitude < 1e-8f) {

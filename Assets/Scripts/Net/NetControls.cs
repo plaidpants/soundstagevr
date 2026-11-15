@@ -159,6 +159,8 @@ public class NetControls : MonoBehaviour {
     // Not a value control. On a device and not one of the things handled elsewhere?
     // Then it may have changed the device's structure: share the patch again.
     if (obj is handle || obj is button || obj is key || NetTools.IsTool(obj) || obj is omniPlug || obj is omniJack) return;
+    if (obj is tape) return; // NetTapes
+    if (obj.GetComponentInParent<libraryDeviceInterface>() != null) return; // the tape library's wheels: browsing, nothing to share
     NetDevice dev = obj.GetComponentInParent<NetDevice>();
     if (dev == null || dev.netId == 0) return;
     Debug.Log("[NetControls] " + obj.GetType().Name + " on " + dev.name + " released: sharing the patch");

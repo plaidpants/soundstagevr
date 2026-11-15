@@ -123,7 +123,7 @@ public class exampleManager : MonoBehaviour {
   void firstLoad() {
     // Multiplayer: already joined someone's session -> their patch is the patch; loading
     // the start example on top would add a second copy of everything for everyone.
-    if (NetSync.IsJoinedClient) {
+    if (NetSync.IsJoinedClient || (NetSession.instance != null && NetSession.instance.state == NetSession.State.Client)) {
       Debug.Log("[exampleManager] in a session: skipping the start example");
       return;
     }
@@ -178,6 +178,16 @@ public class exampleManager : MonoBehaviour {
   }
 
   Coroutine _loadRoutine;
+
+  // Multiplayer: joined a session - its patch replaces everything here, so an example
+  // still being loaded must not keep adding devices (or share itself) afterwards.
+  public void CancelLoad() {
+    if (_loadRoutine == null) return;
+    StopCoroutine(_loadRoutine);
+    _loadRoutine = null;
+    NetDevice.silentCreate = false;
+    Debug.Log("[exampleManager] joined a session: example load stopped");
+  }
   IEnumerator loadRoutine(string s) {
     moving = true;
     List<GameObject> gameObjects = new List<GameObject>(GameObject.FindGameObjectsWithTag("instrument"));

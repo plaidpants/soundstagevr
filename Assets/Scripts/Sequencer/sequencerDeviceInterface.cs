@@ -139,6 +139,27 @@ public class sequencerDeviceInterface : deviceInterface {
   int curStep = 0;
   public bool silent = false;
 
+  // ---- multiplayer (Net/NetClock): keep the step lined up with the host's ----
+  // While playing on the master clock, step minus ticks played stays the same, so
+  // comparing it with the host's (sent with the clock) shows a sequencer a step or
+  // more ahead or behind (started a moment apart, loaded at a different time).
+  public bool NetSyncable {
+    get { return externalPulse == null && _beatManager != null && _beatManager.MC && _beatManager.Active && _beatManager.TicksPerMeasure > 0 && dimensions[0] > 0; }
+  }
+  public int NetAnchor() {
+    long tick = masterControl.instance.measureCount * _beatManager.TicksPerMeasure + _beatManager.CurBeat;
+    int len = dimensions[0];
+    long a = (targetStep - tick) % len;
+    return (int)(a < 0 ? a + len : a);
+  }
+  public int NetLength { get { return dimensions[0]; } }
+  public int NetTicks { get { return _beatManager.TicksPerMeasure; } }
+  public void NetShiftSteps(int d) {
+    if (stepSelect.curState == manipObject.manipState.grabbed) return;
+    int len = dimensions[0];
+    SelectStep(((targetStep + d) % len + len) % len);
+  }
+
   public void executeNextStep() {
     if (stepSelect.curState == manipObject.manipState.grabbed) return;
 

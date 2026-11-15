@@ -49,6 +49,7 @@ public class airhornUI : manipObject {
   }
 
   public override void setPress(bool on) {
+    NetTools.AirhornPress(this, on, curSelection); // multiplayer: others hear it too
     _deviceInterface.PlaySample(on, curSelection);
     for (int i = 0; i < 4; i++) buttonOverlays[i].SetActive(i == curSelection && on);
   }

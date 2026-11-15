@@ -112,6 +112,13 @@ public class tape : manipObject {
     if (masterObj == null) masterObj = transform.parent;
     label = s;
     filename = f;
+    // the colour comes from the sample (2026-11), so a tape keeps its colour when it's
+    // loaded again from a patch, and is the same colour on every headset
+    if (!string.IsNullOrEmpty(f)) {
+      uint h = 2166136261;
+      foreach (char ch in f) h = (h ^ ch) * 16777619;
+      setHue((h % PaletteSize) / (float)PaletteSize);
+    }
     labelMesh.text = s;
     origPos = transform.localPosition;
     origRot = transform.localRotation;
@@ -163,6 +170,7 @@ public class tape : manipObject {
     if (deck != null && deck != coll.transform) //if still in another deck
     {
       deck.parent.GetComponent<samplerLoad>().UnloadTape(this);
+      NetTapes.Ejected(deck.parent.GetComponent<samplerLoad>()); // multiplayer
     }
 
     deck = coll.transform;
@@ -178,6 +186,7 @@ public class tape : manipObject {
     if (curState != manipState.grabbed) return;
     if (deck == coll.transform) {
       deck.parent.GetComponent<samplerLoad>().UnloadTape(this);
+      NetTapes.Ejected(deck.parent.GetComponent<samplerLoad>()); // multiplayer
       if (manipulatorObjScript != null) manipulatorObjScript.hapticPulse(500);
       deck = null;
       tapeTrans.parent = transform;
@@ -275,6 +284,7 @@ public class tape : manipObject {
       transform.rotation = tapeTrans.rotation;
       tapeTrans.parent = transform;
       deck.parent.GetComponent<samplerLoad>().LoadTape(this);
+      NetTapes.Loaded(deck.parent.GetComponent<samplerLoad>(), this); // multiplayer
       if (insertCoroutine != null) StopCoroutine(insertCoroutine);
       insertCoroutine = StartCoroutine(insertRoutine());
     }

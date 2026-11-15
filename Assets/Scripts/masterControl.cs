@@ -251,6 +251,7 @@ public class masterControl : MonoBehaviour {
   public void resetClock() {
     _measurePhase = 0;
     curCycle = 0;
+    measureCount = 0;
     beatResetEvent();
   }
 
@@ -273,6 +274,10 @@ public class masterControl : MonoBehaviour {
   // so no beat is skipped or played twice.
   public double MeasurePhaseSeconds { get { return _measurePhase; } }
   public bool BeatRunning { get { return beatUpdateRunning; } }
+  // measures played since the clock started (multiplayer: sequencer steps are lined up
+  // against it, and joined headsets take the host's count)
+  public long measureCount;
+  public void AddMeasures(long n) { System.Threading.Interlocked.Add(ref measureCount, n); }
   volatile bool clockAdjustPending;
   double clockAdjust;
   public void AdjustClock(double seconds) {
@@ -294,8 +299,8 @@ public class masterControl : MonoBehaviour {
     if (clockAdjustPending) {
       clockAdjustPending = false;
       _measurePhase += clockAdjust;
-      while (_measurePhase >= measurePeriod) _measurePhase -= measurePeriod;
-      while (_measurePhase < 0) _measurePhase += measurePeriod;
+      while (_measurePhase >= measurePeriod) { _measurePhase -= measurePeriod; measureCount++; }
+      while (_measurePhase < 0) { _measurePhase += measurePeriod; measureCount--; }
     }
     if (clockSlewPending) {
       clockSlewPending = false;
@@ -315,7 +320,7 @@ public class masterControl : MonoBehaviour {
     for (int i = 0; i < buffer.Length; i += channels) {
       beatUpdateEvent(curCycle);
       _measurePhase += step;
-      if (_measurePhase > measurePeriod) _measurePhase -= measurePeriod;
+      if (_measurePhase > measurePeriod) { _measurePhase -= measurePeriod; measureCount++; }
       curCycle = (float)(_measurePhase / measurePeriod);
     }
   }

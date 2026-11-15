@@ -63,8 +63,14 @@ public class maracaUI : manipObject {
   public Vector3 lastInstantVelocity = Vector3.zero;
   public float instantAcceleration = 0;
   Vector3 lastpos = Vector3.zero;
+  [System.NonSerialized] public bool netHeld; // multiplayer: another player is shaking it (NetTools)
+  public void SetNetHeld(bool on) {
+    if (netHeld == on) return;
+    netHeld = on;
+    glowTrans.gameObject.SetActive(on); // lit while held, as for the player holding it
+  }
   void Update() {
-    if (curState == manipState.grabbed) {
+    if (curState == manipState.grabbed || netHeld) {
       instantVelocity = transform.position - lastpos;
       instantAcceleration = Mathf.Clamp01(Vector3.Distance(instantVelocity, lastInstantVelocity) * 100);
       lastpos = transform.position;

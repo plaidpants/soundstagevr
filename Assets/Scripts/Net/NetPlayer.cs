@@ -1,7 +1,9 @@
 // A player in a multiplayer session (2026-11, milestone 0).
 //
-// Head: SoundStage's headset model, tinted with the player's colour, moved by a
-// NetworkTransformUnreliable (client-to-server) on the Head child.
+// Head: SoundStage's headset model, tinted with the player's colour. Sent with the
+// hands (the prefab's NetworkTransform on the Head is switched off: its buffering
+// showed the head ~100 ms late). Head and hands are shown where they should be now,
+// carried forward from their last pose by PosePredictor (NetPredict.cs).
 // Hands: what the player really uses - the glowing tracked hands (with finger poses) or
 // the controller models - see NetHand. Sent by this script ~20 times a second,
 // unreliable: the owner sends a HandsPacket to the server, which passes it on to the
@@ -16,6 +18,9 @@ using Mirror;
 using UnityEngine;
 
 public struct HandsPacket {
+  public double time; // sender's network time when sampled
+  public Vector3 headPos;
+  public uint headRot;
   public bool handTracking;
   public bool leftOn, rightOn;
   public Vector3 leftPos, rightPos;
@@ -36,7 +41,6 @@ public class NetPlayer : NetworkBehaviour {
   [SyncVar(hook = nameof(OnColor))] public Color color = Color.white;
 
   public float sendRate = 20f;
-  public float smoothing = 18f; // how quickly remote hands catch up with the last pose
 
   OVRCameraRig rig;
   MaterialPropertyBlock block;
@@ -45,12 +49,14 @@ public class NetPlayer : NetworkBehaviour {
   float sendTimer;
 
   // remote side
-  bool haveTarget;
-  Vector3 leftTargetPos, rightTargetPos;
-  Quaternion leftTargetRot = Quaternion.identity, rightTargetRot = Quaternion.identity;
+  readonly PosePredictor headPredict = new PosePredictor(), leftPredict = new PosePredictor(), rightPredict = new PosePredictor();
 
   // local side, reused buffers
   static OVRPlugin.HandState handState = new OVRPlugin.HandState();
+
+  void Awake() {
+    foreach (NetworkTransformBase nt in GetComponentsInChildren<NetworkTransformBase>(true)) nt.enabled = false;
+  }
 
   void OnEnable() { all.Add(this); }
   void OnDisable() { all.Remove(this); }
@@ -80,16 +86,42 @@ public class NetPlayer : NetworkBehaviour {
     foreach (Renderer r in parts) if (r != null) r.SetPropertyBlock(block);
   }
 
+  // The camera device (recording / broadcast) shows everyone's headset as the plain
+  // grey original, not the player colours: the tint is taken off just for its renders.
+  static readonly Dictionary<Camera, bool> isRecordingCam = new Dictionary<Camera, bool>();
+
+  [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+  static void HookCameras() {
+    Camera.onPreRender += cam => { if (IsRecordingCam(cam)) Tint(false); };
+    Camera.onPostRender += cam => { if (IsRecordingCam(cam)) Tint(true); };
+  }
+
+  static bool IsRecordingCam(Camera cam) {
+    if (cam == null || all.Count == 0) return false;
+    if (!isRecordingCam.TryGetValue(cam, out bool rec)) {
+      rec = cam.GetComponentInParent<cameraDeviceInterface>() != null;
+      isRecordingCam[cam] = rec;
+    }
+    return rec;
+  }
+
+  static void Tint(bool on) {
+    foreach (NetPlayer p in all) {
+      if (p == null || p.isLocalPlayer) continue;
+      if (on) p.ApplyColor();
+      else foreach (Renderer r in p.parts) if (r != null) r.SetPropertyBlock(null);
+    }
+  }
+
   // ---------- local player: read and send ----------
 
   void LateUpdate() {
     if (isLocalPlayer) { LocalUpdate(); return; }
-    if (!haveTarget) return;
-    float k = 1f - Mathf.Exp(-smoothing * Time.deltaTime);
-    leftHand.position = Vector3.Lerp(leftHand.position, leftTargetPos, k);
-    leftHand.rotation = Quaternion.Slerp(leftHand.rotation, leftTargetRot, k);
-    rightHand.position = Vector3.Lerp(rightHand.position, rightTargetPos, k);
-    rightHand.rotation = Quaternion.Slerp(rightHand.rotation, rightTargetRot, k);
+    if (!headPredict.Has) return;
+    float dt = Time.deltaTime;
+    headPredict.Apply(head, dt);
+    leftPredict.Apply(leftHand, dt);
+    rightPredict.Apply(rightHand, dt);
   }
 
   void LocalUpdate() {
@@ -102,6 +134,9 @@ public class NetPlayer : NetworkBehaviour {
     sendTimer = 0;
 
     HandsPacket p = new HandsPacket();
+    p.time = NetworkTime.time;
+    p.headPos = head.position;
+    p.headRot = Compression.CompressQuaternion(head.rotation);
     p.handTracking = HandInput.HandsActive();
     Transform l = HandSource(0, p.handTracking), r = HandSource(1, p.handTracking);
     if (l != null) { p.leftOn = l.gameObject.activeInHierarchy; p.leftPos = l.position; p.leftRot = Compression.CompressQuaternion(l.rotation); }
@@ -168,13 +203,9 @@ public class NetPlayer : NetworkBehaviour {
 
   void ApplyHands(HandsPacket p) {
     if (isLocalPlayer || leftNet == null) return;
-    leftTargetPos = p.leftPos; leftTargetRot = Compression.DecompressQuaternion(p.leftRot);
-    rightTargetPos = p.rightPos; rightTargetRot = Compression.DecompressQuaternion(p.rightRot);
-    if (!haveTarget) {
-      leftHand.SetPositionAndRotation(leftTargetPos, leftTargetRot);
-      rightHand.SetPositionAndRotation(rightTargetPos, rightTargetRot);
-      haveTarget = true;
-    }
+    headPredict.Feed(p.headPos, Compression.DecompressQuaternion(p.headRot), p.time);
+    leftPredict.Feed(p.leftPos, Compression.DecompressQuaternion(p.leftRot), p.time);
+    rightPredict.Feed(p.rightPos, Compression.DecompressQuaternion(p.rightRot), p.time);
     leftNet.SetBones(p.leftBones);
     rightNet.SetBones(p.rightBones);
     leftNet.Show(p.handTracking, p.leftOn);

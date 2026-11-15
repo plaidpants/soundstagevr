@@ -32,14 +32,15 @@ public class NetDevice : MonoBehaviour {
   bool wasGrabbed;
 
   bool hasRemoteTarget;
-  Vector3 targetPos, targetScale;
-  Quaternion targetRot;
+  Vector3 targetScale;
+  readonly PosePredictor predict = new PosePredictor(); // NetPredict.cs
 
   public bool IsDevice { get { return CompareTag("instrument") && GetComponent<deviceInterface>() != null; } }
 
   void Awake() {
     fromNetwork = silentCreate;
     all.Add(this);
+    BuildTools();
   }
 
   // Hand-held parts (drumsticks, maracas, mic grip), listed once while they're all
@@ -48,10 +49,12 @@ public class NetDevice : MonoBehaviour {
   [System.NonSerialized] public List<manipObject> tools;
   public static readonly Dictionary<manipObject, NetDevice> toolOwner = new Dictionary<manipObject, NetDevice>();
 
+  // From Awake (a maraca or mic pulled from the menu is in the hand - re-parented -
+  // before Start), and again in Start for anything set up in between.
   void BuildTools() {
-    tools = new List<manipObject>();
+    if (tools == null) tools = new List<manipObject>();
     foreach (manipObject m in GetComponentsInChildren<manipObject>(true)) {
-      if (!NetTools.IsTool(m)) continue;
+      if (!NetTools.IsTool(m) || tools.Contains(m)) continue;
       tools.Add(m);
       toolOwner[m] = this;
     }
@@ -84,9 +87,12 @@ public class NetDevice : MonoBehaviour {
     return false;
   }
 
-  public void SetRemotePose(Vector3 pos, Quaternion rot, Vector3 scale, bool held) {
+  public void SetRemotePose(Vector3 pos, Quaternion rot, Vector3 scale, bool held, double time) {
     if (LocallyGrabbed()) return; // we're holding it: ours wins until we let go
-    targetPos = pos; targetRot = rot; targetScale = scale;
+    // start from where it is here, so the first pose eases in
+    if (!predict.Has) predict.Feed(transform.position, transform.rotation, time - .001, false);
+    predict.Feed(pos, rot, time, held);
+    targetScale = scale;
     hasRemoteTarget = true;
     SetRemotelyHeld(held);
   }
@@ -147,6 +153,7 @@ public class NetDevice : MonoBehaviour {
     bool grabbed = LocallyGrabbed();
     if (grabbed) {
       hasRemoteTarget = false;
+      predict.Reset();
       sendTimer += Time.unscaledDeltaTime;
       if (sendTimer >= 1f / NetSync.poseRate) { sendTimer = 0; NetSync.LocalDevicePose(this); }
     } else if (wasGrabbed) {
@@ -156,12 +163,11 @@ public class NetDevice : MonoBehaviour {
 
     if (hasRemoteTarget) {
       float k = 1f - Mathf.Exp(-18f * Time.deltaTime);
-      transform.position = Vector3.Lerp(transform.position, targetPos, k);
-      transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, k);
+      predict.Apply(transform, Time.deltaTime); // carried forward to now while it's moving
       NetSync.SetWorldScale(transform, Vector3.Lerp(transform.lossyScale, targetScale, k));
-      if ((transform.position - targetPos).sqrMagnitude < 1e-8f && Quaternion.Angle(transform.rotation, targetRot) < .01f) {
-        transform.SetPositionAndRotation(targetPos, targetRot);
+      if (predict.Settled && (transform.lossyScale - targetScale).sqrMagnitude < 1e-8f) {
         NetSync.SetWorldScale(transform, targetScale);
+        predict.Reset();
         hasRemoteTarget = false;
       }
     }

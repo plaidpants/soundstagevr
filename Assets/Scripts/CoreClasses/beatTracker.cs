@@ -32,6 +32,12 @@ public class beatTracker : ScriptableObject {
 
   bool active = true;
 
+  // multiplayer (Net/NetClock): which tick of the measure it's on, ticks per measure,
+  // whether it's playing and following the master clock
+  public int CurBeat { get { return curBeat; } }
+  public int TicksPerMeasure { get { return timeValues.Length; } }
+  public bool Active { get { return active; } }
+
   public bool MC = false;
   public void toggleMC(bool on) {
     if (MC == on) return;

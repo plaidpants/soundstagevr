@@ -242,7 +242,12 @@ public class keyboardDeviceInterface : deviceInterface {
     }
   }
 
+  int diagCount; // multiplayer diagnosis: the first presses of each keyboard are logged
   public void asynchKeyHit(bool on, int ID, keyInput k) {
+    if (on && k == keyInput.touch && diagCount++ < 6)
+      Debug.Log("[Keyboard] " + name + " key " + ID + " (" + keyCount + " keys, states " + keyStates.Length + "), curKey " + curKey +
+                ", muted " + muted + ", speaker in " + (_speaker != null && _speaker.incoming != null) + " vol " + (_speaker != null ? _speaker.volume : -1) +
+                ", out plugged " + (output != null && output.near != null) + ", adsr vol " + (adsrSignal.volumes != null && adsrSignal.volumes.Length > 1 ? adsrSignal.volumes[1].ToString("F2") : "?"));
     if (ID < 0 || ID >= keyCount || ID >= keyStates.Length) return; // e.g. sequencer notes above a shrunk range
     if (k == keyInput.midi) keyStates[ID].midiState = on;
     else if (k == keyInput.seq) keyStates[ID].seqState = on;

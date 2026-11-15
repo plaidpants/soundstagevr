@@ -22,7 +22,7 @@ using UnityEngine;
 public struct NetPatchMsg : NetworkMessage { public byte[] patch; public int[] ids; public int nextId; }
 public struct NetSpawnReqMsg : NetworkMessage { public long token; public int tempId; public byte[] data; }
 public struct NetSpawnMsg : NetworkMessage { public long token; public int tempId; public int netId; public byte[] data; }
-public struct NetPoseMsg : NetworkMessage { public int netId; public bool held; public Vector3 pos; public Quaternion rot; public Vector3 scale; }
+public struct NetPoseMsg : NetworkMessage { public int netId; public double time; public bool held; public Vector3 pos; public Quaternion rot; public Vector3 scale; }
 public struct NetDeleteMsg : NetworkMessage { public int netId; }
 public struct NetPatchUploadMsg : NetworkMessage { public byte[] patch; }
 
@@ -30,7 +30,11 @@ public static class NetSync {
   public static float poseRate = 20f;
   public static bool quitting;
 
-  public static bool Active { get { return NetworkServer.active || NetworkClient.isConnected; } }
+  // A joined headset sends nothing until the session's patch has arrived: whatever it
+  // did before (a start example, a file or example still loading, a device pulled from
+  // the menu) is replaced by that patch, and mustn't land in everyone else's.
+  static bool awaitingPatch;
+  public static bool Active { get { return (NetworkServer.active || NetworkClient.isConnected) && !awaitingPatch; } }
   static bool IsHost { get { return NetworkServer.active; } }
   public static bool IsJoinedClient { get { return NetworkClient.isConnected && !NetworkServer.active; } }
 
@@ -66,6 +70,7 @@ public static class NetSync {
   // ---------------- registration (SoundStageNetworkManager) ----------------
 
   public static void RegisterServer() {
+    awaitingPatch = false;
     NetworkServer.RegisterHandler<NetSpawnReqMsg>(OnServerSpawnReq);
     NetworkServer.RegisterHandler<NetPoseMsg>(OnServerPose);
     NetworkServer.RegisterHandler<NetDeleteMsg>(OnServerDelete);
@@ -74,6 +79,7 @@ public static class NetSync {
     NetworkServer.RegisterHandler<NetControlMsg>(OnServerControl);
     NetworkServer.RegisterHandler<NetCableMsg>(OnServerCable);
     NetworkServer.RegisterHandler<NetTempoMsg>(NetClock.OnServerTempo);
+    NetworkServer.RegisterHandler<NetTapeMsg>(OnServerTape);
     // a new session: the host's devices get fresh IDs
     nextId = 1;
     NetDevice.byId.Clear();
@@ -87,7 +93,8 @@ public static class NetSync {
   }
 
   public static void RegisterClient() {
-    if (IsHost) return; // host-mode client: the host's scene is the patch
+    if (IsHost) { awaitingPatch = false; return; } // host-mode client: the host's scene is the patch
+    awaitingPatch = true;
     NetworkClient.RegisterHandler<NetPatchMsg>(OnClientPatch);
     NetworkClient.RegisterHandler<NetSpawnMsg>(OnClientSpawn);
     NetworkClient.RegisterHandler<NetPoseMsg>(OnClientPose);
@@ -96,6 +103,7 @@ public static class NetSync {
     NetworkClient.RegisterHandler<NetControlMsg>(NetControls.Apply);
     NetworkClient.RegisterHandler<NetCableMsg>(NetCables.Apply);
     NetworkClient.RegisterHandler<NetClockMsg>(NetClock.Apply);
+    NetworkClient.RegisterHandler<NetTapeMsg>(NetTapes.Apply);
     pendingByTemp.Clear();
   }
 
@@ -124,7 +132,7 @@ public static class NetSync {
 
   public static void LocalDevicePose(NetDevice d, bool final = false) {
     if (!Active || d.netId == 0) return;
-    NetPoseMsg m = new NetPoseMsg { netId = d.netId, held = !final, pos = d.transform.position, rot = d.transform.rotation, scale = d.transform.lossyScale };
+    NetPoseMsg m = new NetPoseMsg { netId = d.netId, time = NetworkTime.time, held = !final, pos = d.transform.position, rot = d.transform.rotation, scale = d.transform.lossyScale };
     int channel = final ? Channels.Reliable : Channels.Unreliable;
     if (IsHost) SendToRemotes(m, null, channel);
     else NetworkClient.Send(m, channel);
@@ -166,16 +174,27 @@ public static class NetSync {
     SendToRemotes(m, conn);
   }
 
+  public static void SendTape(NetTapeMsg m) {
+    if (!Active) return;
+    if (IsHost) SendToRemotes(m, null);
+    else NetworkClient.Send(m);
+  }
+
+  static void OnServerTape(NetworkConnectionToClient conn, NetTapeMsg m) {
+    NetTapes.Apply(m);
+    SendToRemotes(m, conn);
+  }
+
   public static void SendTool(NetToolMsg m) {
     if (!Active) return;
-    int channel = m.held ? Channels.Unreliable : Channels.Reliable;
+    int channel = m.held && m.press < 0 ? Channels.Unreliable : Channels.Reliable;
     if (IsHost) SendToRemotes(m, null, channel);
     else NetworkClient.Send(m, channel);
   }
 
   static void OnServerTool(NetworkConnectionToClient conn, NetToolMsg m) {
     NetTools.Apply(m);
-    SendToRemotes(m, conn, m.held ? Channels.Unreliable : Channels.Reliable);
+    SendToRemotes(m, conn, m.held && m.press < 0 ? Channels.Unreliable : Channels.Reliable);
   }
 
   // Before a local clear (NEW, file load, example): the removed devices stay quiet;
@@ -281,6 +300,10 @@ public static class NetSync {
   // ---------------- client side ----------------
 
   static void OnClientPatch(NetPatchMsg m) {
+    if (awaitingPatch) {
+      exampleManager em = Object.FindObjectOfType<exampleManager>();
+      if (em != null) em.CancelLoad();
+    }
     xmlSaveLoad set = xmlSaveLoad.FromBytes(m.patch);
     int[] ids = m.ids;
     ReplacePatch(set, (index, g) => {
@@ -289,6 +312,7 @@ public static class NetSync {
     });
     nextId = m.nextId;
     pendingByTemp.Clear();
+    awaitingPatch = false;
     Debug.Log("[NetSync] loaded the session's patch (" + (ids != null ? ids.Length : 0) + " devices, " + m.patch.Length / 1024 + " KB)");
   }
 
@@ -312,7 +336,7 @@ public static class NetSync {
   // ---------------- shared ----------------
 
   static void ApplyPose(NetPoseMsg m) {
-    if (NetDevice.byId.TryGetValue(m.netId, out NetDevice d) && d != null) d.SetRemotePose(m.pos, m.rot, m.scale, m.held);
+    if (NetDevice.byId.TryGetValue(m.netId, out NetDevice d) && d != null) d.SetRemotePose(m.pos, m.rot, m.scale, m.held, m.time);
   }
 
   static void ApplyDelete(int netId) {

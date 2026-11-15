@@ -18,6 +18,10 @@ public struct NetClockMsg : NetworkMessage {
   public float bpm;
   public double measure;   // seconds into the measure
   public bool running;     // metronome started
+  public long measureCount;  // measures since the clock started
+  public int[] seqIds;       // running step sequencers: device ID,
+  public int[] seqAnchor;    // step minus ticks played (see sequencerDeviceInterface.NetAnchor)
+  public int[] seqLen;       // steps and ticks per measure (only compared when the same here)
   public int[] lfoIds;     // device ID of each LFO oscillator
   public double[] lfoPhase; // its phase, 0..1
   public float[] lfoFreq;
@@ -177,11 +181,20 @@ public class NetClock : MonoBehaviour {
       phases.Add(o._phase);
       freqs.Add(o.frequency);
     }
+    var sIds = new List<int>(); var sAnchor = new List<int>(); var sLen = new List<int>();
+    foreach (sequencerDeviceInterface sq in FindObjectsOfType<sequencerDeviceInterface>()) {
+      if (!sq.NetSyncable) continue;
+      NetDevice d = sq.GetComponent<NetDevice>();
+      if (d == null || d.netId == 0) continue;
+      sIds.Add(d.netId); sAnchor.Add(sq.NetAnchor()); sLen.Add(sq.NetLength * 1000 + sq.NetTicks);
+    }
     return new NetClockMsg {
       time = NetworkTime.time,
       bpm = masterControl.instance.bpm,
       measure = masterControl.instance.MeasurePhaseSeconds,
       running = masterControl.instance.BeatRunning,
+      measureCount = masterControl.instance.measureCount,
+      seqIds = sIds.ToArray(), seqAnchor = sAnchor.ToArray(), seqLen = sLen.ToArray(),
       lfoIds = ids.ToArray(), lfoPhase = phases.ToArray(), lfoFreq = freqs.ToArray()
     };
   }
@@ -194,6 +207,26 @@ public class NetClock : MonoBehaviour {
   }
 
   static int logCount;
+
+  // a sequencer off from the host's by the same number of steps in two messages in a
+  // row (one could catch a step mid-change) is moved into line
+  static readonly Dictionary<int, int> seqOff = new Dictionary<int, int>();
+  static void ApplySequencers(NetClockMsg m, bool clockSettled) {
+    if (m.seqIds == null || !clockSettled) return;
+    for (int i = 0; i < m.seqIds.Length; i++) {
+      if (!NetDevice.byId.TryGetValue(m.seqIds[i], out NetDevice d) || d == null) continue;
+      sequencerDeviceInterface sq = d.GetComponent<sequencerDeviceInterface>();
+      if (sq == null || !sq.NetSyncable || sq.NetLength * 1000 + sq.NetTicks != m.seqLen[i]) { seqOff.Remove(m.seqIds[i]); continue; }
+      int len = sq.NetLength;
+      int off = ((m.seqAnchor[i] - sq.NetAnchor()) % len + len) % len;
+      if (off == 0) { seqOff.Remove(m.seqIds[i]); continue; }
+      if (seqOff.TryGetValue(m.seqIds[i], out int last) && last == off) {
+        Debug.Log("[NetClock] " + d.name + " was " + off + " step(s) off the host: moved into line");
+        sq.NetShiftSteps(off);
+        seqOff.Remove(m.seqIds[i]);
+      } else seqOff[m.seqIds[i]] = off;
+    }
+  }
 
   public static void Apply(NetClockMsg m) {
     masterControl mc = masterControl.instance;
@@ -215,6 +248,13 @@ public class NetClock : MonoBehaviour {
     hostCycle -= System.Math.Floor(hostCycle);
     double period = mc.measurePeriod;
     double error = Wrap(hostCycle * period - mc.MeasurePhaseSeconds, period);
+    // measure count: take the host's (where it is now, whole measures)
+    double hostAbs = m.measureCount + (m.measure + (m.running ? elapsed : 0)) / hostPeriod;
+    double myAbs = mc.measureCount + mc.MeasurePhaseSeconds / period;
+    long fix = (long)System.Math.Round(hostAbs - myAbs);
+    if (fix != 0) mc.AddMeasures(fix);
+    ApplySequencers(m, fix == 0 && System.Math.Abs(error) < .03);
+
     if (tempoSettling) return; // while the tempo is being turned here, leave the beat be
     // small gaps: run a little fast / slow until closed (a jump skips or repeats beats)
     if (System.Math.Abs(error) > snapSeconds) mc.AdjustClock(error);
