@@ -158,7 +158,7 @@ public class keyboardDeviceInterface : deviceInterface {
     if (sizeHandle.curState == manipObject.manipState.grabbed) {
       int want = minOctaves + Mathf.RoundToInt((sizeHandleBaseX - sizeHandle.transform.localPosition.x) / octaveWidth);
       want = Mathf.Clamp(want, minOctaves, MaxOctaves);
-      if (want != octaves) { SetOctaves(want); sizeHandle.pulse(); }
+      if (want != octaves) { SetOctaves(want); sizeHandle.pulse(); NetControls.Resized(this, octaves); }
     } else {
       if (octaves > MaxOctaves) SetOctaves(MaxOctaves); // octave control went up
       Vector3 p = sizeHandle.transform.localPosition;
@@ -167,6 +167,12 @@ public class keyboardDeviceInterface : deviceInterface {
   }
 
   // rebuild the keys for n octaves (12n + 1 keys)
+  // multiplayer: another player resized it (the size handle follows by itself)
+  public void NetSetOctaves(int n) {
+    if (sizeHandle != null && sizeHandle.curState == manipObject.manipState.grabbed) return;
+    if (n != octaves) SetOctaves(n);
+  }
+
   void SetOctaves(int n) {
     n = Mathf.Clamp(n, minOctaves, 5);
     int newCount = 12 * n + 1;

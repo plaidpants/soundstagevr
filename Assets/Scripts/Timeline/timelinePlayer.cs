@@ -16,7 +16,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class timelinePlayer : MonoBehaviour {
+public class timelinePlayer : MonoBehaviour, INetBeatSync {
   public xHandle playheadHandle;
   timelineComponentInterface _deviceInterface;
   float lastBeatTime = 0;
@@ -187,6 +187,22 @@ public class timelinePlayer : MonoBehaviour {
 
   float curBeatTime = 0;
   public bool timeSynch = true;
+
+  // ---- multiplayer (Net/NetBeatSync.cs): keep the playhead lined up with the host's ----
+  volatile bool netShiftPending;
+  float netShift;
+  float LoopLength { get { return _deviceInterface._gridParams.head_tail.y - _deviceInterface._gridParams.head_tail.x; } }
+  public bool NetSyncable { get { return playing && looping && !playheadScrubbing && LoopLength > 0 && _deviceInterface._gridParams.unitDuration > 0; } }
+  public int NetConfig { get { return Mathf.RoundToInt(LoopLength * 16) * 1000 + Mathf.RoundToInt(_deviceInterface._gridParams.unitDuration * 1024); } }
+  public double NetAnchor() {
+    double a = (curGridPosition - _deviceInterface._gridParams.head_tail.x) - NetBeat.Measures / _deviceInterface._gridParams.unitDuration;
+    double len = LoopLength;
+    a %= len;
+    return a < 0 ? a + len : a;
+  }
+  public double NetPeriod { get { return LoopLength; } }
+  public double NetTolerance { get { return (1.0 / 64) / _deviceInterface._gridParams.unitDuration; } } // a 64th of a measure
+  public void NetShift(double d) { netShift = (float)d; netShiftPending = true; }
   public void beatUpdateEvent(float t) {
     if (playDesired != playing) {
       if (playDesired) {
@@ -197,6 +213,19 @@ public class timelinePlayer : MonoBehaviour {
     }
 
     curBeatTime = t;
+
+    if (netShiftPending) { // moved on the audio thread, where the playhead runs
+      netShiftPending = false;
+      if (playing && !playheadScrubbing) {
+        curGridPosition += netShift;
+        Vector2 ht = _deviceInterface._gridParams.head_tail;
+        float len = ht.y - ht.x;
+        if (len > 0) {
+          while (curGridPosition > ht.y) curGridPosition -= len;
+          while (curGridPosition < ht.x) curGridPosition += len;
+        }
+      }
+    }
 
     if (!playing || playheadScrubbing) {
       lastBeatTime = t;

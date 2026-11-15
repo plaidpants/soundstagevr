@@ -19,9 +19,14 @@ public struct NetClockMsg : NetworkMessage {
   public double measure;   // seconds into the measure
   public bool running;     // metronome started
   public long measureCount;  // measures since the clock started
-  public int[] seqIds;       // running step sequencers: device ID,
-  public int[] seqAnchor;    // step minus ticks played (see sequencerDeviceInterface.NetAnchor)
-  public int[] seqLen;       // steps and ticks per measure (only compared when the same here)
+  public int[] seqIds;       // playing sequencers / timelines (NetBeatSync.cs): device ID,
+  public int[] seqIndex;     // which one on the device,
+  public double[] seqAnchor; // position minus clock time played,
+  public int[] seqConfig;    // length / speed (only compared when the same here)
+  public int[] arpIds;       // running xylophone-roll arpeggiators: device ID,
+  public long[] arpTick;     // the clock tick of their last step,
+  public int[] arpState;     // which note, direction, note playing (3 per arpeggiator),
+  public int[] arpConfig;    // notes / pattern / speed (only compared when the same here)
   public int[] lfoIds;     // device ID of each LFO oscillator
   public double[] lfoPhase; // its phase, 0..1
   public float[] lfoFreq;
@@ -181,12 +186,20 @@ public class NetClock : MonoBehaviour {
       phases.Add(o._phase);
       freqs.Add(o.frequency);
     }
-    var sIds = new List<int>(); var sAnchor = new List<int>(); var sLen = new List<int>();
-    foreach (sequencerDeviceInterface sq in FindObjectsOfType<sequencerDeviceInterface>()) {
-      if (!sq.NetSyncable) continue;
-      NetDevice d = sq.GetComponent<NetDevice>();
+    var sIds = new List<int>(); var sIdx = new List<int>(); var sAnchor = new List<double>(); var sCfg = new List<int>();
+    var aIds = new List<int>(); var aTick = new List<long>(); var aState = new List<int>(); var aCfg = new List<int>();
+    foreach (NetDevice d in NetDevice.all) {
       if (d == null || d.netId == 0) continue;
-      sIds.Add(d.netId); sAnchor.Add(sq.NetAnchor()); sLen.Add(sq.NetLength * 1000 + sq.NetTicks);
+      xylorollDeviceInterface xy = d.GetComponent<xylorollDeviceInterface>();
+      if (xy != null && xy.NetArpActive) {
+        xylorollDeviceInterface.ArpSnap a = xy.NetArpLatest;
+        aIds.Add(d.netId); aTick.Add(a.tick); aState.Add(a.cur); aState.Add(a.mod); aState.Add(a.playing); aCfg.Add(xy.NetArpConfig);
+      }
+      INetBeatSync[] list = d.GetComponentsInChildren<INetBeatSync>(true);
+      for (int k = 0; k < list.Length; k++) {
+        if (!list[k].NetSyncable) continue;
+        sIds.Add(d.netId); sIdx.Add(k); sAnchor.Add(list[k].NetAnchor()); sCfg.Add(list[k].NetConfig);
+      }
     }
     return new NetClockMsg {
       time = NetworkTime.time,
@@ -194,7 +207,8 @@ public class NetClock : MonoBehaviour {
       measure = masterControl.instance.MeasurePhaseSeconds,
       running = masterControl.instance.BeatRunning,
       measureCount = masterControl.instance.measureCount,
-      seqIds = sIds.ToArray(), seqAnchor = sAnchor.ToArray(), seqLen = sLen.ToArray(),
+      seqIds = sIds.ToArray(), seqIndex = sIdx.ToArray(), seqAnchor = sAnchor.ToArray(), seqConfig = sCfg.ToArray(),
+      arpIds = aIds.ToArray(), arpTick = aTick.ToArray(), arpState = aState.ToArray(), arpConfig = aCfg.ToArray(),
       lfoIds = ids.ToArray(), lfoPhase = phases.ToArray(), lfoFreq = freqs.ToArray()
     };
   }
@@ -208,23 +222,35 @@ public class NetClock : MonoBehaviour {
 
   static int logCount;
 
-  // a sequencer off from the host's by the same number of steps in two messages in a
-  // row (one could catch a step mid-change) is moved into line
-  static readonly Dictionary<int, int> seqOff = new Dictionary<int, int>();
+  // a sequencer / timeline off from the host's by about the same amount in two messages
+  // in a row (one could catch it mid-step) is moved into line
+  static readonly Dictionary<long, double> seqOff = new Dictionary<long, double>();
   static void ApplySequencers(NetClockMsg m, bool clockSettled) {
-    if (m.seqIds == null || !clockSettled) return;
+    if (m.seqIds == null || m.seqIndex == null || !clockSettled) return;
     for (int i = 0; i < m.seqIds.Length; i++) {
+      long key = ((long)m.seqIds[i] << 8) | (uint)m.seqIndex[i];
       if (!NetDevice.byId.TryGetValue(m.seqIds[i], out NetDevice d) || d == null) continue;
-      sequencerDeviceInterface sq = d.GetComponent<sequencerDeviceInterface>();
-      if (sq == null || !sq.NetSyncable || sq.NetLength * 1000 + sq.NetTicks != m.seqLen[i]) { seqOff.Remove(m.seqIds[i]); continue; }
-      int len = sq.NetLength;
-      int off = ((m.seqAnchor[i] - sq.NetAnchor()) % len + len) % len;
-      if (off == 0) { seqOff.Remove(m.seqIds[i]); continue; }
-      if (seqOff.TryGetValue(m.seqIds[i], out int last) && last == off) {
-        Debug.Log("[NetClock] " + d.name + " was " + off + " step(s) off the host: moved into line");
-        sq.NetShiftSteps(off);
-        seqOff.Remove(m.seqIds[i]);
-      } else seqOff[m.seqIds[i]] = off;
+      INetBeatSync[] list = d.GetComponentsInChildren<INetBeatSync>(true);
+      if (m.seqIndex[i] >= list.Length) continue;
+      INetBeatSync sq = list[m.seqIndex[i]];
+      if (!sq.NetSyncable || sq.NetConfig != m.seqConfig[i]) { seqOff.Remove(key); continue; }
+      double off = Wrap(m.seqAnchor[i] - sq.NetAnchor(), sq.NetPeriod);
+      if (System.Math.Abs(off) < sq.NetTolerance) { seqOff.Remove(key); continue; }
+      if (seqOff.TryGetValue(key, out double last) && System.Math.Abs(last - off) < sq.NetTolerance) {
+        Debug.Log("[NetClock] " + d.name + " #" + m.seqIndex[i] + " was " + off.ToString("F2") + " off the host: moved into line");
+        sq.NetShift(off);
+        seqOff.Remove(key);
+      } else seqOff[key] = off;
+    }
+  }
+
+  static void ApplyArps(NetClockMsg m) {
+    if (m.arpIds == null) return;
+    for (int i = 0; i < m.arpIds.Length; i++) {
+      if (!NetDevice.byId.TryGetValue(m.arpIds[i], out NetDevice d) || d == null) continue;
+      xylorollDeviceInterface xy = d.GetComponent<xylorollDeviceInterface>();
+      if (xy == null || !xy.NetArpActive || xy.NetArpConfig != m.arpConfig[i]) continue;
+      xy.NetArpSet(m.arpTick[i], m.arpState[i * 3], m.arpState[i * 3 + 1], m.arpState[i * 3 + 2]);
     }
   }
 
@@ -254,6 +280,7 @@ public class NetClock : MonoBehaviour {
     long fix = (long)System.Math.Round(hostAbs - myAbs);
     if (fix != 0) mc.AddMeasures(fix);
     ApplySequencers(m, fix == 0 && System.Math.Abs(error) < .03);
+    if (fix == 0 && System.Math.Abs(error) < .03) ApplyArps(m);
 
     if (tempoSettling) return; // while the tempo is being turned here, leave the beat be
     // small gaps: run a little fast / slow until closed (a jump skips or repeats beats)

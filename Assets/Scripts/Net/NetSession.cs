@@ -25,9 +25,34 @@ public class NetSession : MonoBehaviour {
   public static event System.Action StatusChanged;
 
   // Changes whenever the network protocol changes, so different builds don't connect.
-  const long Handshake = 0x5353565200000001; // "SSVR" protocol 1
+  // "SSVR" + a fingerprint of every network message's fields: two builds whose messages
+  // differ can't read each other (the joiner was dropped on the first message it
+  // couldn't read, rejoined, got the patch again - over and over, wiping whatever it
+  // made), so they don't see each other at all instead.
+  static long handshake;
+  public static long Handshake {
+    get {
+      if (handshake == 0) {
+        var names = new List<string>();
+        foreach (System.Type t in typeof(NetSession).Assembly.GetTypes()) {
+          if (!t.IsValueType || !typeof(NetworkMessage).IsAssignableFrom(t)) continue;
+          var sb = new System.Text.StringBuilder(t.Name);
+          foreach (System.Reflection.FieldInfo f in t.GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))
+            sb.Append('|').Append(f.Name).Append(':').Append(f.FieldType.Name);
+          names.Add(sb.ToString());
+        }
+        names.Sort(System.StringComparer.Ordinal);
+        uint h = 2166136261;
+        foreach (string n in names) foreach (char ch in n) h = (h ^ ch) * 16777619;
+        handshake = 0x5353565200000000L | h;
+        Debug.Log("[NetSession] network version " + h.ToString("X8") + " (" + names.Count + " messages): only builds with the same version find each other");
+      }
+      return handshake;
+    }
+  }
 
   public State state { get; private set; } = State.Off;
+  public int successionRank; // host migration: 1 = take over if the host leaves (sent by the host)
 
   SoundStageNetworkManager manager;
   NetworkDiscovery discovery;
@@ -199,12 +224,49 @@ public class NetSession : MonoBehaviour {
   }
 
   // Called by SoundStageNetworkManager when our client connection ends (host left,
-  // connect failed). Milestone 0: look again; host migration comes with milestone 3.
+  // connect failed). Host migration: every headset has the whole patch, so the next in
+  // line (rank 1) takes over at once, keeping the device IDs; the others look for it a
+  // little longer than usual and, if its patch is the same as theirs, keep their own
+  // (NetSync.PatchMatches) - nothing reloads and the music keeps playing.
   public void OnClientConnectionLost() {
     if (state != State.Client) return;
-    Debug.Log("[NetSession] lost the host; searching again");
+    int rank = successionRank;
+    successionRank = 0;
+    bool hadPatch = NetSync.HadPatch;
+    NetSync.migrating = hadPatch;
+    if (hadPatch && rank == 1) {
+      Debug.Log("[NetSession] lost the host: next in line, taking over");
+      SetState(State.Searching);
+      Invoke(nameof(TakeOver), .3f);
+      return;
+    }
+    Debug.Log("[NetSession] lost the host; searching again" + (hadPatch && rank > 0 ? " (place " + rank + " in line)" : ""));
     SetState(State.Searching);
+    if (hadPatch && rank > 1) {
+      migrationRank = rank;
+      Invoke(nameof(StartMigrationSearch), .3f);
+      return;
+    }
     Invoke(nameof(StartLocal), 1f + Random.Range(0f, 2f));
+  }
+
+  void TakeOver() {
+    if (state != State.Searching) return;
+    EnsureNetwork();
+    NetSync.keepIds = true;
+    BecomeHost();
+  }
+
+  // like StartLocal, but wait long enough for the next in line to be advertising (and
+  // a bit longer the further back in line, in case it left too)
+  int migrationRank = 2;
+  void StartMigrationSearch() {
+    EnsureNetwork();
+    CancelInvoke();
+    found.Clear();
+    SetState(State.Searching);
+    discovery.StartDiscovery();
+    Invoke(nameof(Decide), 3f + 2f * migrationRank);
   }
 
   void SetState(State s) {
@@ -260,6 +322,7 @@ public class SoundStageNetworkManager : NetworkManager {
   public override void OnServerReady(NetworkConnectionToClient conn) {
     base.OnServerReady(conn);
     NetSync.ServerSendPatch(conn);
+    NetSync.SendSuccession();
   }
 
   public override void OnServerConnect(NetworkConnectionToClient conn) {
@@ -270,6 +333,7 @@ public class SoundStageNetworkManager : NetworkManager {
   public override void OnServerDisconnect(NetworkConnectionToClient conn) {
     Debug.Log("[NetSession] player left: " + conn.address);
     base.OnServerDisconnect(conn);
+    NetSync.SendSuccession();
   }
 
   public override void OnClientDisconnect() {

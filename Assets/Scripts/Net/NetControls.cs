@@ -24,7 +24,7 @@ using UnityEngine;
 public struct NetControlMsg : NetworkMessage { public int netId; public byte kind; public int index; public float a, b; }
 
 public class NetControls : MonoBehaviour {
-  public enum Kind : byte { Dial, Slider, SliderUneven, SliderNotched, Slider2D, Switch, Button, Key, DrumHit }
+  public enum Kind : byte { Dial, Slider, SliderUneven, SliderNotched, Slider2D, Switch, Button, Key, DrumHit, Octaves }
 
   static NetControls instance;
   public static bool applying; // a received change is being applied: hooks don't send
@@ -160,6 +160,7 @@ public class NetControls : MonoBehaviour {
     // Then it may have changed the device's structure: share the patch again.
     if (obj is handle || obj is button || obj is key || NetTools.IsTool(obj) || obj is omniPlug || obj is omniJack) return;
     if (obj is tape) return; // NetTapes
+    if (obj.name == "sizeHandle" && (obj.GetComponentInParent<keyboardDeviceInterface>() != null || obj.GetComponentInParent<xylorollDeviceInterface>() != null)) return; // NetControls.Resized
     if (obj.GetComponentInParent<libraryDeviceInterface>() != null) return; // the tape library's wheels: browsing, nothing to share
     NetDevice dev = obj.GetComponentInParent<NetDevice>();
     if (dev == null || dev.netId == 0) return;
@@ -183,7 +184,28 @@ public class NetControls : MonoBehaviour {
 
   // ---------- apply what arrives ----------
 
+  // keyboard / xylophone roll range dragged here (a = octaves)
+  public static void Resized(deviceInterface di, int octaves) {
+    if (!NetSync.Active || applying) return;
+    NetDevice dev = di.GetComponent<NetDevice>();
+    if (dev == null || dev.netId == 0) return;
+    dev.Rebaseline();
+    NetSync.SendControl(new NetControlMsg { netId = dev.netId, kind = (byte)Kind.Octaves, index = 0, a = octaves }, true);
+  }
+
   public static void Apply(NetControlMsg m) {
+    if ((Kind)m.kind == Kind.Octaves) {
+      if (!NetDevice.byId.TryGetValue(m.netId, out NetDevice d) || d == null) return;
+      applying = true;
+      try {
+        keyboardDeviceInterface kb = d.GetComponent<keyboardDeviceInterface>();
+        if (kb != null) kb.NetSetOctaves(Mathf.RoundToInt(m.a));
+        xylorollDeviceInterface xy = d.GetComponent<xylorollDeviceInterface>();
+        if (xy != null) xy.NetSetOctaves(Mathf.RoundToInt(m.a));
+      } finally { applying = false; }
+      d.Rebaseline();
+      return;
+    }
     Component c = Find(m);
     if (NetDevice.byId.TryGetValue(m.netId, out NetDevice target) && target != null) target.Rebaseline();
     if (c == null) { Debug.Log("[NetControls] no control " + (Kind)m.kind + " #" + m.index + " on device " + m.netId); return; }

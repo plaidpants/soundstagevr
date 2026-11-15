@@ -166,7 +166,7 @@ public class xylorollDeviceInterface : deviceInterface {
     if (sizeHandle.curState == manipObject.manipState.grabbed) {
       int want = minOctaves + Mathf.RoundToInt((sizeHandleBaseX - sizeHandle.transform.localPosition.x) / octaveWidth);
       want = Mathf.Clamp(want, minOctaves, MaxOctaves);
-      if (want != octaves) { SetOctaves(want); sizeHandle.pulse(); }
+      if (want != octaves) { SetOctaves(want); sizeHandle.pulse(); NetControls.Resized(this, octaves); }
     } else {
       if (octaves > MaxOctaves) SetOctaves(MaxOctaves); // octave slider moved up
       Vector3 p = sizeHandle.transform.localPosition;
@@ -175,6 +175,12 @@ public class xylorollDeviceInterface : deviceInterface {
   }
 
   // rebuild the bars for n octaves (12n bars)
+  // multiplayer: another player resized it (the size handle follows by itself)
+  public void NetSetOctaves(int n) {
+    if (sizeHandle != null && sizeHandle.curState == manipObject.manipState.grabbed) return;
+    if (n != octaves) SetOctaves(n);
+  }
+
   void SetOctaves(int n) {
     n = Mathf.Clamp(n, minOctaves, 5);
     int newCount = 12 * n;
@@ -453,13 +459,80 @@ public class xylorollDeviceInterface : deviceInterface {
   public void resetArp() {
     arpCur = 0;
     arpPlayingKey = -1;
+    System.Array.Clear(arpHistory, 0, arpHistory.Length);
+    arpLatest = null;
   }
 
   int arpCur = 0;
   int arpPlayingKey = -1;
+
+  // ---- multiplayer (Net/NetClock): keep the arpeggiator on the host's note ----
+  // It runs like a sequencer (on the master clock, whatever notes are switched on),
+  // but its state (which note, which way for up/down) depends on its history, so
+  // instead of a position the host sends its state at a given clock tick. Each step is
+  // remembered here with its tick; if ours at that tick differs, ours is set to the
+  // host's and the steps since are replayed (silently) - on the audio thread, at the
+  // next step.
+  public class ArpSnap { public long tick; public int cur, mod, playing; }
+  readonly ArpSnap[] arpHistory = new ArpSnap[32];
+  int arpHistoryNext;
+  volatile ArpSnap arpLatest;
+  volatile ArpSnap arpPending;
+
+  public bool NetArpActive {
+    get { return arpPattern != 0 && selectedKeys.Count > 1 && _beatManager != null && _beatManager.MC && _beatManager.Active && arpLatest != null; }
+  }
+  public int NetArpConfig {
+    get {
+      int[] k = selectedKeys.ToArray();
+      if (arpPattern != 4) System.Array.Sort(k);
+      int h = arpPattern * 31 + arpSpeed;
+      foreach (int x in k) h = h * 131 + x;
+      return h;
+    }
+  }
+  public ArpSnap NetArpLatest { get { return arpLatest; } }
+  public void NetArpSet(long tick, int cur, int mod, int playing) {
+    arpPending = new ArpSnap { tick = tick, cur = cur, mod = mod, playing = playing };
+  }
+
+  long ArpTick() { return masterControl.instance.measureCount * _beatManager.TicksPerMeasure + _beatManager.CurBeat; }
+
+  void ArpRemember() {
+    ArpSnap s = arpHistory[arpHistoryNext] ?? (arpHistory[arpHistoryNext] = new ArpSnap());
+    s.tick = ArpTick(); s.cur = arpCur; s.mod = arpMod; s.playing = arpPlayingKey;
+    arpHistoryNext = (arpHistoryNext + 1) % arpHistory.Length;
+    arpLatest = s;
+  }
+
+  // state only, as arpStep moves it
+  void ArpAdvance(int[] sortedKeys) {
+    arpCur = updateArpStep(arpCur);
+    if (sortedKeys[arpCur] == arpPlayingKey) arpCur = updateArpStep(arpCur);
+    arpPlayingKey = sortedKeys[arpCur];
+  }
+
+  void ArpApplyPending(int[] sortedKeys) {
+    ArpSnap p = arpPending;
+    if (p == null) return;
+    arpPending = null;
+    ArpSnap mine = null;
+    foreach (ArpSnap s in arpHistory) if (s != null && s.tick == p.tick) { mine = s; break; }
+    if (mine == null) return; // too long ago (or not reached yet): wait for the next one
+    if (mine.cur == p.cur && mine.mod == p.mod && mine.playing == p.playing) return; // in step
+    if (p.cur < 0 || p.cur >= sortedKeys.Length) return;
+    long steps = 0;
+    foreach (ArpSnap s in arpHistory) if (s != null && s.tick > p.tick) steps++;
+    arpCur = p.cur; arpMod = p.mod; arpPlayingKey = p.playing;
+    for (long i = 0; i < steps; i++) ArpAdvance(sortedKeys);
+    System.Array.Clear(arpHistory, 0, arpHistory.Length); // what we remembered was off
+    Debug.Log("[NetClock] arpeggiator on " + name + " moved onto the host's note");
+  }
+
   public void arpStep() {
     int[] sortedKeys = selectedKeys.ToArray();
     if (arpPattern != 4) System.Array.Sort(sortedKeys);
+    if (arpPattern != 0 && sortedKeys.Length > 1) ArpApplyPending(sortedKeys);
 
     if (arpPattern != 0 && selectedKeys.Count > 1) {
       arpCur = updateArpStep(arpCur);
@@ -469,6 +542,7 @@ public class xylorollDeviceInterface : deviceInterface {
       for (int i = 0; i < sortedKeys.Length; i++) {
         if (isSelectedKey(sortedKeys[i])) setKeyActive(sortedKeys[i], i == arpCur);
       }
+      ArpRemember();
     }
   }
 

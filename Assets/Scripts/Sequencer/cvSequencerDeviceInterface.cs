@@ -17,7 +17,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 
-public class cvSequencerDeviceInterface : deviceInterface {
+public class cvSequencerDeviceInterface : deviceInterface, INetBeatSync {
 
   // out generators are nested in the jackOutPrefabs! 
   public GameObject jackOutPrefab, cvJackOutPrefab;
@@ -153,6 +153,20 @@ public class cvSequencerDeviceInterface : deviceInterface {
 
   int curStep = 0;
   public bool silent = false;
+
+  // ---- multiplayer (Net/NetBeatSync.cs): keep the step lined up with the host's ----
+  public bool NetSyncable {
+    get { return externalPulse == null && _beatManager != null && _beatManager.MC && _beatManager.Active && _beatManager.TicksPerMeasure > 0 && dimensions[0] > 0; }
+  }
+  public int NetConfig { get { return dimensions[0] * 1000 + _beatManager.TicksPerMeasure; } }
+  public double NetAnchor() { return NetBeat.StepAnchor(targetStep, _beatManager, dimensions[0]); }
+  public double NetPeriod { get { return dimensions[0]; } }
+  public double NetTolerance { get { return .5; } }
+  public void NetShift(double d) {
+    if (stepSelect.curState == manipObject.manipState.grabbed) return;
+    int len = dimensions[0];
+    SelectStep(((targetStep + (int)System.Math.Round(d)) % len + len) % len);
+  }
 
   public void executeNextStep() {
     if (stepSelect.curState == manipObject.manipState.grabbed) return;

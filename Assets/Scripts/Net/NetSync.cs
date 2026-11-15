@@ -20,6 +20,8 @@ using Mirror;
 using UnityEngine;
 
 public struct NetPatchMsg : NetworkMessage { public byte[] patch; public int[] ids; public int nextId; }
+// host migration: your place in line to take over if the host leaves (1 = next host)
+public struct NetSuccessionMsg : NetworkMessage { public int rank; }
 public struct NetSpawnReqMsg : NetworkMessage { public long token; public int tempId; public byte[] data; }
 public struct NetSpawnMsg : NetworkMessage { public long token; public int tempId; public int netId; public byte[] data; }
 public struct NetPoseMsg : NetworkMessage { public int netId; public double time; public bool held; public Vector3 pos; public Quaternion rot; public Vector3 scale; }
@@ -59,6 +61,58 @@ public static class NetSync {
   }
 
   static int nextId = 1;
+
+  // ---- host migration ----
+  public static bool migrating;   // lost the host; the next patch may be the same as ours
+  public static bool keepIds;     // becoming host after the host left: keep the IDs
+  public static bool HadPatch { get { return NetDevice.byId.Count > 0; } }
+
+  // host: tell each joined headset its place in line (join order)
+  public static void SendSuccession() {
+    if (!NetworkServer.active) return;
+    var conns = new List<NetworkConnectionToClient>();
+    foreach (NetworkConnectionToClient c in NetworkServer.connections.Values)
+      if (c != NetworkServer.localConnection && c.isReady) conns.Add(c);
+    conns.Sort((a, b) => a.connectionId.CompareTo(b.connectionId));
+    for (int i = 0; i < conns.Count; i++) conns[i].Send(new NetSuccessionMsg { rank = i + 1 });
+  }
+
+  // the same devices under the same IDs with the same settings (ignoring where they
+  // stand and the jack / device IDs, which are per headset)
+  static bool PatchMatches(xmlSaveLoad set, int[] ids) {
+    if (ids == null || set == null || set.InstrumentList == null || set.InstrumentList.Count != ids.Length) return false;
+    int mine = 0;
+    foreach (KeyValuePair<int, NetDevice> kv in NetDevice.byId) if (kv.Value != null) mine++;
+    if (mine != ids.Length) return false;
+    for (int i = 0; i < ids.Length; i++) {
+      if (!NetDevice.byId.TryGetValue(ids[i], out NetDevice d) || d == null) return false;
+      deviceInterface di = d.GetComponent<deviceInterface>();
+      if (di == null) return false;
+      if (PortableHash(di.GetData()) != PortableHash(set.InstrumentList[i])) {
+        Debug.Log("[NetSync] device " + ids[i] + " (" + d.name + ") differs");
+        return false;
+      }
+    }
+    return true;
+  }
+
+  static readonly System.Text.RegularExpressions.Regex idElements =
+    new System.Text.RegularExpressions.Regex(@"<(\w*ID)>-?\d+</\1>");
+
+  static int PortableHash(InstrumentData data) {
+    Vector3 p = data.position, sc = data.scale; Quaternion q = data.rotation; int id = data.ID;
+    data.position = Vector3.zero; data.rotation = Quaternion.identity; data.scale = Vector3.one; data.ID = 0;
+    string xml;
+    try {
+      using (var w = new StringWriter()) { deviceSerializer.Serialize(w, data); xml = w.ToString(); }
+    } finally { data.position = p; data.rotation = q; data.scale = sc; data.ID = id; }
+    xml = idElements.Replace(xml, "");
+    unchecked {
+      int h = (int)2166136261;
+      foreach (char ch in xml) h = (h ^ ch) * 16777619;
+      return h;
+    }
+  }
   static int nextTempId = 1;
   static readonly long myToken = System.DateTime.Now.Ticks ^ (long)Random.Range(int.MinValue, int.MaxValue);
   static readonly Dictionary<int, NetDevice> pendingByTemp = new Dictionary<int, NetDevice>();
@@ -80,6 +134,15 @@ public static class NetSync {
     NetworkServer.RegisterHandler<NetCableMsg>(OnServerCable);
     NetworkServer.RegisterHandler<NetTempoMsg>(NetClock.OnServerTempo);
     NetworkServer.RegisterHandler<NetTapeMsg>(OnServerTape);
+    migrating = false;
+    if (keepIds) {
+      // taking over after the host left: everyone has this patch with these IDs
+      keepIds = false;
+      nextId = 1;
+      foreach (int id in NetDevice.byId.Keys) if (id >= nextId) nextId = id + 1;
+      Debug.Log("[NetSync] took over the session: hosting its patch of " + NetDevice.byId.Count + " devices");
+      return;
+    }
     // a new session: the host's devices get fresh IDs
     nextId = 1;
     NetDevice.byId.Clear();
@@ -104,6 +167,7 @@ public static class NetSync {
     NetworkClient.RegisterHandler<NetCableMsg>(NetCables.Apply);
     NetworkClient.RegisterHandler<NetClockMsg>(NetClock.Apply);
     NetworkClient.RegisterHandler<NetTapeMsg>(NetTapes.Apply);
+    NetworkClient.RegisterHandler<NetSuccessionMsg>(m => { if (NetSession.instance != null) NetSession.instance.successionRank = m.rank; });
     pendingByTemp.Clear();
   }
 
@@ -306,6 +370,19 @@ public static class NetSync {
     }
     xmlSaveLoad set = xmlSaveLoad.FromBytes(m.patch);
     int[] ids = m.ids;
+    if (migrating) {
+      migrating = false;
+      if (PatchMatches(set, ids)) {
+        // rejoined after the host left, and the new host has the same patch: keep ours
+        // (no reload, nothing stops playing)
+        nextId = m.nextId;
+        pendingByTemp.Clear();
+        awaitingPatch = false;
+        Debug.Log("[NetSync] rejoined the session: same patch (" + ids.Length + " devices), kept");
+        return;
+      }
+      Debug.Log("[NetSync] rejoined the session: the patch differs, loading it");
+    }
     ReplacePatch(set, (index, g) => {
       NetDevice d = g.GetComponent<NetDevice>();
       if (d != null && ids != null && index < ids.Length) d.SetId(ids[index]);
@@ -405,7 +482,9 @@ public static class NetSync {
   static byte[] DeviceData(NetDevice d) {
     deviceInterface di = d.GetComponent<deviceInterface>();
     if (di == null) return null;
-    InstrumentData data = di.GetData();
+    InstrumentData data;
+    try { data = di.GetData(); }
+    catch (System.Exception e) { Debug.LogError("[NetSync] reading " + d.name + " to send it failed: " + e); return null; }
     data.scale = d.transform.lossyScale;
     using (var ms = new MemoryStream()) {
       using (var w = new StreamWriter(ms, new UTF8Encoding(false))) deviceSerializer.Serialize(w, data);

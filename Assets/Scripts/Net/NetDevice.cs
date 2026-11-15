@@ -10,6 +10,7 @@
 // Patch loads and joins replace whole patches through NetSync, which marks the devices
 // it creates or removes so they don't announce themselves.
 
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -63,7 +64,17 @@ public class NetDevice : MonoBehaviour {
   void Start() {
     started = true;
     BuildTools();
-    if (!fromNetwork && IsDevice) NetSync.LocalDeviceCreated(this);
+    if (!fromNetwork && IsDevice) StartCoroutine(AnnounceSoon());
+  }
+
+  // A new device is sent once it has run for a couple of frames: some only set up their
+  // defaults in their first Update (the keyboard's ADSR was sent all zero - silent on
+  // the other headsets), and reading one too early could fail outright.
+  IEnumerator AnnounceSoon() {
+    yield return null;
+    yield return null;
+    if (this == null || silentDestroy || netId != 0) yield break;
+    NetSync.LocalDeviceCreated(this);
   }
 
   void OnDestroy() {
