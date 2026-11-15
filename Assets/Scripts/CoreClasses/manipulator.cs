@@ -206,6 +206,13 @@ public class manipulator : MonoBehaviour {
     if (!on) { holdingTool = false; heldTool = null; heldToolKey = null; }
     showTip();
 
+    // multiplayer: it was taken by another player after we highlighted it
+    if (on && selectedObject != null && selectedObject.netLocked) {
+      Debug.Log("[manipulator] " + controllerIndex + ": " + selectedObject.name + " is held by another player");
+      selectedObject = null;
+      selectedTransform = null;
+    }
+
     if (selectedObject != null) {
       selectedObject.setGrab(grabbing, transform);
       if (!on) toggleController(true);
@@ -370,6 +377,12 @@ public class manipulator : MonoBehaviour {
           }
         }
       }
+    }
+
+    // multiplayer: someone else is holding it
+    if (candidate != null) {
+      manipObject co = candidate.GetComponent<manipObject>();
+      if (co != null && co.netLocked) candidate = null;
     }
 
     if (candidate != selectedTransform) {

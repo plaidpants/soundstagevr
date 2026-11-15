@@ -22,6 +22,9 @@ public class manipObject : MonoBehaviour {
   public manipulator manipulatorObjScript;
   public bool stickyGrip = false;
   public bool canBeDeleted = false;
+  // Multiplayer: another player is holding it (Net/NetSync.SetGrabBlocked); the
+  // manipulators here won't select or grab it.
+  [System.NonSerialized] public bool netLocked;
 
   bool selected = false;
   bool grabbed = false;

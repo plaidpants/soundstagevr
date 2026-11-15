@@ -113,6 +113,10 @@ public class NetPlayer : NetworkBehaviour {
 
     if (isServer) RpcHands(p);
     else CmdHands(p);
+
+    // drumsticks, maracas, mic grip held in either hand
+    if (manips == null || manips.Length < 2 || manips[0] == null) HandSource(0, false);
+    NetTools.LocalHands(manips != null ? manips[0] : null, manips != null && manips.Length > 1 ? manips[1] : null);
   }
 
   // Where this player's hand / controller visual is: in hand tracking the rig's hand

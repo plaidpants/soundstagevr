@@ -22,7 +22,7 @@ using UnityEngine;
 public struct NetPatchMsg : NetworkMessage { public byte[] patch; public int[] ids; public int nextId; }
 public struct NetSpawnReqMsg : NetworkMessage { public long token; public int tempId; public byte[] data; }
 public struct NetSpawnMsg : NetworkMessage { public long token; public int tempId; public int netId; public byte[] data; }
-public struct NetPoseMsg : NetworkMessage { public int netId; public Vector3 pos; public Quaternion rot; public Vector3 scale; }
+public struct NetPoseMsg : NetworkMessage { public int netId; public bool held; public Vector3 pos; public Quaternion rot; public Vector3 scale; }
 public struct NetDeleteMsg : NetworkMessage { public int netId; }
 public struct NetPatchUploadMsg : NetworkMessage { public byte[] patch; }
 
@@ -32,6 +32,27 @@ public static class NetSync {
 
   public static bool Active { get { return NetworkServer.active || NetworkClient.isConnected; } }
   static bool IsHost { get { return NetworkServer.active; } }
+  public static bool IsJoinedClient { get { return NetworkClient.isConnected && !NetworkServer.active; } }
+
+  // Devices can sit under a scaled parent (the start example hangs under the example
+  // manager at 0.75), and a received patch puts them at the top level, so scale is sent
+  // as world scale and turned back into local scale on arrival.
+  // While another player holds something, it can't be selected or grabbed here
+  // (manipObject.netLocked, checked by manipulator): a drumstick in someone else's hand
+  // would otherwise start the hand-tool calibration; two people dragging one device
+  // would fight. Anything already selected here is let go of.
+  public static void SetGrabBlocked(IEnumerable<manipObject> objects, bool blocked) {
+    foreach (manipObject m in objects) {
+      if (m == null) continue;
+      m.netLocked = blocked;
+      if (blocked && m.curState == manipObject.manipState.selected) m.setState(manipObject.manipState.none);
+    }
+  }
+
+  public static void SetWorldScale(Transform t, Vector3 world) {
+    Vector3 p = t.parent != null ? t.parent.lossyScale : Vector3.one;
+    t.localScale = new Vector3(p.x != 0 ? world.x / p.x : world.x, p.y != 0 ? world.y / p.y : world.y, p.z != 0 ? world.z / p.z : world.z);
+  }
 
   static int nextId = 1;
   static int nextTempId = 1;
@@ -49,6 +70,7 @@ public static class NetSync {
     NetworkServer.RegisterHandler<NetPoseMsg>(OnServerPose);
     NetworkServer.RegisterHandler<NetDeleteMsg>(OnServerDelete);
     NetworkServer.RegisterHandler<NetPatchUploadMsg>(OnServerPatchUpload);
+    NetworkServer.RegisterHandler<NetToolMsg>(OnServerTool);
     // a new session: the host's devices get fresh IDs
     nextId = 1;
     NetDevice.byId.Clear();
@@ -66,6 +88,7 @@ public static class NetSync {
     NetworkClient.RegisterHandler<NetSpawnMsg>(OnClientSpawn);
     NetworkClient.RegisterHandler<NetPoseMsg>(OnClientPose);
     NetworkClient.RegisterHandler<NetDeleteMsg>(OnClientDelete);
+    NetworkClient.RegisterHandler<NetToolMsg>(NetTools.Apply);
     pendingByTemp.Clear();
   }
 
@@ -80,7 +103,8 @@ public static class NetSync {
   public static void LocalDeviceCreated(NetDevice d) {
     if (!Active || applyingPatch) return;
     byte[] data = DeviceData(d);
-    if (data == null) return;
+    if (data == null) { Debug.LogWarning("[NetSync] new device " + d.name + " has no data to send"); return; }
+    Debug.Log("[NetSync] new device here: " + d.name + (IsHost ? " (sending)" : " (asking the host for an ID)"));
     if (IsHost) {
       d.SetId(nextId++);
       SendToRemotes(new NetSpawnMsg { token = 0, netId = d.netId, data = data }, null);
@@ -93,7 +117,7 @@ public static class NetSync {
 
   public static void LocalDevicePose(NetDevice d, bool final = false) {
     if (!Active || d.netId == 0) return;
-    NetPoseMsg m = new NetPoseMsg { netId = d.netId, pos = d.transform.position, rot = d.transform.rotation, scale = d.transform.localScale };
+    NetPoseMsg m = new NetPoseMsg { netId = d.netId, held = !final, pos = d.transform.position, rot = d.transform.rotation, scale = d.transform.lossyScale };
     int channel = final ? Channels.Reliable : Channels.Unreliable;
     if (IsHost) SendToRemotes(m, null, channel);
     else NetworkClient.Send(m, channel);
@@ -102,8 +126,21 @@ public static class NetSync {
   public static void LocalDeviceDeleted(NetDevice d) {
     if (!Active || d.netId == 0) return;
     NetDeleteMsg m = new NetDeleteMsg { netId = d.netId };
+    Debug.Log("[NetSync] device " + d.netId + " deleted here: " + d.name);
     if (IsHost) SendToRemotes(m, null);
     else NetworkClient.Send(m);
+  }
+
+  public static void SendTool(NetToolMsg m) {
+    if (!Active) return;
+    int channel = m.held ? Channels.Unreliable : Channels.Reliable;
+    if (IsHost) SendToRemotes(m, null, channel);
+    else NetworkClient.Send(m, channel);
+  }
+
+  static void OnServerTool(NetworkConnectionToClient conn, NetToolMsg m) {
+    NetTools.Apply(m);
+    SendToRemotes(m, conn, m.held ? Channels.Unreliable : Channels.Reliable);
   }
 
   // Before a local clear (NEW, file load, example): the removed devices stay quiet;
@@ -129,7 +166,9 @@ public static class NetSync {
       Debug.Log("[NetSync] patch replaced here: sent to everyone");
     } else {
       List<deviceInterface> order = new List<deviceInterface>();
-      byte[] bytes = SaveLoadInterface.instance.BuildSet(order).ToBytes();
+      xmlSaveLoad set = SaveLoadInterface.instance.BuildSet(order);
+      for (int i = 0; i < order.Count; i++) set.InstrumentList[i].scale = order[i].transform.lossyScale;
+      byte[] bytes = set.ToBytes();
       NetworkClient.Send(new NetPatchUploadMsg { patch = bytes });
       Debug.Log("[NetSync] patch replaced here: sent to the host (" + bytes.Length / 1024 + " KB)");
     }
@@ -139,7 +178,8 @@ public static class NetSync {
 
   static void OnServerSpawnReq(NetworkConnectionToClient conn, NetSpawnReqMsg m) {
     NetDevice d = SpawnFromBytes(m.data);
-    if (d == null) return;
+    if (d == null) { Debug.LogWarning("[NetSync] couldn't create a player's new device"); return; }
+    Debug.Log("[NetSync] player created " + d.name + ": ID " + nextId);
     d.SetId(nextId++);
     NetSpawnMsg s = new NetSpawnMsg { token = m.token, tempId = m.tempId, netId = d.netId, data = m.data };
     SendToRemotes(s, null); // the requester too: it learns the ID
@@ -168,6 +208,7 @@ public static class NetSync {
     xmlSaveLoad set = SaveLoadInterface.instance.BuildSet(order);
     int[] ids = new int[order.Count];
     for (int i = 0; i < order.Count; i++) {
+      set.InstrumentList[i].scale = order[i].transform.lossyScale; // devices load at the top level
       NetDevice d = order[i].GetComponent<NetDevice>();
       ids[i] = d != null ? d.netId : 0;
     }
@@ -215,6 +256,7 @@ public static class NetSync {
     }
     NetDevice d = SpawnFromBytes(m.data);
     if (d != null) d.SetId(m.netId);
+    Debug.Log("[NetSync] device " + m.netId + " created by another player: " + (d != null ? d.name : "FAILED"));
   }
 
   static void OnClientPose(NetPoseMsg m) { ApplyPose(m); }
@@ -223,11 +265,12 @@ public static class NetSync {
   // ---------------- shared ----------------
 
   static void ApplyPose(NetPoseMsg m) {
-    if (NetDevice.byId.TryGetValue(m.netId, out NetDevice d) && d != null) d.SetRemotePose(m.pos, m.rot, m.scale);
+    if (NetDevice.byId.TryGetValue(m.netId, out NetDevice d) && d != null) d.SetRemotePose(m.pos, m.rot, m.scale, m.held);
   }
 
   static void ApplyDelete(int netId) {
-    if (!NetDevice.byId.TryGetValue(netId, out NetDevice d) || d == null) return;
+    if (!NetDevice.byId.TryGetValue(netId, out NetDevice d) || d == null) { Debug.Log("[NetSync] delete of unknown device " + netId); return; }
+    Debug.Log("[NetSync] device " + netId + " deleted by another player: " + d.name);
     d.silentDestroy = true;
     NetDevice.byId.Remove(netId);
     Object.Destroy(d.gameObject);
@@ -260,9 +303,10 @@ public static class NetSync {
   static NetDevice SpawnFromBytes(byte[] data) {
     InstrumentData d = FromDeviceBytes(data);
     if (d == null) return null;
-    GameObject g;
+    GameObject g = null;
     NetDevice.silentCreate = true;
     try { g = SaveLoadInterface.instance.SpawnFromData(d); }
+    catch (System.Exception e) { Debug.LogError("[NetSync] creating " + d.deviceType + " failed: " + e); }
     finally { NetDevice.silentCreate = false; }
     return g != null ? g.GetComponent<NetDevice>() : null;
   }
@@ -273,6 +317,7 @@ public static class NetSync {
     deviceInterface di = d.GetComponent<deviceInterface>();
     if (di == null) return null;
     InstrumentData data = di.GetData();
+    data.scale = d.transform.lossyScale;
     using (var ms = new MemoryStream()) {
       using (var w = new StreamWriter(ms, new UTF8Encoding(false))) deviceSerializer.Serialize(w, data);
       return ms.ToArray();

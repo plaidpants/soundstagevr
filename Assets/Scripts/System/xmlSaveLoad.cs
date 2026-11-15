@@ -38,6 +38,23 @@ public class xmlSaveLoad {
     }
   }
 
+  // Multiplayer: the patch as gzipped XML bytes and back.
+  public byte[] ToBytes() {
+    XmlSerializer serializer = new XmlSerializer(typeof(xmlSaveLoad));
+    using (var ms = new MemoryStream()) {
+      using (var gz = new System.IO.Compression.GZipStream(ms, System.IO.Compression.CompressionLevel.Fastest, true))
+      using (var w = new StreamWriter(gz, new UTF8Encoding(false))) serializer.Serialize(w, this);
+      return ms.ToArray();
+    }
+  }
+
+  public static xmlSaveLoad FromBytes(byte[] data) {
+    XmlSerializer serializer = new XmlSerializer(typeof(xmlSaveLoad));
+    using (var ms = new MemoryStream(data))
+    using (var gz = new System.IO.Compression.GZipStream(ms, System.IO.Compression.CompressionMode.Decompress))
+      return serializer.Deserialize(gz) as xmlSaveLoad;
+  }
+
   public void SaveToFile(string path) {
     XmlSerializer serializer = new XmlSerializer(typeof(xmlSaveLoad));
     using (StreamWriter stream = new StreamWriter(path, false, Encoding.GetEncoding("UTF-8"))) {

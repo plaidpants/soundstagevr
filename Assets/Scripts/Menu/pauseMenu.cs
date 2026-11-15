@@ -98,7 +98,10 @@ public class pauseMenu : MonoBehaviour {
 
   public void loadFile(string s) {
     clearInstruments();
-    SaveLoadInterface.instance.Load(s);
+    NetDevice.silentCreate = true; // multiplayer: shared as a whole patch below
+    try { SaveLoadInterface.instance.Load(s); }
+    finally { NetDevice.silentCreate = false; }
+    NetSync.LocalPatchReplaced();
     mainMenuActive();
     toggleMenu();
     curItem = itemType.main;
@@ -167,12 +170,14 @@ public class pauseMenu : MonoBehaviour {
 
         masterControl.instance.currentScene = "";
         clearInstruments();
+        NetSync.LocalPatchReplaced();
       }
     }
     return;
   }
 
   public void clearInstruments() {
+    NetSync.MarkAllSilent(); // multiplayer: no per-device deletes, the new patch is shared whole
     GameObject[] gameObjects = GameObject.FindGameObjectsWithTag("instrument");
     for (int i = 0; i < gameObjects.Length; i++) {
       Destroy(gameObjects[i]);

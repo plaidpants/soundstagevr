@@ -121,7 +121,16 @@ public class exampleManager : MonoBehaviour {
   }
 
   void firstLoad() {
+    // Multiplayer: already joined someone's session -> their patch is the patch; loading
+    // the start example on top would add a second copy of everything for everyone.
+    if (NetSync.IsJoinedClient) {
+      Debug.Log("[exampleManager] in a session: skipping the start example");
+      return;
+    }
+    NetDevice.silentCreate = true; // shared as one patch below
+    try {
         SaveLoadInterface.instance.Load(System.IO.Directory.GetParent(Application.persistentDataPath).FullName + System.IO.Path.DirectorySeparatorChar + "examples" + System.IO.Path.DirectorySeparatorChar + "startExample.xml", true);
+    } finally { NetDevice.silentCreate = false; }
 
     GameObject exampleParent = new GameObject("exampleParent");
     exampleParent.transform.position = new Vector3(-.5f, .5f, 0);
@@ -137,12 +146,13 @@ public class exampleManager : MonoBehaviour {
     exampleParent.transform.localPosition = new Vector3(0, -1f / transform.localScale.x, 0);
 
     drumDeviceInterface[] drums = FindObjectsOfType<drumDeviceInterface>();
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < Mathf.Min(3, drums.Length); i++) {
       if (drums[i].transform.localScale.x > .95f) {
         drums[i].displayDrumsticks(true);
         break;
       }
     }
+    NetSync.LocalPatchReplaced(); // hosting already: share it
   }
 
   void killManipHints() {
@@ -171,6 +181,7 @@ public class exampleManager : MonoBehaviour {
   IEnumerator loadRoutine(string s) {
     moving = true;
     List<GameObject> gameObjects = new List<GameObject>(GameObject.FindGameObjectsWithTag("instrument"));
+    NetSync.MarkAllSilent(); // multiplayer: the new patch is shared whole when it lands
     for (int i = 0; i < gameObjects.Count; i++) {
       Destroy(gameObjects[i]);
     }
@@ -178,7 +189,9 @@ public class exampleManager : MonoBehaviour {
     GameObject prevParent = GameObject.Find("exampleParent");
     if (prevParent != null) Destroy(prevParent);
 
-    SaveLoadInterface.instance.Load(System.IO.Directory.GetParent(Application.persistentDataPath).FullName + System.IO.Path.DirectorySeparatorChar + "examples" + System.IO.Path.DirectorySeparatorChar + s + ".xml", true);
+    NetDevice.silentCreate = true;
+    try { SaveLoadInterface.instance.Load(System.IO.Directory.GetParent(Application.persistentDataPath).FullName + System.IO.Path.DirectorySeparatorChar + "examples" + System.IO.Path.DirectorySeparatorChar + s + ".xml", true); }
+    finally { NetDevice.silentCreate = false; }
 
     Vector3 avg = Vector3.zero;
     int objectCount = 0;
@@ -253,6 +266,7 @@ public class exampleManager : MonoBehaviour {
     curSide = candidate;
     used = true;
     moving = false;
+    NetSync.LocalPatchReplaced(); // multiplayer: everyone gets the example where it landed
   }
 
   float SmoothStep(float t) {

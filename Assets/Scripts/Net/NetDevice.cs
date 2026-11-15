@@ -42,13 +42,30 @@ public class NetDevice : MonoBehaviour {
     all.Add(this);
   }
 
+  // Hand-held parts (drumsticks, maracas, mic grip), listed once while they're all
+  // still on the device: a held one is re-parented to the hand, so it can't be found
+  // under the device then. Same prefab, same order on every headset (NetTools).
+  [System.NonSerialized] public List<manipObject> tools;
+  public static readonly Dictionary<manipObject, NetDevice> toolOwner = new Dictionary<manipObject, NetDevice>();
+
+  void BuildTools() {
+    tools = new List<manipObject>();
+    foreach (manipObject m in GetComponentsInChildren<manipObject>(true)) {
+      if (!NetTools.IsTool(m)) continue;
+      tools.Add(m);
+      toolOwner[m] = this;
+    }
+  }
+
   void Start() {
     started = true;
+    BuildTools();
     if (!fromNetwork && IsDevice) NetSync.LocalDeviceCreated(this);
   }
 
   void OnDestroy() {
     all.Remove(this);
+    if (tools != null) foreach (manipObject m in tools) if (m != null) toolOwner.Remove(m);
     if (netId != 0 && byId.TryGetValue(netId, out NetDevice d) && d == this) byId.Remove(netId);
     if (started && !silentDestroy && netId != 0 && !NetSync.quitting) NetSync.LocalDeviceDeleted(this);
   }
@@ -67,13 +84,28 @@ public class NetDevice : MonoBehaviour {
     return false;
   }
 
-  public void SetRemotePose(Vector3 pos, Quaternion rot, Vector3 scale) {
+  public void SetRemotePose(Vector3 pos, Quaternion rot, Vector3 scale, bool held) {
     if (LocallyGrabbed()) return; // we're holding it: ours wins until we let go
     targetPos = pos; targetRot = rot; targetScale = scale;
     hasRemoteTarget = true;
+    SetRemotelyHeld(held);
+  }
+
+  // Someone else is moving it: its handles can't be grabbed here until they let go
+  // (or nothing has been heard for 2 s, in case the release message never comes).
+  bool remotelyHeld;
+  float remoteHeldTime;
+
+  void SetRemotelyHeld(bool on) {
+    if (on) remoteHeldTime = Time.unscaledTime;
+    if (on == remotelyHeld) return;
+    remotelyHeld = on;
+    if (handles == null) handles = GetComponentsInChildren<handle>(true);
+    NetSync.SetGrabBlocked(handles, on);
   }
 
   void LateUpdate() {
+    if (remotelyHeld && (!NetSync.Active || Time.unscaledTime - remoteHeldTime > 2f)) SetRemotelyHeld(false);
     if (!NetSync.Active || netId == 0) return;
 
     bool grabbed = LocallyGrabbed();
@@ -90,10 +122,10 @@ public class NetDevice : MonoBehaviour {
       float k = 1f - Mathf.Exp(-18f * Time.deltaTime);
       transform.position = Vector3.Lerp(transform.position, targetPos, k);
       transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, k);
-      transform.localScale = Vector3.Lerp(transform.localScale, targetScale, k);
+      NetSync.SetWorldScale(transform, Vector3.Lerp(transform.lossyScale, targetScale, k));
       if ((transform.position - targetPos).sqrMagnitude < 1e-8f && Quaternion.Angle(transform.rotation, targetRot) < .01f) {
         transform.SetPositionAndRotation(targetPos, targetRot);
-        transform.localScale = targetScale;
+        NetSync.SetWorldScale(transform, targetScale);
         hasRemoteTarget = false;
       }
     }

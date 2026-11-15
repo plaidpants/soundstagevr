@@ -43,6 +43,8 @@ public class deviceInterface : componentInterface {
   public virtual void Awake() {
     // distance detail (System/DeviceLOD.cs); builds itself a frame later
     if (GetComponent<DeviceLOD>() == null) gameObject.AddComponent<DeviceLOD>();
+    // multiplayer identity (Net/NetDevice.cs); idle unless a session is running
+    if (GetComponent<NetDevice>() == null) gameObject.AddComponent<NetDevice>();
   }
 
   public virtual void OnMidiNote(int channel, bool on, int pitch) {

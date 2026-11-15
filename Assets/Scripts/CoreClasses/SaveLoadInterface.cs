@@ -40,11 +40,22 @@ public class SaveLoadInterface : MonoBehaviour {
   public void Load(string filename, bool tutorial = false) {
     synthSet = xmlSaveLoad.LoadFromFile(filename);
     masterControl.instance.currentScene = filename;
+    LoadSynthSet(filename, null);
+  }
 
+  // Multiplayer (Net/NetSync): load a patch received over the network. onDevice gets
+  // each device with its index in set.InstrumentList, so both sides can give the same
+  // device the same network ID.
+  public void LoadFromSet(xmlSaveLoad set, System.Action<int, GameObject> onDevice) {
+    synthSet = set;
+    LoadSynthSet(null, onDevice);
+  }
+
+  void LoadSynthSet(string filename, System.Action<int, GameObject> onDevice) {
     float v = systemLoad(synthSet.SystemList[0]);
     UpgradeOldData(synthSet.InstrumentList);
 
-    if (v == 0) {
+    if (v == 0 && filename != null) {
       xmlUpdate _xmlUpdate = new xmlUpdate();
       List<InstrumentData> dataB = _xmlUpdate.UpdateFile(filename);
       UpgradeOldData(dataB);
@@ -58,6 +69,7 @@ public class SaveLoadInterface : MonoBehaviour {
     for (int i = 0; i < c; i++) {
       GameObject g = Instantiate(instrumentPrefabs[synthSet.InstrumentList[c - 1 - i].deviceType], Vector3.zero, Quaternion.identity) as GameObject;
       g.GetComponent<deviceInterface>().Load(synthSet.InstrumentList[c - 1 - i]);
+      if (onDevice != null) onDevice(c - 1 - i, g);
     }
 
     LoadPlugs();
@@ -103,11 +115,13 @@ public class SaveLoadInterface : MonoBehaviour {
     synthSet.SystemList.Clear();
   }
 
-  void systemSave() {
+  void systemSave() { systemSave(synthSet); }
+
+  void systemSave(xmlSaveLoad set) {
     SystemData s = new SystemData();
     s.version = masterControl.versionNumber;
     s.BPM = masterControl.instance.bpm;
-    synthSet.SystemList.Add(s);
+    set.SystemList.Add(s);
   }
 
   float systemLoad(SystemData s, bool justpreview = false) {
@@ -121,20 +135,34 @@ public class SaveLoadInterface : MonoBehaviour {
 
   public void Save(string filename) {
     masterControl.instance.currentScene = filename;
+    BuildSet(null).SaveToFile(filename);
+  }
 
-    if (synthSet == null) synthSet = new xmlSaveLoad();
-    ClearSynthSetList();
-
-    systemSave();
+  // The whole patch as a save-file set. order (optional) gets the device behind each
+  // InstrumentList entry, in the same order (used by multiplayer for network IDs).
+  public xmlSaveLoad BuildSet(List<deviceInterface> order) {
+    xmlSaveLoad set = new xmlSaveLoad();
+    systemSave(set);
     deviceInterface[] devices = FindObjectsOfType(typeof(deviceInterface)) as deviceInterface[];
-    foreach (deviceInterface d in devices) synthSet.InstrumentList.Add(d.GetData());
+    foreach (deviceInterface d in devices) {
+      set.InstrumentList.Add(d.GetData());
+      if (order != null) order.Add(d);
+    }
 
     omniPlug[] plugs = FindObjectsOfType(typeof(omniPlug)) as omniPlug[];
     foreach (omniPlug p in plugs) {
-      synthSet.PlugList.Add(p.GetData());
+      set.PlugList.Add(p.GetData());
     }
+    return set;
+  }
 
-    synthSet.SaveToFile(filename);
+  // One device from its saved data (multiplayer spawn), like Copy without the grab.
+  public GameObject SpawnFromData(InstrumentData data) {
+    GameObject prefab;
+    if (data == null || !instrumentPrefabs.TryGetValue(data.deviceType, out prefab) || prefab == null) return null;
+    GameObject g = Instantiate(prefab, Vector3.zero, Quaternion.identity) as GameObject;
+    g.GetComponent<deviceInterface>().Load(data);
+    return g;
   }
 
   void LoadPlugs() {
