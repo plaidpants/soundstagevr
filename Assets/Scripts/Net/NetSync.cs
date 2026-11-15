@@ -134,6 +134,8 @@ public static class NetSync {
     NetworkServer.RegisterHandler<NetCableMsg>(OnServerCable);
     NetworkServer.RegisterHandler<NetTempoMsg>(NetClock.OnServerTempo);
     NetworkServer.RegisterHandler<NetTapeMsg>(OnServerTape);
+    NetworkServer.RegisterHandler<NetRoomMsg>(NetRoom.OnServer);
+    NetRoom.ServerStarted();
     migrating = false;
     if (keepIds) {
       // taking over after the host left: everyone has this patch with these IDs
@@ -167,6 +169,7 @@ public static class NetSync {
     NetworkClient.RegisterHandler<NetCableMsg>(NetCables.Apply);
     NetworkClient.RegisterHandler<NetClockMsg>(NetClock.Apply);
     NetworkClient.RegisterHandler<NetTapeMsg>(NetTapes.Apply);
+    NetworkClient.RegisterHandler<NetRoomMsg>(NetRoom.Apply);
     NetworkClient.RegisterHandler<NetSuccessionMsg>(m => { if (NetSession.instance != null) NetSession.instance.successionRank = m.rank; });
     pendingByTemp.Clear();
   }
@@ -175,6 +178,7 @@ public static class NetSync {
   public static void ServerSendPatch(NetworkConnectionToClient conn) {
     if (conn == NetworkServer.localConnection) return;
     conn.Send(BuildPatchMsg());
+    if (NetRoom.RoomExists) conn.Send(NetRoom.Current()); // the shared room, to align to
   }
 
   // ---------------- local changes (NetDevice / menus) ----------------
@@ -194,9 +198,13 @@ public static class NetSync {
     }
   }
 
-  public static void LocalDevicePose(NetDevice d, bool final = false) {
+  // final: the resting pose (reliable). drift: moved by something other than a hand
+  // (the example shelf following the player's height, an example landing) - not held,
+  // so the handles stay free on the other headsets.
+  public static void LocalDevicePose(NetDevice d, bool final = false, bool drift = false) {
     if (!Active || d.netId == 0) return;
-    NetPoseMsg m = new NetPoseMsg { netId = d.netId, time = NetworkTime.time, held = !final, pos = d.transform.position, rot = d.transform.rotation, scale = d.transform.lossyScale };
+    d.NoteSynced();
+    NetPoseMsg m = new NetPoseMsg { netId = d.netId, time = NetworkTime.time, held = !final && !drift, pos = d.transform.position, rot = d.transform.rotation, scale = d.transform.lossyScale };
     int channel = final ? Channels.Reliable : Channels.Unreliable;
     if (IsHost) SendToRemotes(m, null, channel);
     else NetworkClient.Send(m, channel);
@@ -237,6 +245,8 @@ public static class NetSync {
     NetCables.Apply(m);
     SendToRemotes(m, conn);
   }
+
+  public static void SendRoomToRemotes(NetRoomMsg m, NetworkConnectionToClient except) { SendToRemotes(m, except); }
 
   public static void SendTape(NetTapeMsg m) {
     if (!Active) return;
@@ -379,6 +389,7 @@ public static class NetSync {
         pendingByTemp.Clear();
         awaitingPatch = false;
         Debug.Log("[NetSync] rejoined the session: same patch (" + ids.Length + " devices), kept");
+        NetRoom.OnJoinedSession();
         return;
       }
       Debug.Log("[NetSync] rejoined the session: the patch differs, loading it");
@@ -390,6 +401,7 @@ public static class NetSync {
     nextId = m.nextId;
     pendingByTemp.Clear();
     awaitingPatch = false;
+    NetRoom.OnJoinedSession();
     Debug.Log("[NetSync] loaded the session's patch (" + (ids != null ? ids.Length : 0) + " devices, " + m.patch.Length / 1024 + " KB)");
   }
 

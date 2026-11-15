@@ -30,6 +30,7 @@ public class wirePanelComponentInterface : componentInterface {
   uiPanelSinglePress msaapanel; // cloned from midipanel at runtime (buttonID 9)
   uiPanelSinglePress envpanel, windpanel, uisoundpanel, skypanel; // right column, buttonIDs 10-13
   uiPanelSinglePress netpanel; // right column row 4, buttonID 14 (Net/NetSession)
+  uiPanelSinglePress roompanel, roommovepanel; // right column rows 5, 6, buttonIDs 15, 16 (Net/NetRoom)
 
   Color colorGreen = Color.HSVToRGB(.4f, 230f / 255, 118f / 255);
   Color colorRed = Color.HSVToRGB(0f, 230f / 255, 118f / 255);
@@ -53,7 +54,10 @@ public class wirePanelComponentInterface : componentInterface {
     uisoundpanel = CloneButton("uiSoundPanel", 12, 2);
     skypanel = CloneButton("skyPanel", 13, 3);
     netpanel = CloneButton("multiplayerPanel", 14, 4);
+    roompanel = CloneButton("roomAlignPanel", 15, 5);
+    roommovepanel = CloneButton("roomMovePanel", 16, 6);
     NetSession.StatusChanged += UpdateNetLabel;
+    NetRoom.Changed += UpdateNetLabel;
     UpdateNetLabel();
     UpdateEnvironmentLabels();
     CreateVersionLabel();
@@ -127,7 +131,7 @@ public class wirePanelComponentInterface : componentInterface {
     g.name = "versionLabel";
     Vector3 p = src.localPosition;
     p.x = (0.1665f + midipanel.transform.localPosition.x) * .5f;
-    p.y = 0.012f + 0.038f * 5;
+    p.y = 0.012f + 0.038f * 7;
     g.transform.localPosition = p;
     g.transform.localScale = src.localScale * .7f;
     g.GetComponent<TextMesh>().text = "SOUNDSTAGE " + Application.version;
@@ -166,10 +170,19 @@ public class wirePanelComponentInterface : componentInterface {
     if (netpanel == null) return;
     netpanel.label.text = NetSession.StatusText();
     netpanel.newColor(NetSession.CurrentMode == NetSession.Mode.Off ? colorRed : colorGreen);
+    if (roompanel != null) {
+      roompanel.label.text = NetRoom.StatusText();
+      roompanel.newColor(NetRoom.InRoom ? colorGreen : colorRed);
+    }
+    if (roommovepanel != null) {
+      roommovepanel.label.text = NetRoom.MoveText();
+      roommovepanel.newColor(NetRoom.InRoom && NetRoom.MoveUnlocked ? colorGreen : colorRed);
+    }
   }
 
   void OnDestroy() {
     NetSession.StatusChanged -= UpdateNetLabel;
+    NetRoom.Changed -= UpdateNetLabel;
   }
 
   void UpdateEnvironmentLabels() {
@@ -260,6 +273,12 @@ public class wirePanelComponentInterface : componentInterface {
     } else if (ID == 11) {
       if (EnvironmentControl.instance != null) EnvironmentControl.instance.SetWind(!EnvironmentControl.instance.WindOn);
       UpdateEnvironmentLabels();
+    } else if (ID == 15) {
+      NetRoom.AlignButton();
+      UpdateNetLabel();
+    } else if (ID == 16) {
+      NetRoom.MoveButton();
+      UpdateNetLabel();
     } else if (ID == 14) {
       NetSession.SetMode(NetSession.CurrentMode == NetSession.Mode.Off ? NetSession.Mode.Local : NetSession.Mode.Off);
       UpdateNetLabel();

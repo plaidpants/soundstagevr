@@ -172,6 +172,8 @@ public class NetDevice : MonoBehaviour {
     }
     wasGrabbed = grabbed;
 
+    if (!grabbed && !hasRemoteTarget) CheckDrift();
+
     if (hasRemoteTarget) {
       float k = 1f - Mathf.Exp(-18f * Time.deltaTime);
       predict.Apply(transform, Time.deltaTime); // carried forward to now while it's moving
@@ -181,6 +183,41 @@ public class NetDevice : MonoBehaviour {
         predict.Reset();
         hasRemoteTarget = false;
       }
+      NoteSynced(); // what another player put here isn't a move of ours
+    }
+  }
+
+  // ---- moves nobody's hand made ----
+  // Devices also move by themselves: the start example rides on the example shelf, which
+  // rises to the player's height once the headset is put on (a headset lying on the floor
+  // starts it low), and a loaded example glides into place. Those moves went unnoticed,
+  // so the devices ended up at different heights on different headsets. Any change from
+  // the last pose sent / received is now sent too (20 a second while it moves, the
+  // resting pose reliably once it has stopped for a quarter second).
+  Vector3 syncedPos, syncedScale;
+  Quaternion syncedRot;
+  bool haveSynced;
+  float driftSendTimer, driftStill;
+  bool drifting;
+
+  public void NoteSynced() {
+    syncedPos = transform.position; syncedRot = transform.rotation; syncedScale = transform.lossyScale;
+    haveSynced = true;
+  }
+
+  void CheckDrift() {
+    if (!haveSynced) { NoteSynced(); return; }
+    bool moved = (transform.position - syncedPos).sqrMagnitude > 1e-6f ||
+                 Quaternion.Angle(transform.rotation, syncedRot) > .1f ||
+                 (transform.lossyScale - syncedScale).sqrMagnitude > 1e-6f;
+    driftSendTimer += Time.unscaledDeltaTime;
+    if (moved) {
+      drifting = true;
+      driftStill = 0;
+      if (driftSendTimer >= 1f / NetSync.poseRate) { driftSendTimer = 0; NetSync.LocalDevicePose(this, false, true); }
+    } else if (drifting) {
+      driftStill += Time.unscaledDeltaTime;
+      if (driftStill > .25f) { drifting = false; NetSync.LocalDevicePose(this, true); }
     }
   }
 }

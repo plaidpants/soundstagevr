@@ -334,6 +334,7 @@ public class SoundStageNetworkManager : NetworkManager {
     Debug.Log("[NetSession] player left: " + conn.address);
     base.OnServerDisconnect(conn);
     NetSync.SendSuccession();
+    NetRoom.ServerDisconnected(conn);
   }
 
   public override void OnClientDisconnect() {

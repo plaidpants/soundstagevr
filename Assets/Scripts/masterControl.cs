@@ -217,12 +217,17 @@ public class masterControl : MonoBehaviour {
   public bool examplesOn = true;
   public bool toggleExamples() {
     examplesOn = !examplesOn;
-    exampleSetups.SetActive(examplesOn);
 
     if (!examplesOn) {
+      // hide only the shelf and logo: the example's devices stay where they are (they
+      // were children of exampleParent and went with it)
       GameObject prevParent = GameObject.Find("exampleParent");
-      if (prevParent != null) Destroy(prevParent);
+      if (prevParent != null) {
+        for (int i = prevParent.transform.childCount - 1; i >= 0; i--) prevParent.transform.GetChild(i).SetParent(null, true);
+        Destroy(prevParent);
+      }
     }
+    exampleSetups.SetActive(examplesOn);
     return examplesOn;
   }
 

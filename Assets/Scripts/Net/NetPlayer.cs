@@ -26,6 +26,7 @@ public struct HandsPacket {
   public Vector3 leftPos, rightPos;
   public uint leftRot, rightRot;
   public uint[] leftBones, rightBones;
+  public float leftScale, rightScale; // hand size (tracked hands)
 }
 
 public class NetPlayer : NetworkBehaviour {
@@ -62,7 +63,16 @@ public class NetPlayer : NetworkBehaviour {
   void OnDisable() { all.Remove(this); }
 
   public override void OnStartServer() {
-    color = palette[(connectionToClient != null ? connectionToClient.connectionId : 0) % palette.Length];
+    // the first colour no other player has (connection IDs aren't 0, 1, 2..., so taking
+    // one modulo the palette could give two players the same colour)
+    int pick = 0;
+    for (int i = 0; i < palette.Length; i++) {
+      bool used = false;
+      foreach (NetPlayer p in all) if (p != null && p != this && p.color == palette[i]) used = true;
+      if (!used) { pick = i; break; }
+      pick = (i + 1) % palette.Length;
+    }
+    color = palette[pick];
   }
 
   public override void OnStartClient() {
@@ -84,6 +94,34 @@ public class NetPlayer : NetworkBehaviour {
     if (block == null) block = new MaterialPropertyBlock();
     block.SetColor("_Color", color);
     foreach (Renderer r in parts) if (r != null) r.SetPropertyBlock(block);
+  }
+
+  // Passthrough shows the camera feed wherever the picture's alpha is 0, which the
+  // avatars' glow materials leave it: an extra material on every renderer of a remote
+  // player marks it solid in alpha only (Resources/Net/NetAlphaWrite.shader), so other
+  // players stay visible in passthrough. Checked now and then (hands are built later).
+  static Material alphaWrite;
+  readonly HashSet<Renderer> solid = new HashSet<Renderer>();
+  float solidTimer = 1;
+  void MarkSolid() {
+    solidTimer += Time.unscaledDeltaTime;
+    if (solidTimer < 1) return;
+    solidTimer = 0;
+    if (alphaWrite == null) {
+      Shader sh = Resources.Load<Shader>("Net/NetAlphaWrite");
+      if (sh == null) return;
+      alphaWrite = new Material(sh);
+    }
+    foreach (Renderer r in GetComponentsInChildren<Renderer>(true)) {
+      if (r == null || solid.Contains(r) || r is ParticleSystemRenderer) continue;
+      Material[] ms = r.sharedMaterials;
+      if (System.Array.IndexOf(ms, alphaWrite) >= 0) { solid.Add(r); continue; }
+      Material[] more = new Material[ms.Length + 1];
+      ms.CopyTo(more, 0);
+      more[ms.Length] = alphaWrite;
+      r.sharedMaterials = more;
+      solid.Add(r);
+    }
   }
 
   // The camera device (recording / broadcast) shows everyone's headset as the plain
@@ -118,6 +156,7 @@ public class NetPlayer : NetworkBehaviour {
   void LateUpdate() {
     if (isLocalPlayer) { LocalUpdate(); return; }
     if (!headPredict.Has) return;
+    MarkSolid();
     float dt = Time.deltaTime;
     headPredict.Apply(head, dt);
     leftPredict.Apply(leftHand, dt);
@@ -142,8 +181,8 @@ public class NetPlayer : NetworkBehaviour {
     if (l != null) { p.leftOn = l.gameObject.activeInHierarchy; p.leftPos = l.position; p.leftRot = Compression.CompressQuaternion(l.rotation); }
     if (r != null) { p.rightOn = r.gameObject.activeInHierarchy; p.rightPos = r.position; p.rightRot = Compression.CompressQuaternion(r.rotation); }
     if (p.handTracking) {
-      p.leftBones = ReadBones(OVRPlugin.Hand.HandLeft, ref p.leftOn);
-      p.rightBones = ReadBones(OVRPlugin.Hand.HandRight, ref p.rightOn);
+      p.leftBones = ReadBones(OVRPlugin.Hand.HandLeft, ref p.leftOn, out p.leftScale);
+      p.rightBones = ReadBones(OVRPlugin.Hand.HandRight, ref p.rightOn, out p.rightScale);
     }
 
     if (isServer) RpcHands(p);
@@ -170,13 +209,15 @@ public class NetPlayer : NetworkBehaviour {
     return mp != null && mp.controllerRep != null ? mp.controllerRep.transform : null;
   }
 
-  static uint[] ReadBones(OVRPlugin.Hand which, ref bool on) {
+  static uint[] ReadBones(OVRPlugin.Hand which, ref bool on, out float scale) {
+    scale = 1f;
     if (!OVRPlugin.GetHandState(OVRPlugin.Step.Render, which, ref handState) ||
         (handState.Status & OVRPlugin.HandStatus.HandTracked) == 0 ||
         handState.BoneRotations == null) {
       on = false;
       return null;
     }
+    scale = handState.HandScale;
     uint[] packed = new uint[handState.BoneRotations.Length];
     for (int i = 0; i < packed.Length; i++) {
       OVRPlugin.Quatf q = handState.BoneRotations[i];
@@ -206,6 +247,7 @@ public class NetPlayer : NetworkBehaviour {
     headPredict.Feed(p.headPos, Compression.DecompressQuaternion(p.headRot), p.time);
     leftPredict.Feed(p.leftPos, Compression.DecompressQuaternion(p.leftRot), p.time);
     rightPredict.Feed(p.rightPos, Compression.DecompressQuaternion(p.rightRot), p.time);
+    if (p.handTracking) { leftNet.SetScale(p.leftScale); rightNet.SetScale(p.rightScale); }
     leftNet.SetBones(p.leftBones);
     rightNet.SetBones(p.rightBones);
     leftNet.Show(p.handTracking, p.leftOn);

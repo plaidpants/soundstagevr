@@ -31,7 +31,7 @@ public class SnapTurn : MonoBehaviour {
   }
 
   void Update() {
-    if (!Enabled || platformSetup.calibrating) return;
+    if (!Enabled || platformSetup.calibrating || NetRoom.StickBlocked) return; // shared room: Net/NetRoom.cs
     if (rig == null) { rig = FindObjectOfType<OVRCameraRig>(); if (rig == null) return; }
     if (rightHand == null) {
       foreach (manipulator m in FindObjectsOfType<manipulator>()) if (!m.IsLeftHand) rightHand = m;

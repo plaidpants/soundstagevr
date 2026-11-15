@@ -53,6 +53,7 @@ public class ArtificialVRMovement : MonoBehaviour
         Vector2 stick = OVRInput.Get(OVRInput.Axis2D.PrimaryThumbstick, OVRInput.Controller.LTouch);
         if (stick.magnitude < deadZone) return;
         if (platformSetup.calibrating) return;
+        if (NetRoom.StickBlocked) return; // aligned to a shared room (Net/NetRoom.cs)
         if (leftHand == null)
         {
             foreach (manipulator m in FindObjectsOfType<manipulator>()) if (m.IsLeftHand) leftHand = m;

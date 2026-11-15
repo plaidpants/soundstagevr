@@ -40,6 +40,15 @@ public class NetHand : MonoBehaviour {
     handVisible = visible && handTracking;
   }
 
+  // the player's own hand size (OVRPlugin's HandScale): without it every remote hand
+  // was drawn at the default size, smaller than most people's real hands
+  float scale = 1f;
+  public void SetScale(float s) {
+    if (s < .5f || s > 2f) return;
+    scale = s;
+    if (handObj != null) handObj.transform.localScale = Vector3.one * s;
+  }
+
   public void SetBones(uint[] packed) {
     if (packed == null || packed.Length == 0) { bonesValid = false; return; }
     if (bones == null || bones.Length != packed.Length) bones = new OVRPlugin.Quatf[packed.Length];
@@ -66,6 +75,7 @@ public class NetHand : MonoBehaviour {
     handObj.transform.SetParent(transform, false);
     handObj.transform.localPosition = Vector3.zero;
     handObj.transform.localRotation = Quaternion.identity;
+    handObj.transform.localScale = Vector3.one * scale;
     Destroy(holder);
   }
 
@@ -105,7 +115,7 @@ public class NetHand : MonoBehaviour {
   public OVRSkeleton.SkeletonPoseData GetSkeletonPoseData() {
     return new OVRSkeleton.SkeletonPoseData {
       RootPose = OVRPlugin.Posef.identity,
-      RootScale = 1f,
+      RootScale = scale,
       BoneRotations = bones,
       IsDataValid = bonesValid && bones != null,
       IsDataHighConfidence = bonesValid,
