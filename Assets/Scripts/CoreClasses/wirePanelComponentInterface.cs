@@ -29,6 +29,7 @@ public class wirePanelComponentInterface : componentInterface {
   uiPanelSinglePress brightnesspanel; // cloned from midipanel at runtime (buttonID 8)
   uiPanelSinglePress msaapanel; // cloned from midipanel at runtime (buttonID 9)
   uiPanelSinglePress envpanel, windpanel, uisoundpanel, skypanel; // right column, buttonIDs 10-13
+  uiPanelSinglePress netpanel; // right column row 4, buttonID 14 (Net/NetSession)
 
   Color colorGreen = Color.HSVToRGB(.4f, 230f / 255, 118f / 255);
   Color colorRed = Color.HSVToRGB(0f, 230f / 255, 118f / 255);
@@ -51,6 +52,9 @@ public class wirePanelComponentInterface : componentInterface {
     windpanel = CloneButton("windPanel", 11, 1);
     uisoundpanel = CloneButton("uiSoundPanel", 12, 2);
     skypanel = CloneButton("skyPanel", 13, 3);
+    netpanel = CloneButton("multiplayerPanel", 14, 4);
+    NetSession.StatusChanged += UpdateNetLabel;
+    UpdateNetLabel();
     UpdateEnvironmentLabels();
     CreateVersionLabel();
     if (PlayerPrefs.GetInt("midiOut") == 1) {
@@ -66,6 +70,7 @@ public class wirePanelComponentInterface : componentInterface {
   void CreatePassthroughButton() {
     if (passthroughpanel != null || midipanel == null) return;
     GameObject g = Instantiate(midipanel.gameObject, midipanel.transform.parent, false);
+    HideMidiNote(g);
     g.name = "passthroughPanel";
     g.transform.localPosition = AboveTop(0, midipanel.transform.localPosition.x);
     g.transform.localRotation = midipanel.transform.localRotation;
@@ -78,6 +83,7 @@ public class wirePanelComponentInterface : componentInterface {
   void CreateGlowQualityButton() {
     if (glowqualitypanel != null || midipanel == null) return;
     GameObject g = Instantiate(midipanel.gameObject, midipanel.transform.parent, false);
+    HideMidiNote(g);
     g.name = "glowQualityPanel";
     g.transform.localPosition = AboveTop(1, midipanel.transform.localPosition.x);
     g.transform.localRotation = midipanel.transform.localRotation;
@@ -90,6 +96,7 @@ public class wirePanelComponentInterface : componentInterface {
   void CreateBrightnessButton() {
     if (brightnesspanel != null || midipanel == null) return;
     GameObject g = Instantiate(midipanel.gameObject, midipanel.transform.parent, false);
+    HideMidiNote(g);
     g.name = "brightnessPanel";
     g.transform.localPosition = AboveTop(2, midipanel.transform.localPosition.x);
     g.transform.localRotation = midipanel.transform.localRotation;
@@ -102,6 +109,7 @@ public class wirePanelComponentInterface : componentInterface {
   void CreateMsaaButton() {
     if (msaapanel != null || midipanel == null) return;
     GameObject g = Instantiate(midipanel.gameObject, midipanel.transform.parent, false);
+    HideMidiNote(g);
     g.name = "msaaPanel";
     g.transform.localPosition = AboveTop(3, midipanel.transform.localPosition.x);
     g.transform.localRotation = midipanel.transform.localRotation;
@@ -119,10 +127,16 @@ public class wirePanelComponentInterface : componentInterface {
     g.name = "versionLabel";
     Vector3 p = src.localPosition;
     p.x = (0.1665f + midipanel.transform.localPosition.x) * .5f;
-    p.y = 0.012f + 0.038f * 4;
+    p.y = 0.012f + 0.038f * 5;
     g.transform.localPosition = p;
     g.transform.localScale = src.localScale * .7f;
     g.GetComponent<TextMesh>().text = "SOUNDSTAGE " + Application.version;
+  }
+
+  // Buttons cloned from MIDI OUT also copy its "(REQUIRES VIRTUAL MIDI DEVICE)" note.
+  static void HideMidiNote(GameObject g) {
+    foreach (TextMesh t in g.GetComponentsInChildren<TextMesh>(true))
+      if (t.text.Contains("REQUIRES")) t.gameObject.SetActive(false);
   }
 
   // The added buttons stack upward from the top of the panel (rows 0,1,2... going up),
@@ -138,6 +152,7 @@ public class wirePanelComponentInterface : componentInterface {
   uiPanelSinglePress CloneButton(string name, int id, int row) {
     if (midipanel == null) return null;
     GameObject g = Instantiate(midipanel.gameObject, midipanel.transform.parent, false);
+    HideMidiNote(g);
     g.name = name;
     g.transform.localPosition = AboveTop(row, 0.1665f);
     g.transform.localRotation = midipanel.transform.localRotation;
@@ -145,6 +160,16 @@ public class wirePanelComponentInterface : componentInterface {
     uiPanelSinglePress u = g.GetComponent<uiPanelSinglePress>();
     u.buttonID = id;
     return u;
+  }
+
+  void UpdateNetLabel() {
+    if (netpanel == null) return;
+    netpanel.label.text = NetSession.StatusText();
+    netpanel.newColor(NetSession.CurrentMode == NetSession.Mode.Off ? colorRed : colorGreen);
+  }
+
+  void OnDestroy() {
+    NetSession.StatusChanged -= UpdateNetLabel;
   }
 
   void UpdateEnvironmentLabels() {
@@ -235,6 +260,9 @@ public class wirePanelComponentInterface : componentInterface {
     } else if (ID == 11) {
       if (EnvironmentControl.instance != null) EnvironmentControl.instance.SetWind(!EnvironmentControl.instance.WindOn);
       UpdateEnvironmentLabels();
+    } else if (ID == 14) {
+      NetSession.SetMode(NetSession.CurrentMode == NetSession.Mode.Off ? NetSession.Mode.Local : NetSession.Mode.Off);
+      UpdateNetLabel();
     } else if (ID == 13) {
       if (EnvironmentControl.instance != null) EnvironmentControl.instance.CycleSky();
       UpdateEnvironmentLabels();

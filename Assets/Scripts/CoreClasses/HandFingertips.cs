@@ -42,8 +42,10 @@ public class HandFingertips : MonoBehaviour {
   // same additive glow shader as the module displays for faint "ghost" hands. Must be set
   // before OVRMeshRenderer initialises, since it remembers the original material.
   public static Color handTint = new Color(0.04f, 0.07f, 0.12f, 0.5f);
-  void ApplyGlowMaterial() {
-    SkinnedMeshRenderer smr = GetComponent<SkinnedMeshRenderer>();
+  void ApplyGlowMaterial() { ApplyGlowMaterial(GetComponent<SkinnedMeshRenderer>()); }
+
+  // Also used for other players' hands (Net/NetHand).
+  public static void ApplyGlowMaterial(SkinnedMeshRenderer smr) {
     Shader sh = Shader.Find("Sonic Ether/Particles/Additive");
     if (smr == null || sh == null) return;
     Material m = new Material(sh);
