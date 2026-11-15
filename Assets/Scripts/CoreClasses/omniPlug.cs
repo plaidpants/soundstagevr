@@ -362,6 +362,7 @@ public class omniPlug : manipObject {
     }
 
     collCandidates.Clear();
+    NetCables.LocalCablesChanged(); // multiplayer: share what changed
   }
 
   void OnCollisionEnter(Collision coll) {

@@ -10,6 +10,8 @@ using System.Collections.Generic;
 public static class TouchTracker {
   static readonly Dictionary<manipObject, int> counts = new Dictionary<manipObject, int>();
 
+  public static bool IsTouched(manipObject o) { return o != null && counts.ContainsKey(o); }
+
   public static void Touch(manipObject o, bool on, manipulator m) {
     if (o == null) return;
     int c;

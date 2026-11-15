@@ -71,6 +71,9 @@ public static class NetSync {
     NetworkServer.RegisterHandler<NetDeleteMsg>(OnServerDelete);
     NetworkServer.RegisterHandler<NetPatchUploadMsg>(OnServerPatchUpload);
     NetworkServer.RegisterHandler<NetToolMsg>(OnServerTool);
+    NetworkServer.RegisterHandler<NetControlMsg>(OnServerControl);
+    NetworkServer.RegisterHandler<NetCableMsg>(OnServerCable);
+    NetworkServer.RegisterHandler<NetTempoMsg>(NetClock.OnServerTempo);
     // a new session: the host's devices get fresh IDs
     nextId = 1;
     NetDevice.byId.Clear();
@@ -79,6 +82,7 @@ public static class NetSync {
       d.netId = 0;
       if (d.IsDevice && !d.silentDestroy) d.SetId(nextId++);
     }
+    NetCables.ForgetKnown();
     Debug.Log("[NetSync] hosting a patch of " + NetDevice.byId.Count + " devices");
   }
 
@@ -89,6 +93,9 @@ public static class NetSync {
     NetworkClient.RegisterHandler<NetPoseMsg>(OnClientPose);
     NetworkClient.RegisterHandler<NetDeleteMsg>(OnClientDelete);
     NetworkClient.RegisterHandler<NetToolMsg>(NetTools.Apply);
+    NetworkClient.RegisterHandler<NetControlMsg>(NetControls.Apply);
+    NetworkClient.RegisterHandler<NetCableMsg>(NetCables.Apply);
+    NetworkClient.RegisterHandler<NetClockMsg>(NetClock.Apply);
     pendingByTemp.Clear();
   }
 
@@ -131,6 +138,34 @@ public static class NetSync {
     else NetworkClient.Send(m);
   }
 
+  public static void SendControl(NetControlMsg m, bool reliable) {
+    if (!Active) return;
+    int channel = reliable ? Channels.Reliable : Channels.Unreliable;
+    if (IsHost) SendToRemotes(m, null, channel);
+    else NetworkClient.Send(m, channel);
+  }
+
+  static void OnServerControl(NetworkConnectionToClient conn, NetControlMsg m) {
+    NetControls.Apply(m);
+    SendToRemotes(m, conn);
+  }
+
+  // host only: the shared clock, unreliable (the next one replaces a lost one)
+  public static void SendClock(NetClockMsg m) {
+    if (IsHost) SendToRemotes(m, null, Channels.Unreliable);
+  }
+
+  public static void SendCable(NetCableMsg m) {
+    if (!Active) return;
+    if (IsHost) SendToRemotes(m, null);
+    else NetworkClient.Send(m);
+  }
+
+  static void OnServerCable(NetworkConnectionToClient conn, NetCableMsg m) {
+    NetCables.Apply(m);
+    SendToRemotes(m, conn);
+  }
+
   public static void SendTool(NetToolMsg m) {
     if (!Active) return;
     int channel = m.held ? Channels.Unreliable : Channels.Reliable;
@@ -161,6 +196,7 @@ public static class NetSync {
     if (!Active) yield break;
     if (IsHost) {
       AssignAllIds(); // loads create devices silently: number them all
+      NetCables.ForgetKnown();
 
       SendToRemotes(BuildPatchMsg(), null);
       Debug.Log("[NetSync] patch replaced here: sent to everyone");
@@ -199,7 +235,18 @@ public static class NetSync {
     xmlSaveLoad set = xmlSaveLoad.FromBytes(m.patch);
     ReplacePatch(set, null);
     AssignAllIds();
-    SendToRemotes(BuildPatchMsg(), null); // everyone, uploader included, so IDs match
+    NetCables.ForgetKnown();
+    // everyone, uploader included, so IDs match - but only once the new devices have
+    // run their first Update: some (the oscillator's LFO switch) only take a loaded
+    // setting into the value they save there, so saving them at once lost it
+    if (NetSession.instance != null) NetSession.instance.StartCoroutine(SharePatchSoon());
+  }
+
+  static IEnumerator SharePatchSoon() {
+    yield return null;
+    yield return null;
+    if (!IsHost) yield break;
+    SendToRemotes(BuildPatchMsg(), null);
     Debug.Log("[NetSync] a player loaded a patch: shared with everyone");
   }
 
@@ -294,6 +341,7 @@ public static class NetSync {
 
       NetDevice.silentCreate = true;
       SaveLoadInterface.instance.LoadFromSet(set, onDevice);
+      NetCables.ForgetKnown();
     } finally {
       NetDevice.silentCreate = false;
       applyingPatch = false;
@@ -309,6 +357,23 @@ public static class NetSync {
     catch (System.Exception e) { Debug.LogError("[NetSync] creating " + d.deviceType + " failed: " + e); }
     finally { NetDevice.silentCreate = false; }
     return g != null ? g.GetComponent<NetDevice>() : null;
+  }
+
+  // A device's saved data without its place or instance IDs, hashed (NetDevice content
+  // check).
+  public static int ContentHash(deviceInterface di, out menuItem.deviceType type) {
+    InstrumentData data = di.GetData();
+    type = data.deviceType;
+    data.position = Vector3.zero; data.rotation = Quaternion.identity; data.scale = Vector3.one; data.ID = 0;
+    using (var ms = new MemoryStream()) {
+      using (var w = new StreamWriter(ms, new UTF8Encoding(false))) deviceSerializer.Serialize(w, data);
+      byte[] b = ms.ToArray();
+      unchecked {
+        int h = (int)2166136261;
+        for (int i = 0; i < b.Length; i++) h = (h ^ b[i]) * 16777619;
+        return h;
+      }
+    }
   }
 
   static readonly XmlSerializer deviceSerializer = new XmlSerializer(typeof(InstrumentData));

@@ -148,6 +148,7 @@ public class button : manipObject {
 
   public bool isHit = false;
   public void keyHit(bool on) {
+    NetControls.ButtonHit(this, on); // multiplayer: presses made here by a player
     isHit = on;
     toggled = on;
 

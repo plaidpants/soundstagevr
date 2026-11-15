@@ -54,7 +54,15 @@ public class key : manipObject {
     if (on != isHit) {
       isHit = on;
       _deviceInterface.hit(on, keyValue);
+      NetControls.KeyHit(this, on); // multiplayer
     }
+  }
+
+  // Multiplayer: another player pressed / released this key (Net/NetControls).
+  public void NetSetHit(bool on) {
+    if (!initialized || on == isHit) return;
+    _deviceInterface.hit(on, keyValue);
+    phantomHit(on);
   }
 
   enum keyState {

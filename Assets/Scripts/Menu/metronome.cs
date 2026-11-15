@@ -44,6 +44,7 @@ public class metronome : componentInterface {
   }
 
   public override void hit(bool on, int ID = -1) {
+    NetClock.LocalMetronome(ID, on); // multiplayer: start / stop / reset for everyone
     if (ID == 0) masterControl.instance.toggleBeatUpdate(on);
     if (ID == 1 && on) masterControl.instance.resetClock();
   }

@@ -104,9 +104,45 @@ public class NetDevice : MonoBehaviour {
     NetSync.SetGrabBlocked(handles, on);
   }
 
+  // ---- content that no control message carries ----
+  // Some devices hold content edited in ways that aren't individual controls (notes
+  // drawn into a timeline, the keyboard's and the xylophone's piano rolls). Once a second their saved data
+  // is compared with what it was; a change that no network message explains (applying
+  // or sending one resets the comparison) means a player here edited it, and the whole
+  // patch is shared again.
+  static readonly HashSet<menuItem.deviceType> contentTypes = new HashSet<menuItem.deviceType> {
+    menuItem.deviceType.Timeline, menuItem.deviceType.XyloRoll,
+    menuItem.deviceType.Keyboard // its built-in sequencer is a timeline
+  };
+  float contentTimer;
+  int contentKind; // 0 unknown, 1 checked, 2 not a content device
+  int contentHash;
+  bool haveContentHash;
+
+  public void Rebaseline() { haveContentHash = false; }
+
+  void CheckContent() {
+    contentTimer += Time.unscaledDeltaTime;
+    if (contentTimer < 1f) return;
+    contentTimer = 0;
+    deviceInterface di = GetComponent<deviceInterface>();
+    if (di == null) return;
+    if (contentKind == 0) contentKind = contentTypes.Contains(di.GetData().deviceType) ? 1 : 2;
+    if (contentKind != 1) return; // not a device with free-form content
+    foreach (manipObject m in GetComponentsInChildren<manipObject>(true))
+      if (m.curState == manipObject.manipState.grabbed) return; // wait until they let go
+    int h = NetSync.ContentHash(di, out _);
+    if (!haveContentHash) { contentHash = h; haveContentHash = true; return; }
+    if (h == contentHash) return;
+    contentHash = h;
+    Debug.Log("[NetDevice] " + name + " content changed here: sharing the patch");
+    NetSync.LocalPatchReplaced();
+  }
+
   void LateUpdate() {
     if (remotelyHeld && (!NetSync.Active || Time.unscaledTime - remoteHeldTime > 2f)) SetRemotelyHeld(false);
     if (!NetSync.Active || netId == 0) return;
+    CheckContent();
 
     bool grabbed = LocallyGrabbed();
     if (grabbed) {

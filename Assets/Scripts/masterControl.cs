@@ -267,13 +267,54 @@ public class masterControl : MonoBehaviour {
     }
   }
 
+  // Multiplayer (Net/NetClock.cs): the measure position in seconds, and corrections
+  // towards the host's clock, applied on the audio thread: AdjustClock jumps (joining,
+  // a reset), SlewClock runs the clock up to 3% fast or slow until the gap is closed,
+  // so no beat is skipped or played twice.
+  public double MeasurePhaseSeconds { get { return _measurePhase; } }
+  public bool BeatRunning { get { return beatUpdateRunning; } }
+  volatile bool clockAdjustPending;
+  double clockAdjust;
+  public void AdjustClock(double seconds) {
+    clockAdjust = seconds;
+    clockAdjustPending = true;
+    SlewClock(0);
+  }
+  public static double maxSlewRate = .03;
+  volatile bool clockSlewPending;
+  double clockSlewRequest, clockSlewLeft;
+  public void SlewClock(double seconds) {
+    clockSlewRequest = seconds;
+    clockSlewPending = true;
+  }
+
   private void OnAudioFilterRead(float[] buffer, int channels) {
     if (!beatUpdateRunning) return;
     double dspTime = AudioSettings.dspTime;
+    if (clockAdjustPending) {
+      clockAdjustPending = false;
+      _measurePhase += clockAdjust;
+      while (_measurePhase >= measurePeriod) _measurePhase -= measurePeriod;
+      while (_measurePhase < 0) _measurePhase += measurePeriod;
+    }
+    if (clockSlewPending) {
+      clockSlewPending = false;
+      clockSlewLeft = clockSlewRequest;
+    }
+    double step = _sampleDuration;
+    if (clockSlewLeft != 0) {
+      int frames = buffer.Length / channels;
+      double rate = clockSlewLeft / (frames * _sampleDuration);
+      if (rate > maxSlewRate) rate = maxSlewRate;
+      if (rate < -maxSlewRate) rate = -maxSlewRate;
+      step = _sampleDuration * (1 + rate);
+      clockSlewLeft -= frames * _sampleDuration * rate;
+      if (System.Math.Abs(clockSlewLeft) < 1e-6) clockSlewLeft = 0;
+    }
 
     for (int i = 0; i < buffer.Length; i += channels) {
       beatUpdateEvent(curCycle);
-      _measurePhase += _sampleDuration;
+      _measurePhase += step;
       if (_measurePhase > measurePeriod) _measurePhase -= measurePeriod;
       curCycle = (float)(_measurePhase / measurePeriod);
     }

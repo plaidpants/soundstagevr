@@ -90,6 +90,7 @@ public class drumpad : MonoBehaviour {
   Coroutine offCoroutine;
   public bool isHit = false;
   public void keyHit(bool on, float velocity = 1f) {
+    if (on) NetControls.DrumHit(this, velocity); // multiplayer: hits made here
     isHit = on;
     if (on) {
       drumDeviceInterface drum = _deviceInterface as drumDeviceInterface;
