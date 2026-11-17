@@ -170,7 +170,10 @@ public class NetPlayer : NetworkBehaviour {
     if (h != null) head.SetPositionAndRotation(h.position, h.rotation);
 
     sendTimer += Time.unscaledDeltaTime;
-    if (sendTimer < 1f / sendRate) return;
+    // over the internet relay (metered bandwidth) 12 poses a second instead of 20;
+    // prediction covers the gaps, and the link's own delay is far bigger anyway
+    float rate = Transport.active is UtpRelayTransport ? Mathf.Min(sendRate, 12f) : sendRate;
+    if (sendTimer < 1f / rate) return;
     sendTimer = 0;
 
     HandsPacket p = new HandsPacket();

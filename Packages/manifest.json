@@ -8,6 +8,7 @@
     "com.unity.ide.vscode": "1.2.5",
     "com.unity.mobile.android-logcat": "1.4.7",
     "com.unity.nuget.newtonsoft-json": "3.2.2",
+    "com.unity.services.multiplayer": "2.2.3",
     "com.unity.test-framework": "1.1.33",
     "com.unity.textmeshpro": "3.0.9",
     "com.unity.timeline": "1.7.7",

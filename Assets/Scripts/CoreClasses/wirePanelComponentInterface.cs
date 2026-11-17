@@ -32,6 +32,7 @@ public class wirePanelComponentInterface : componentInterface {
   uiPanelSinglePress netpanel; // right column row 4, buttonID 14 (Net/NetSession)
   uiPanelSinglePress roompanel, roommovepanel; // right column rows 5, 6, buttonIDs 15, 16 (Net/NetRoom)
   uiPanelSinglePress harnesspanel; // right column row 8, buttonID 18: the test harness (TestHarness)
+  uiPanelSinglePress internetroompanel; // right column row 9, buttonID 19: internet room 1-9 (NetInternet)
   uiPanelSinglePress binauralpanel; // right column row 7, buttonID 17: 3D audio off / speakers / all
 
   Color colorGreen = Color.HSVToRGB(.4f, 230f / 255, 118f / 255);
@@ -62,6 +63,7 @@ public class wirePanelComponentInterface : componentInterface {
     UpdateBinauralLabel();
     harnesspanel = CloneButton("harnessPanel", 18, 8);
     UpdateHarnessLabel();
+    internetroompanel = CloneButton("internetRoomPanel", 19, 9);
     TestHarness.Changed += UpdateHarnessLabel;
     NetSession.StatusChanged += UpdateNetLabel;
     NetRoom.Changed += UpdateNetLabel;
@@ -138,7 +140,7 @@ public class wirePanelComponentInterface : componentInterface {
     g.name = "versionLabel";
     Vector3 p = src.localPosition;
     p.x = (0.1665f + midipanel.transform.localPosition.x) * .5f;
-    p.y = 0.012f + 0.038f * 9;
+    p.y = 0.012f + 0.038f * 10;
     g.transform.localPosition = p;
     g.transform.localScale = src.localScale * .7f;
     g.GetComponent<TextMesh>().text = "SOUNDSTAGE " + Application.version;
@@ -177,6 +179,11 @@ public class wirePanelComponentInterface : componentInterface {
     if (netpanel == null) return;
     netpanel.label.text = NetSession.StatusText();
     netpanel.newColor(NetSession.CurrentMode == NetSession.Mode.Off ? colorRed : colorGreen);
+    if (internetroompanel != null) {
+      bool internet = NetSession.CurrentMode == NetSession.Mode.Internet;
+      internetroompanel.label.text = (internet ? "INTERNET ROOM: " : "INTERNET ROOM (OFF): ") + NetInternet.Room;
+      internetroompanel.newColor(internet ? colorGreen : colorRed);
+    }
     if (roompanel != null) {
       roompanel.label.text = NetRoom.StatusText();
       roompanel.newColor(NetRoom.InRoom ? colorGreen : colorRed);
@@ -307,7 +314,10 @@ public class wirePanelComponentInterface : componentInterface {
       NetRoom.MoveButton();
       UpdateNetLabel();
     } else if (ID == 14) {
-      NetSession.SetMode(NetSession.CurrentMode == NetSession.Mode.Off ? NetSession.Mode.Local : NetSession.Mode.Off);
+      NetSession.CycleMode(); // OFF -> LOCAL -> INTERNET
+      UpdateNetLabel();
+    } else if (ID == 19) {
+      NetSession.NextRoom();
       UpdateNetLabel();
     } else if (ID == 13) {
       if (EnvironmentControl.instance != null) EnvironmentControl.instance.CycleSky();
