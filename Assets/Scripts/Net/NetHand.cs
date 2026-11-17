@@ -40,8 +40,20 @@ public class NetHand : MonoBehaviour {
   Transform[] dots;
   LineRenderer[] fingers;
 
+  // With a headset runtime but no hand model from it (PC over Link without hand tracking
+  // over Link: the hand gets built but its mesh never comes), dots are used too.
+  bool meshFailed;
+  float handBuiltAt;
+  bool UseDots { get { return NoRuntime || meshFailed; } }
+
+  bool HandMeshReady() {
+    if (handObj == null) return false;
+    SkinnedMeshRenderer r = handObj.GetComponent<SkinnedMeshRenderer>();
+    return r != null && r.sharedMesh != null && r.sharedMesh.vertexCount > 0;
+  }
+
   public void SetTips(Vector3[] tips) {
-    if (!NoRuntime || tips == null || tips.Length < 5) return;
+    if (!UseDots || tips == null || tips.Length < 5) return;
     if (dotsObj == null) BuildDots();
     for (int i = 0; i < 5; i++) {
       dots[i + 1].localPosition = tips[i];
@@ -77,7 +89,12 @@ public class NetHand : MonoBehaviour {
   }
 
   public void Show(bool handTracking, bool visible) {
-    if (NoRuntime) {
+    if (!NoRuntime && !meshFailed && handObj != null && handTracking && Time.unscaledTime - handBuiltAt > 2f && !HandMeshReady()) {
+      meshFailed = true;
+      handObj.SetActive(false);
+      Debug.Log("[NetHand] no hand model from the headset runtime here (hand tracking over Link off?): drawing remote hands as dots");
+    }
+    if (UseDots) {
       if (!handTracking && controllerObj == null) BuildController();
       if (dotsObj != null) dotsObj.SetActive(visible && handTracking);
       if (controllerObj != null) controllerObj.SetActive(visible && !handTracking);
@@ -128,6 +145,7 @@ public class NetHand : MonoBehaviour {
     handObj.transform.localRotation = Quaternion.identity;
     handObj.transform.localScale = Vector3.one * scale;
     Destroy(holder);
+    handBuiltAt = Time.unscaledTime;
   }
 
   void BuildController() {
