@@ -80,6 +80,7 @@ public class dial : manipObject {
   }
 
   void Start() {
+    WarmPopup();
     setPercent(percent);
   }
 
@@ -150,7 +151,9 @@ public class dial : manipObject {
       if (turnCount > 3) masterControl.instance.dialUsed = true;
       else if (cumulative > .2f) {
         masterControl.instance.dialUsed = true;
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         Instantiate(Resources.Load("Hints/TurnVignette", typeof(GameObject)), transform.parent, false);
+        Debug.Log("[dial] first-dial turn hint shown (" + sw.ElapsedMilliseconds + " ms to load)"); // (2026-11: chasing a hitch on the first dial grab)
       }
 
       yield return null;
@@ -171,6 +174,7 @@ public class dial : manipObject {
       return;
     }
     if (popup != null) return;
+    var sw = System.Diagnostics.Stopwatch.StartNew();
     // look like the device's own text labels (the dial's "Label" is a picture, not text)
     deviceInterface dev = GetComponentInParent<deviceInterface>();
     TextMesh src = dev != null ? dev.GetComponentInChildren<TextMesh>(true) : null;
@@ -187,6 +191,7 @@ public class dial : manipObject {
     Vector3 s = src.transform.lossyScale;
     g.transform.localScale = new Vector3(Mathf.Abs(s.x), Mathf.Abs(s.y), Mathf.Abs(s.z)) * 1.3f;
     UpdatePopup();
+    if (sw.ElapsedMilliseconds > 30) Debug.Log("[dial] value popup took " + sw.ElapsedMilliseconds + " ms to make");
   }
 
   void UpdatePopup() {
@@ -200,6 +205,19 @@ public class dial : manipObject {
     popup.transform.position = pos;
     Camera cam = Camera.main;
     if (cam != null) popup.transform.rotation = Quaternion.LookRotation(pos - cam.transform.position, cam.transform.up);
+  }
+
+  // The first popup of a session took ~0.7 s to make on the PC (a hitch on the first dial
+  // grab). The first dial that starts makes one and throws it away (LateUpdate removes it,
+  // as nobody holds the dial), so that cost lands while the app loads.
+  static bool popupWarmed;
+  void WarmPopup() {
+    if (popupWarmed || GetComponentInParent<deviceInterface>() == null) return;
+    popupWarmed = true;
+    var sw = System.Diagnostics.Stopwatch.StartNew();
+    ShowPopup(true);
+    if (popup != null) popup.text = "0123456789.,-+# HZ ABCDEFG"; // every character a popup shows
+    Debug.Log("[dial] value popup warmed up at start (" + sw.ElapsedMilliseconds + " ms)");
   }
 
   void LateUpdate() {
