@@ -65,6 +65,35 @@ public class signalGenerator : MonoBehaviour
 
     }
 
+    // ---- pulling another device's signal (2026-11) ----
+    // Devices get their inputs by calling the upstream generator. Cables that form a loop
+    // (A feeds B feeds A - patched by a player, or by two players at once in multiplayer)
+    // made that recursion endless: a stack overflow on the audio thread, which kills the
+    // app. Every pull goes through here: a generator asked for its signal again while it
+    // is still working out the same buffer (on the same thread) gives silence instead, so
+    // a loop just breaks there. It's logged once per generator.
+    int pullingThread; // 0 = not busy
+    bool loopLogged;
+
+    public void Pull(float[] buffer, double dspTime, int channels)
+    {
+        int me = System.Environment.CurrentManagedThreadId;
+        if (pullingThread == me)
+        {
+            System.Array.Clear(buffer, 0, buffer.Length);
+            if (!loopLogged)
+            {
+                loopLogged = true;
+                Debug.LogWarning("[Audio] signal loop through " + GetType().Name + ": cables go round in a circle; the loop is cut here (silence)");
+            }
+            return;
+        }
+        int was = pullingThread;
+        pullingThread = me;
+        try { processBuffer(buffer, dspTime, channels); }
+        finally { pullingThread = was; }
+    }
+
     public virtual float[] getBuffer(double dspTime, int channels, int bufferLength, bool modFreq = false, float requestedFreq = 440f, float detuneAmount = 0)
     {
         float[] buffer = new float[bufferLength];

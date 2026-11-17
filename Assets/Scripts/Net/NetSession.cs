@@ -117,7 +117,7 @@ public class NetSession : MonoBehaviour {
     manager.offlineScene = "";
     manager.onlineScene = "";
 
-    discovery = g.AddComponent<NetworkDiscovery>();
+    discovery = g.AddComponent<SoundStageDiscovery>();
     discovery.transport = kcp;
     discovery.secretHandshake = Handshake;
     discovery.OnServerFound = new ServerFoundUnityEvent<ServerResponse>();
@@ -128,7 +128,7 @@ public class NetSession : MonoBehaviour {
     // one NetworkDiscovery is allowed per object.
     GameObject probe = new GameObject("HostProbe");
     probe.transform.SetParent(g.transform, false);
-    hostProbe = probe.AddComponent<NetworkDiscovery>();
+    hostProbe = probe.AddComponent<SoundStageDiscovery>();
     hostProbe.transport = kcp;
     hostProbe.secretHandshake = Handshake;
     hostProbe.OnServerFound = new ServerFoundUnityEvent<ServerResponse>();
@@ -181,16 +181,25 @@ public class NetSession : MonoBehaviour {
     InvokeRepeating(nameof(ProbeOtherHosts), 3f, 6f);
   }
 
-  // Two headsets started together can both end up hosting, each alone. While we host
-  // with nobody joined, look for other hosts every few seconds; of two lone hosts the
-  // one with the higher server ID gives up and joins the other (the rule is the same
-  // on both, so they never swap back and forth).
+  // A host can end up alone next to another session: two headsets started together,
+  // or a headset that slept, lost its connection, took over as host on waking (before
+  // its wifi was back) while the real session carried on. While we host with nobody
+  // joined, look for other hosts every few seconds, for as long as we stay alone. A
+  // host that has players always wins; of two lone hosts the one with the higher
+  // server ID gives up and joins the other (the rule is the same on both, so they
+  // never swap back and forth).
   void ProbeOtherHosts() {
     if (state != State.Host || NetworkServer.connections.Count > 1) {
       hostProbe.StopDiscovery();
       return;
     }
-    hostProbe.StartDiscovery();
+    try {
+      hostProbe.StartDiscovery();
+    } catch (System.Exception e) {
+      // no network yet (just woke up): try again next time
+      Debug.Log("[NetSession] can't look for other hosts yet: " + e.Message);
+      return;
+    }
     Invoke(nameof(StopProbe), 2f);
   }
 
@@ -199,8 +208,13 @@ public class NetSession : MonoBehaviour {
   void OnOtherHostFound(ServerResponse r) {
     if (state != State.Host || r.serverId == discovery.ServerId) return; // ourselves
     if (NetworkServer.connections.Count > 1) return; // someone joined us: stay host
-    if (discovery.ServerId < r.serverId) return;     // the other one gives up
-    Debug.Log("[NetSession] another host is running (" + r.uri + "): joining it instead");
+    int theirs = SoundStageDiscovery.Players(r);
+    if (theirs > 1) {
+      Debug.Log("[NetSession] another host with " + theirs + " players is running (" + r.uri + "): joining it");
+    } else {
+      if (discovery.ServerId < r.serverId) return;   // two lone hosts: the other one gives up
+      Debug.Log("[NetSession] another lone host is running (" + r.uri + "): joining it instead");
+    }
     CancelInvoke();
     hostProbe.StopDiscovery();
     SetState(State.Searching); // so stopping the host doesn't count as losing a connection

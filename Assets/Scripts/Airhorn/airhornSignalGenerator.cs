@@ -20,6 +20,6 @@ public class airhornSignalGenerator : signalGenerator {
   public clipPlayerSimple curPlayer;
 
   public override void processBuffer(float[] buffer, double dspTime, int channels) {
-    curPlayer.processBuffer(buffer, dspTime, channels);
+    curPlayer.Pull(buffer, dspTime, channels);
   }
 }

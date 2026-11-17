@@ -57,6 +57,22 @@ public class midiComponentInterface : componentInterface {
   }
 
   public void ConnectByName(string s) {
+    remoteOwner = null;
+    // In multiplayer the patch says which computer a connection belongs to
+    // ("device|COMPUTER", see NetMidi.Tag): another computer's connection is left to it,
+    // even if this one has a device with the same name, so two PCs with the same USB
+    // interface don't both play.
+    NetMidi.Untag(s, out string devName, out string owner);
+    if (owner != null && owner != NetMidi.Me && NetSync.InSession) {
+      remoteOwner = owner;
+      connectedDevice = s; // keep it as it is, so every copy of the patch says the same
+      listopen = false;
+      CloseList();
+      ShowRemoteStatus();
+      return;
+    }
+    string saved = s;
+    s = devName;
     MIDImaster.instance.RefreshDevices(input);
     int ID = MIDImaster.instance.GetIDbyName(input, s);
     if (ID == -1) {
@@ -64,11 +80,11 @@ public class midiComponentInterface : componentInterface {
       // PC's MIDI keyboard, saved in the shared patch): show it as connected there, and
       // keep the name, so this copy of the patch says the same as the PC's (otherwise
       // the copies differ, get shared back and forth, and the PC's connection is lost).
-      if (NetMidi.IsRemote(input, s, out string owner)) {
-        NetShowRemote(s + " (" + owner + ")", true, s);
+      if (NetMidi.IsRemote(input, s, out string remote)) {
+        NetShowRemote(s + " (" + remote + ")", true, s);
       } else {
         Debug.Log("[MIDI] " + s + " isn't on this machine (another player's?)");
-        connectedDevice = s;
+        connectedDevice = saved; // (unplugged here: keep the saved connection as it was)
         mainMidiPanel.label.text = s;
       }
     } else {
@@ -106,7 +122,8 @@ public class midiComponentInterface : componentInterface {
     NetMidi.LocalConnected(this, name, curMIDIdevice != null); // multiplayer: others show it too
     Debug.Log("[MIDI] " + (curMIDIdevice != null ? "connected " : "couldn't connect ") + name + (input ? " (in)" : " (out)") + " to " + (_deviceInterface != null ? _deviceInterface.name : name));
     if (curMIDIdevice != null) {
-      connectedDevice = name;
+      connectedDevice = NetMidi.Tag(name);
+      remoteOwner = null;
       s = "CONNECTED!";
       statusLightMat.SetColor("_TintColor", connectedColor);
       statusText.text = s;
@@ -140,9 +157,22 @@ public class midiComponentInterface : componentInterface {
   void Update() {
     if (channelSlider != null) channel = channelSlider.switchVal;
     PlayQueuedMidi();
+    if (remoteOwner != null && Time.unscaledTime - remoteChecked > 2f) ShowRemoteStatus();
+  }
+
+  // another computer's connection: show whether that computer is in the session now
+  string remoteOwner;
+  float remoteChecked;
+  void ShowRemoteStatus() {
+    remoteChecked = Time.unscaledTime;
+    NetMidi.Untag(connectedDevice, out string devName, out string owner);
+    bool online = NetMidi.OwnerOnline(owner);
+    mainMidiPanel.label.text = devName + " (" + owner + ")" + (online ? "" : " - OFFLINE");
+    statusLightMat.SetColor("_TintColor", online ? connectedColor : disconnectedColor);
   }
 
   bool listopen = false;
+  public bool ListOpen { get { return listopen; } } // (the test harness)
   public override void hit(bool on, int ID = -1) {
     if (!on) return;
     if (ID == -1) toggleList();
@@ -181,6 +211,11 @@ public class midiComponentInterface : componentInterface {
   const int RemoteBase = 1000;
 
   public void NetShowRemote(string label, bool connected, string deviceName = null) {
+    remoteOwner = null;
+    if (connected && deviceName != null) {
+      NetMidi.Untag(deviceName, out _, out string owner);
+      remoteOwner = owner;
+    }
     mainMidiPanel.label.text = label;
     if (deviceName != null) connectedDevice = connected ? deviceName : "";
     statusLightMat.SetColor("_TintColor", connected ? connectedColor : disconnectedColor);

@@ -21,7 +21,9 @@ public class speakerDeviceInterface : deviceInterface {
   speaker output;
   public basicSwitch channelSwitcher; // LEFT ONLY / RIGHT ONLY (ludzeller's fork, 2026-11)
   public GameObject speakerRim;
-  public new AudioSource audio;
+#pragma warning disable 0108, 0109 // the editor still has the old Component.audio, the player build doesn't: one or the other always warned
+  public AudioSource audio;
+#pragma warning restore 0108, 0109
 
   SpeakerData data;
 

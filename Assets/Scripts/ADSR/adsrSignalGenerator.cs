@@ -141,7 +141,7 @@ public class adsrSignalGenerator : signalGenerator {
       if (pulseBuffer.Length != buffer.Length)
         System.Array.Resize(ref pulseBuffer, buffer.Length);
 
-      incoming.processBuffer(pulseBuffer, dspTime, channels);
+      incoming.Pull(pulseBuffer, dspTime, channels);
       bool on = GetBinaryState(pulseBuffer, pulseBuffer.Length, channels, ref lastBuffer);
       _devinterface.pulseUpdate(on);
     }

@@ -19,7 +19,9 @@ public class embeddedSpeaker : MonoBehaviour {
   public omniJack speakerOut;
   signalGenerator signal;
   public speaker output;
-  public new AudioSource audio;
+#pragma warning disable 0108, 0109 // the editor still has the old Component.audio, the player build doesn't: one or the other always warned
+  public AudioSource audio;
+#pragma warning restore 0108, 0109
   public GameObject speakerRim;
 
   bool secondary = true;

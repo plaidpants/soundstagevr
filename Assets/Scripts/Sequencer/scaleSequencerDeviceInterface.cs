@@ -357,6 +357,9 @@ public class scaleSequencerDeviceInterface : deviceInterface, INetBeatSync {
       sharedScale = scaleIndex;
       foreach (scaleSequencerDeviceInterface d in all) if (d != this && d != null && d.link) d.SetScale(sharedScale);
     }
+    // multiplayer: the scale is in the saved patch, and no control message carries it
+    // (the list entry that was touched is gone by the time a hand lets go), so share it
+    NetSync.LocalPatchReplaced();
   }
 
   void SetScale(int i) {
@@ -538,7 +541,7 @@ public class scaleSequencerDeviceInterface : deviceInterface, INetBeatSync {
 
     double dspTime = AudioSettings.dspTime;
     float[] playBuffer = AudioBufferPool.GetCleared(ref _scratch_playBuffer, buffer.Length);
-    externalPulse.processBuffer(playBuffer, dspTime, channels);
+    externalPulse.Pull(playBuffer, dspTime, channels);
 
     for (int i = 0; i < playBuffer.Length; i += channels) {
       if (playBuffer[i] > lastPlaySig[1] && lastPlaySig[1] <= lastPlaySig[0]) {

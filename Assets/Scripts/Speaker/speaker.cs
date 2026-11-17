@@ -29,10 +29,11 @@ public class speaker : MonoBehaviour {
   public static extern void MultiplyArrayBySingleValue(float[] buffer, int length, float val);
 
   private void OnAudioFilterRead(float[] buffer, int channels) {
-    if (incoming == null) return;
+    signalGenerator inc = incoming; // (read once: a cable pulled on the main thread can clear it between a check and the call)
+    if (inc == null) return;
     long start = System.Diagnostics.Stopwatch.GetTimestamp();
     double dspTime = AudioSettings.dspTime;
-    incoming.processBuffer(buffer, dspTime, channels);
+    inc.Pull(buffer, dspTime, channels);
     if (!leftOn && channels == 2) {
       for (int n = 0; n < buffer.Length; n += 2) buffer[n] = buffer[n + 1];
     }

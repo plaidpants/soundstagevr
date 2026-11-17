@@ -231,7 +231,7 @@ public class sequencerDeviceInterface : deviceInterface, INetBeatSync {
     double dspTime = AudioSettings.dspTime;
 
     float[] playBuffer = AudioBufferPool.GetCleared(ref _scratch_playBuffer, buffer.Length);
-    externalPulse.processBuffer(playBuffer, dspTime, channels);
+    externalPulse.Pull(playBuffer, dspTime, channels);
 
     for (int i = 0; i < playBuffer.Length; i += channels) {
       if (playBuffer[i] > lastPlaySig[1] && lastPlaySig[1] <= lastPlaySig[0]) {

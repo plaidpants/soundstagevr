@@ -230,13 +230,13 @@ public class clipPlayerComplex : clipPlayer {
       System.Array.Resize(ref tailBuffer, buffer.Length);
 
 
-    if (speedGen != null) speedGen.processBuffer(speedBuffer, dspTime, channels);
-    if (ampGen != null) ampGen.processBuffer(ampBuffer, dspTime, channels);
-    if (seqGen != null) seqGen.processBuffer(seqBuffer, dspTime, channels);
+    if (speedGen != null) speedGen.Pull(speedBuffer, dspTime, channels);
+    if (ampGen != null) ampGen.Pull(ampBuffer, dspTime, channels);
+    if (seqGen != null) seqGen.Pull(seqBuffer, dspTime, channels);
 
     if (headGen != null)
     {
-      headGen.processBuffer(headBuffer, dspTime, channels);
+      headGen.Pull(headBuffer, dspTime, channels);
       headOffset = (headBuffer[0] + 1) * 0.5f * headTrim; // -1,1 mapping 
     } else {
       headOffset = 0f;
@@ -244,7 +244,7 @@ public class clipPlayerComplex : clipPlayer {
 
     if (tailGen != null)
     {
-      tailGen.processBuffer(tailBuffer, dspTime, channels);
+      tailGen.Pull(tailBuffer, dspTime, channels);
       tailOffset = 1 - (tailBuffer[0] + 1) * 0.5f * tailTrim; // inverted -1,1 mapping
     }
     else

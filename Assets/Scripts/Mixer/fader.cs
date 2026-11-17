@@ -76,10 +76,10 @@ public class fader : signalGenerator {
 
       SetArrayToSingleValue(bufferB, bufferB.Length, 0.0f);
 
-      incomingA.processBuffer(buffer, dspTime, channels);
-      incomingB.processBuffer(bufferB, dspTime, channels);
-    } else if (incomingA != null) incomingA.processBuffer(buffer, dspTime, channels);
-    else incomingB.processBuffer(buffer, dspTime, channels);
+      incomingA.Pull(buffer, dspTime, channels);
+      incomingB.Pull(bufferB, dspTime, channels);
+    } else if (incomingA != null) incomingA.Pull(buffer, dspTime, channels);
+    else incomingB.Pull(buffer, dspTime, channels);
 
     processFader(buffer, buffer.Length, channels, bufferB, bufferB.Length, incomingA != null, incomingB != null, samePercent, lastpercent, sliderPercent);
 

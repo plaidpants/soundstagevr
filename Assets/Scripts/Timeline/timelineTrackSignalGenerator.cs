@@ -49,7 +49,7 @@ public class timelineTrackSignalGenerator : signalGenerator {
   public override void processBuffer(float[] buffer, double dspTime, int channels) {
 
     if (incoming != null) {
-      incoming.processBuffer(buffer, dspTime, channels);
+      incoming.Pull(buffer, dspTime, channels);
 
       if (IsPulse(buffer, buffer.Length)) {
         _interface.updateSignal(false, timelineTrackComponentInterface.sigSource.signal);

@@ -96,7 +96,7 @@ public class NetControls : MonoBehaviour {
   // plus the matching release of anything we sent as pressed.
   public static void ButtonHit(button b, bool on) {
     if (!NetSync.Active || applying) return;
-    bool byPlayer = b.curState != manipObject.manipState.none || TouchTracker.IsTouched(b);
+    bool byPlayer = b.curState != manipObject.manipState.none || TouchTracker.IsTouched(b); // (the test harness grabs buttons too)
     if (on && byPlayer) { sentOn.Add(b); Send(b, Kind.Button, 1, 0, true); }
     else if (!on && (byPlayer || sentOn.Remove(b))) Send(b, Kind.Button, 0, 0, true);
   }
@@ -110,6 +110,11 @@ public class NetControls : MonoBehaviour {
     bool byPlayer = k.curState == manipObject.manipState.grabbed || TouchTracker.IsTouched(k);
     if (on && byPlayer) { sentOn.Add(k); Send(k, Kind.Key, 1, 0, true); }
     else if (!on && sentOn.Remove(k)) Send(k, Kind.Key, 0, 0, true);
+  }
+
+  // the test harness changed a value control (TestHarness): send it as a held one would be
+  public static void HarnessValue(manipObject o, bool reliable) {
+    if (o != null && ValueOf(o, out Kind k, out float a, out float b)) Send(o, k, a, b, reliable);
   }
 
   public static void DrumHit(drumpad p, float velocity) {
@@ -160,6 +165,7 @@ public class NetControls : MonoBehaviour {
     // Then it may have changed the device's structure: share the patch again.
     if (obj is handle || obj is button || obj is key || NetTools.IsTool(obj) || obj is omniPlug || obj is omniJack) return;
     if (obj is tape) return; // NetTapes
+    if (obj is scalePickItem) return; // the Scale Sequencer's scale button / list: opening the list is local (a patch reload closed it before a scale could be picked); a pick shares the patch itself (PickScale)
     if (obj is midiPanel) return; // the MIDI device list: picking from it is local (and shared by NetMidi) - a patch reload here closed the list before anything could be picked
     if (obj.name == "sizeHandle" && (obj.GetComponentInParent<keyboardDeviceInterface>() != null || obj.GetComponentInParent<xylorollDeviceInterface>() != null)) return; // NetControls.Resized
     if (obj.GetComponentInParent<libraryDeviceInterface>() != null) return; // the tape library's wheels: browsing, nothing to share

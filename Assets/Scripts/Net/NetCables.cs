@@ -123,7 +123,7 @@ public static class NetCables {
   }
 
   // like SaveLoadInterface.LoadPlugs for one cable
-  static void Connect(omniJack outJack, omniJack inJack, Color color, Vector3[] path) {
+  public static void Connect(omniJack outJack, omniJack inJack, Color color, Vector3[] path) {
     GameObject prefab = SaveLoadInterface.instance.plugPrefab;
     omniPlug outPlug = (Object.Instantiate(prefab, outJack.transform.position, outJack.transform.rotation) as GameObject).GetComponent<omniPlug>();
     omniPlug inPlug = (Object.Instantiate(prefab, inJack.transform.position, inJack.transform.rotation) as GameObject).GetComponent<omniPlug>();

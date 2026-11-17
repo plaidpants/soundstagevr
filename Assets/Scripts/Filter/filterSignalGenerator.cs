@@ -188,7 +188,7 @@ public class filterSignalGenerator : signalGenerator {
 
         if (controlIncoming != null)
         {
-            controlIncoming.processBuffer(controlBuffer, dspTime, channels);
+            controlIncoming.Pull(controlBuffer, dspTime, channels);
             controlFloat = controlBuffer[controlBuffer.Length - 1];
         }
 
@@ -200,7 +200,7 @@ public class filterSignalGenerator : signalGenerator {
             return;            
         }
 
-        incoming.processBuffer(buffer, dspTime, channels);
+        incoming.Pull(buffer, dspTime, channels);
 
         // if pass through, just end
         if (curType == filterType.pass)

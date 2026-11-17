@@ -225,6 +225,7 @@ public class NetClock : MonoBehaviour {
   // a sequencer / timeline off from the host's by about the same amount in two messages
   // in a row (one could catch it mid-step) is moved into line
   static readonly Dictionary<long, double> seqOff = new Dictionary<long, double>();
+  static readonly Dictionary<long, float> skipLogged = new Dictionary<long, float>();
   static void ApplySequencers(NetClockMsg m, bool clockSettled) {
     if (m.seqIds == null || m.seqIndex == null || !clockSettled) return;
     for (int i = 0; i < m.seqIds.Length; i++) {
@@ -233,7 +234,17 @@ public class NetClock : MonoBehaviour {
       INetBeatSync[] list = d.GetComponentsInChildren<INetBeatSync>(true);
       if (m.seqIndex[i] >= list.Length) continue;
       INetBeatSync sq = list[m.seqIndex[i]];
-      if (!sq.NetSyncable || sq.NetConfig != m.seqConfig[i]) { seqOff.Remove(key); continue; }
+      if (!sq.NetSyncable || sq.NetConfig != m.seqConfig[i]) {
+        seqOff.Remove(key);
+        // (once in a while: a sequencer playing on the host that can't be lined up here
+        // drifts apart for good, so say why)
+        if (!skipLogged.TryGetValue(key, out float t) || Time.unscaledTime - t > 30f) {
+          skipLogged[key] = Time.unscaledTime;
+          Debug.Log("[NetClock] " + d.name + " #" + m.seqIndex[i] + " not lined up with the host: " +
+                    (!sq.NetSyncable ? "not playing from the master clock here" : "length/speed differ (host " + m.seqConfig[i] + ", here " + sq.NetConfig + ")"));
+        }
+        continue;
+      }
       double off = Wrap(m.seqAnchor[i] - sq.NetAnchor(), sq.NetPeriod);
       if (System.Math.Abs(off) < sq.NetTolerance) { seqOff.Remove(key); continue; }
       if (seqOff.TryGetValue(key, out double last) && System.Math.Abs(last - off) < sq.NetTolerance) {

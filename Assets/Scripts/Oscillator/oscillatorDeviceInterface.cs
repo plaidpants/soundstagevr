@@ -41,6 +41,7 @@ public class oscillatorDeviceInterface : deviceInterface {
   public override void Awake() {
     base.Awake();
     signal = GetComponent<oscillatorSignalGenerator>();
+    freqDial.valueText = FrequencyText;
     if (rangeSwitch == null) rangeSwitch = OscillatorRangeSwitch.Create(transform);
     active = true;
     viz.period = lfo ? 512 : 1;
@@ -79,6 +80,29 @@ public class oscillatorDeviceInterface : deviceInterface {
     if (lfo && slowCurve) signal.frequency = Mathf.Pow(freqPercent, 4) * 10 + 1.0f / 120.0f; // 120s, 0.1s
     else if (lfo) signal.frequency = freqPercent * 8; // original
     else signal.frequency = Mathf.Clamp(3520.00f * Mathf.Pow(freqDial.percent, 2), 27.50f, Mathf.Infinity);// Mathf.Pow(freqDial.percent, 2); //signal.frequency = 40 + 10000 * Mathf.Pow(freqDial.percent, 2);
+  }
+
+  // What the frequency dial's value popup shows (dial.valueText, 2026-11): the frequency
+  // for that dial position, and at audio rate the nearest note and how many cents off it
+  // is. A keyboard or xylophone roll on the frequency input scales this frequency (its A
+  // key plays exactly the dial's frequency), so 440 HZ / A4 puts the oscillator in tune
+  // with the keyboard's own sound.
+  static readonly string[] noteNames = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
+
+  float FrequencyAt(float p) {
+    if (lfo && slowCurve) return Mathf.Pow(p, 4) * 10 + 1.0f / 120.0f;
+    if (lfo) return p * 8;
+    return Mathf.Clamp(3520.00f * Mathf.Pow(p, 2), 27.50f, Mathf.Infinity);
+  }
+
+  string FrequencyText(float p) {
+    float f = FrequencyAt(p);
+    if (lfo) return (f < 1 ? f.ToString("0.000") : f.ToString("0.00")) + " HZ";
+    float midi = 69 + 12 * Mathf.Log(f / 440f, 2);
+    int n = Mathf.RoundToInt(midi);
+    int cents = Mathf.RoundToInt((midi - n) * 100);
+    return f.ToString(f < 1000 ? "0.0" : "0") + " HZ\n" + noteNames[((n % 12) + 12) % 12] + (n / 12 - 1) +
+           (cents == 0 ? "" : (cents > 0 ? " +" : " ") + cents);
   }
 
   void UpdateAmp() {

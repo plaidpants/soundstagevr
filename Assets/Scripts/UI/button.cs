@@ -45,7 +45,9 @@ public class button : manipObject {
   public float labelEmission = .4f;
   public float glowEmission = .5f;
 
-  Queue<bool> hits = new Queue<bool>();
+  // phantomHit is also called from the audio thread (a sequencer started by its control
+  // input presses its own PLAY button): a plain Queue got corrupted (2026-11)
+  System.Collections.Concurrent.ConcurrentQueue<bool> hits = new System.Collections.Concurrent.ConcurrentQueue<bool>();
   public bool startToggled = false;
   public bool disregardStartToggled = false;
 
@@ -131,8 +133,7 @@ public class button : manipObject {
   }
 
   void Update() {
-    for (int i = 0; i < hits.Count; i++) {
-      bool on = hits.Dequeue();
+    while (hits.TryDequeue(out bool on)) {
       isHit = on;
       toggled = on;
       if (on) {

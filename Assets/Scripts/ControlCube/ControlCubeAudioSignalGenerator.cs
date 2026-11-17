@@ -21,6 +21,6 @@ public class ControlCubeAudioSignalGenerator : signalGenerator {
   public oscillatorSignalGenerator osc1;
 
   public override void processBuffer(float[] buffer, double dspTime, int channels) {
-    osc1.processBuffer(buffer, dspTime, channels);
+    osc1.Pull(buffer, dspTime, channels);
   }
 }

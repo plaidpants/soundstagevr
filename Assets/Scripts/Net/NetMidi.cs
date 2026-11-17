@@ -61,6 +61,29 @@ public class NetMidi : MonoBehaviour {
 
   public struct RemoteInput { public int token; public string owner, name; }
 
+  // this computer's name: shown next to its MIDI devices on the other machines, and saved
+  // with its connections in the patch ("device|COMPUTER"), so a computer that drops out
+  // and comes back (in a new session) picks its own connections up again
+  public static readonly string Me = SafeMachineName();
+  static string SafeMachineName() {
+    try { string n = System.Environment.MachineName; if (!string.IsNullOrEmpty(n)) return n.Replace("|", ""); } catch (System.Exception) { }
+    return "PC";
+  }
+  public static string Tag(string device) => string.IsNullOrEmpty(device) || !DesktopMode.IsWindows ? device : device + "|" + Me;
+  public static void Untag(string s, out string device, out string owner) {
+    device = s; owner = null;
+    if (string.IsNullOrEmpty(s)) return;
+    int i = s.LastIndexOf('|');
+    if (i <= 0 || i == s.Length - 1) return;
+    device = s.Substring(0, i); owner = s.Substring(i + 1);
+  }
+  // is that computer in the session (it sent its device list in the last 20 s)?
+  public static bool OwnerOnline(string owner) {
+    if (owner == null || !NetSync.InSession) return false;
+    foreach (var kv in lists) if (kv.Value.owner == owner && Time.unscaledTime - kv.Value.seen <= 20f) return true;
+    return false;
+  }
+
   static readonly int myToken = new System.Random().Next(1, int.MaxValue); // (UnityEngine.Random can't be used in a static initializer)
   static readonly System.Collections.Generic.Dictionary<int, (string owner, string[] names, string[] outNames, float seen)> lists =
     new System.Collections.Generic.Dictionary<int, (string, string[], string[], float)>();
@@ -102,7 +125,7 @@ public class NetMidi : MonoBehaviour {
     foreach (MIDIdevice d in MIDImaster.instance.outputDevices) {
       if (!d.name.StartsWith("Service Test") && !d.name.StartsWith("Microsoft GS")) outNames.Add(d.name);
     }
-    NetMidiListMsg m = new NetMidiListMsg { token = myToken, owner = "PC", names = names.ToArray(), outNames = outNames.ToArray() };
+    NetMidiListMsg m = new NetMidiListMsg { token = myToken, owner = Me, names = names.ToArray(), outNames = outNames.ToArray() };
     if (NetworkServer.active) { OnList(m); NetSync.SendMidiRelay(m, null); }
     else NetworkClient.Send(m);
   }
@@ -134,7 +157,7 @@ public class NetMidi : MonoBehaviour {
   // this machine connected (or failed to connect) a MIDI-in: show it everywhere
   public static void LocalConnected(midiComponentInterface c, string name, bool ok) {
     if (!NetSync.Active || !Locate(c, out NetDevice d, out int i)) return;
-    SendSelect(new NetMidiSelectMsg { kind = (byte)(ok ? 1 : 2), netId = d.netId, component = i, token = myToken, name = name, owner = "PC" });
+    SendSelect(new NetMidiSelectMsg { kind = (byte)(ok ? 1 : 2), netId = d.netId, component = i, token = myToken, name = name, owner = Me });
   }
 
   static void SendSelect(NetMidiSelectMsg m) {
@@ -152,7 +175,7 @@ public class NetMidi : MonoBehaviour {
       return;
     }
     if (m.token == myToken) return; // our own connection: shown already
-    c.NetShowRemote(m.name + " (" + m.owner + ")" + (m.kind == 2 ? " - FAILED" : ""), m.kind == 1, m.name);
+    c.NetShowRemote(m.name + " (" + m.owner + ")" + (m.kind == 2 ? " - FAILED" : ""), m.kind == 1, m.name + "|" + m.owner);
   }
 
   static bool applying;

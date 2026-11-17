@@ -33,8 +33,8 @@ public class valveSignalGenerator : signalGenerator {
     }
 
     float[] controlBuffer = AudioBufferPool.GetCleared(ref _scratch_controlBuffer, buffer.Length);
-    if (controlSig != null) controlSig.processBuffer(controlBuffer, dspTime, channels);
-    if (incoming != null) incoming.processBuffer(buffer, dspTime, channels);
+    if (controlSig != null) controlSig.Pull(controlBuffer, dspTime, channels);
+    if (incoming != null) incoming.Pull(buffer, dspTime, channels);
 
     GateProcessBuffer(buffer, buffer.Length, channels, (incoming != null), controlBuffer, (controlSig != null), amp);
   }

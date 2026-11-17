@@ -43,7 +43,7 @@ public class mixer : signalGenerator {
       SetArrayToSingleValue(b[i], buffer.Length, 0.0f);
 
       if (i < incoming.Count) {
-        if (incoming[i] != null) incoming[i].processBuffer(b[i], dspTime, channels);
+        if (incoming[i] != null) incoming[i].Pull(b[i], dspTime, channels);
       }
     }
 

@@ -39,12 +39,18 @@ public class midiOutDeviceInterface : deviceInterface {
   private void OnAudioFilterRead(float[] buffer, int channels) {
     double dspTime = AudioSettings.dspTime;
 
+    // (the lists change on the main thread - a new device fills them in its first frames,
+    // cables come and go - while this runs on the audio thread: fetch each one safely)
     for (int i = 0; i < CClist.Count; i++) {
-      CClist[i].processBuffer(buffer, dspTime, channels);
+      midiCCout c;
+      try { c = CClist[i]; } catch (System.ArgumentOutOfRangeException) { break; }
+      if (c != null) c.Pull(buffer, dspTime, channels);
     }
 
     for (int i = 0; i < Notelist.Count; i++) {
-      Notelist[i].processBuffer(buffer, dspTime, channels);
+      midiNoteOut n;
+      try { n = Notelist[i]; } catch (System.ArgumentOutOfRangeException) { break; }
+      if (n != null) n.Pull(buffer, dspTime, channels);
     }
   }
 

@@ -252,10 +252,10 @@ public class waveTranscribeLooper : signalGenerator {
     float[] recBuffer = AudioBufferPool.GetCleared(ref _scratch_recBuffer, buffer.Length);
     float[] playBuffer = AudioBufferPool.GetCleared(ref _scratch_playBuffer, buffer.Length);
 
-    if (_deviceInterface.recordTrigger.signal != null) _deviceInterface.recordTrigger.signal.processBuffer(recBuffer, dspTime, channels);
-    if (_deviceInterface.playTrigger.signal != null) _deviceInterface.playTrigger.signal.processBuffer(playBuffer, dspTime, channels);
+    if (_deviceInterface.recordTrigger.signal != null) _deviceInterface.recordTrigger.signal.Pull(recBuffer, dspTime, channels);
+    if (_deviceInterface.playTrigger.signal != null) _deviceInterface.playTrigger.signal.Pull(playBuffer, dspTime, channels);
 
-    if (incoming != null) incoming.processBuffer(buffer, dspTime, channels);
+    if (incoming != null) incoming.Pull(buffer, dspTime, channels);
 
     Color curWaveLine = waveLine;
     Color curWaveBG = waveBG;

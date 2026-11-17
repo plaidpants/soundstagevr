@@ -62,7 +62,7 @@ public class clipPlayerSimple : clipPlayer {
     floatingBufferCount = _lastBuffer;
 
     float[] seqBuffer = AudioBufferPool.GetCleared(ref _scratch_seqBuffer, buffer.Length);
-    if (seqGen != null) seqGen.processBuffer(seqBuffer, dspTime, channels);
+    if (seqGen != null) seqGen.Pull(seqBuffer, dspTime, channels);
 
 
     floatingBufferCount = ClipSignalGenerator(buffer, speedBuffer, ampBuffer, seqBuffer, buffer.Length, lastSeqGen, channels, false, false, seqGen != null, floatingBufferCount, sampleBounds,

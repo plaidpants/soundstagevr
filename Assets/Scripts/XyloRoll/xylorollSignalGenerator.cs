@@ -24,6 +24,10 @@ public class xylorollSignalGenerator : signalGenerator {
   public bool oscInput = true;
 
   List<monophone> voices;
+  // The voice list is changed by notes from the main thread (keys, MIDI) and the audio
+  // thread (a sequencer driven by its control input, the scale sequencer), and read by
+  // processBuffer on the audio thread: one lock round all of it (2026-11).
+  readonly object voiceLock = new object();
 
   [DllImport("SoundStageNative")]
   public static extern void XylorollMergeSignalsWithoutOsc(float[] buf, int length, float[] buf1, float[] buf2);
@@ -56,6 +60,11 @@ public class xylorollSignalGenerator : signalGenerator {
   }
 
   public void updateVoices(int ID, bool add) {
+    if (voices == null) return;
+    lock (voiceLock) UpdateVoicesLocked(ID, add);
+  }
+
+  void UpdateVoicesLocked(int ID, bool add) {
     if (add) {
       for (int i = 0; i < voices.Count; i++) {
         if (voices[i].curKey == ID) {
@@ -95,6 +104,12 @@ public class xylorollSignalGenerator : signalGenerator {
   }
 
   public void setMonophone(int v, int ID) {
+    if (voices == null) return;
+    lock (voiceLock) SetMonophoneLocked(v, ID);
+  }
+
+  void SetMonophoneLocked(int v, int ID) {
+    if (v < 0 || v >= voices.Count) return;
 
     if (ID == -1) {
       if (voices[v].adsr.sustaining) {
@@ -122,7 +137,8 @@ public class xylorollSignalGenerator : signalGenerator {
   }
 
   public void updateOctave(int val) {
-    for (int i = 0; i < voices.Count; i++) voices[i].key.updateOctave(val);
+    if (voices == null) return;
+    lock (voiceLock) for (int i = 0; i < voices.Count; i++) voices[i].key.updateOctave(val);
   }
 
   float[] _scratch_b1; // reused audio-thread scratch (see AudioBufferPool)
@@ -136,14 +152,16 @@ public class xylorollSignalGenerator : signalGenerator {
     // (setMonophone, on the main thread, moves a voice to the end of the list - remove,
     // then add - while this runs on the audio thread: a voice can be briefly missing, so
     // each one is fetched safely and this buffer just skips the moment it isn't there)
+    if (voices == null) return;
+    lock (voiceLock)
     for (int i = 0; i < voices.Count; i++) {
       monophone v;
       try { v = voices[i]; } catch (System.ArgumentOutOfRangeException) { break; }
       if (v == null) continue;
       if (oscInput) {
         if (v.adsr.active) {
-          v.osc[0].processBuffer(b1, dspTime, channels);
-          v.osc[1].processBuffer(b2, dspTime, channels);
+          v.osc[0].Pull(b1, dspTime, channels);
+          v.osc[1].Pull(b2, dspTime, channels);
           XylorollMergeSignalsWithOsc(buffer, buffer.Length, b1, b2);
         } else {
           v.curKey = -1;
@@ -151,8 +169,8 @@ public class xylorollSignalGenerator : signalGenerator {
         }
       } else {
         if (v.adsr.active) {
-          v.sampler.processBuffer(b1, dspTime, channels);
-          v.adsr.processBuffer(b2, dspTime, channels);
+          v.sampler.Pull(b1, dspTime, channels);
+          v.adsr.Pull(b2, dspTime, channels);
           XylorollMergeSignalsWithoutOsc(buffer, buffer.Length, b1, b2);
         } else v.curKey = -1;
       }

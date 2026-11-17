@@ -111,6 +111,7 @@ public class NetDevice : MonoBehaviour {
   // Someone else is moving it: its handles can't be grabbed here until they let go
   // (or nothing has been heard for 2 s, in case the release message never comes).
   bool remotelyHeld;
+  public bool RemotelyHeld => remotelyHeld; // someone else is moving it
   float remoteHeldTime;
 
   void SetRemotelyHeld(bool on) {

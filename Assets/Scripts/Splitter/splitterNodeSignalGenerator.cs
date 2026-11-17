@@ -82,6 +82,6 @@ public class splitterNodeSignalGenerator : signalGenerator {
       return;
     }
 
-    sig.processBuffer(buffer, dspTime, channels);
+    sig.Pull(buffer, dspTime, channels);
   }
 }

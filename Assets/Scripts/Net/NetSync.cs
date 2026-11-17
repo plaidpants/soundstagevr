@@ -37,6 +37,8 @@ public static class NetSync {
   // the menu) is replaced by that patch, and mustn't land in everyone else's.
   static bool awaitingPatch;
   public static bool Active { get { return (NetworkServer.active || NetworkClient.isConnected) && !awaitingPatch; } }
+  // connected to a session, even while its patch is still loading (Active is false then)
+  public static bool InSession { get { return NetworkServer.active || NetworkClient.isConnected; } }
   static bool IsHost { get { return NetworkServer.active; } }
   public static bool IsJoinedClient { get { return NetworkClient.isConnected && !NetworkServer.active; } }
 

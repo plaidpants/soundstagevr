@@ -35,7 +35,10 @@ public class cvSequencer : signalGenerator {
 
   float outVal = 0f;
 
-  double sigTime = -1;  // note: sigTime stuff will probably be necessary for tightness, also for cvSeq! Or not???
+#pragma warning disable 0414 // kept for the commented-out timing code below
+  double sigTime = -1;
+#pragma warning restore 0414
+  // note: sigTime stuff will probably be necessary for tightness, also for cvSeq! Or not???
 
   public override void processBuffer(float[] buffer, double dspTime, int channels) {
     //float val = signalOn ? 1.0f : -1.0f;

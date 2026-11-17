@@ -66,7 +66,7 @@ public class reverbSignalGenerator : signalGenerator {
       return;
     }
 
-    incoming.processBuffer(buffer, dspTime, channels);
+    incoming.Pull(buffer, dspTime, channels);
 
     if (bufferCopy.Length != buffer.Length)
       System.Array.Resize(ref bufferCopy, buffer.Length);

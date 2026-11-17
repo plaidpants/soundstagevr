@@ -27,7 +27,7 @@ public class gainSignalGenerator : signalGenerator {
 
   public override void processBuffer(float[] buffer, double dspTime, int channels) {
 
-    if (incoming != null) incoming.processBuffer(buffer, dspTime, channels);
+    if (incoming != null) incoming.Pull(buffer, dspTime, channels);
 
     for(int n = 0; n < buffer.Length; n++) 
     {

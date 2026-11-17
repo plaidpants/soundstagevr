@@ -63,7 +63,7 @@ public class midiCCout : signalGenerator {
 
   public override void processBuffer(float[] buffer, double dspTime, int channels) {
     if (incoming == null) return;
-    incoming.processBuffer(buffer, dspTime, channels);
+    incoming.Pull(buffer, dspTime, channels);
     if (curValue != buffer[buffer.Length - 1]) {
       curValue = buffer[buffer.Length - 1];
       updateDesired = true;

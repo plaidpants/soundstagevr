@@ -158,9 +158,63 @@ public class dial : manipObject {
     yield return null;
   }
 
+  // ---- value popup (2026-11) ----
+  // While a player holds the dial, its value floats above it, facing them. A device can
+  // say what the value means (the oscillator shows Hz and the note); otherwise it's 0-100.
+  public System.Func<float, string> valueText;
+  TextMesh popup;
+
+  void ShowPopup(bool on) {
+    if (!on) {
+      if (popup != null) Destroy(popup.gameObject);
+      popup = null;
+      return;
+    }
+    if (popup != null) return;
+    // look like the device's own text labels (the dial's "Label" is a picture, not text)
+    deviceInterface dev = GetComponentInParent<deviceInterface>();
+    TextMesh src = dev != null ? dev.GetComponentInChildren<TextMesh>(true) : null;
+    if (src == null) return;
+    GameObject g = new GameObject("dialValuePopup");
+    popup = g.AddComponent<TextMesh>();
+    popup.font = src.font;
+    popup.fontSize = src.fontSize;
+    popup.characterSize = src.characterSize;
+    popup.anchor = TextAnchor.LowerCenter;
+    popup.alignment = TextAlignment.Center;
+    popup.richText = false;
+    g.GetComponent<MeshRenderer>().sharedMaterial = src.GetComponent<Renderer>().sharedMaterial;
+    Vector3 s = src.transform.lossyScale;
+    g.transform.localScale = new Vector3(Mathf.Abs(s.x), Mathf.Abs(s.y), Mathf.Abs(s.z)) * 1.3f;
+    UpdatePopup();
+  }
+
+  void UpdatePopup() {
+    if (popup == null) return;
+    string t = null;
+    if (valueText != null) { try { t = valueText(percent); } catch (System.Exception) { } }
+    popup.text = t ?? Mathf.RoundToInt(percent * 100).ToString();
+    Transform lt = transform.parent.Find("Label");
+    float size = lt != null ? Mathf.Abs(lt.lossyScale.y) : .01f;
+    Vector3 pos = transform.position + transform.parent.up * (size * 4f + .02f);
+    popup.transform.position = pos;
+    Camera cam = Camera.main;
+    if (cam != null) popup.transform.rotation = Quaternion.LookRotation(pos - cam.transform.position, cam.transform.up);
+  }
+
+  void LateUpdate() {
+    if (popup == null) return;
+    if (curState != manipState.grabbed) { ShowPopup(false); return; }
+    UpdatePopup();
+  }
+
+  void OnDisable() { ShowPopup(false); }
+  void OnDestroy() { ShowPopup(false); }
+
   public override void setState(manipState state) {
     curState = state;
     setGlowState(state);
+    ShowPopup(state == manipState.grabbed);
 
     if (curState == manipState.grabbed) {
       turnCount = 0;

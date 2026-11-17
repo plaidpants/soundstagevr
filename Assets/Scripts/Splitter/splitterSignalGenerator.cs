@@ -58,7 +58,7 @@ public class splitterSignalGenerator : signalGenerator {
           System.Array.Resize(ref curBuffer, buffer.Length);
 
         if (incoming == null) SetArrayToSingleValue(buffer, buffer.Length, 0.0f);
-        else incoming.processBuffer(buffer, dspTime, channels);
+        else incoming.Pull(buffer, dspTime, channels);
 
         SetArrayToSingleValue(curBuffer, buffer.Length, 0.0f);
         CopyArray(buffer, curBuffer, buffer.Length);
@@ -66,7 +66,7 @@ public class splitterSignalGenerator : signalGenerator {
 
     } else {
       if (incoming == null) SetArrayToSingleValue(buffer, buffer.Length, 0.0f);
-      else incoming.processBuffer(buffer, dspTime, channels);
+      else incoming.Pull(buffer, dspTime, channels);
 
       int count = nodes.Count;
 
@@ -77,7 +77,7 @@ public class splitterSignalGenerator : signalGenerator {
         SetArrayToSingleValue(mergeBuffers[i], buffer.Length, 0.0f);
 
         if (i < nodes.Count) {
-          if (nodes[i] != null) nodes[i].processBuffer(mergeBuffers[i], dspTime, channels);
+          if (nodes[i] != null) nodes[i].Pull(mergeBuffers[i], dspTime, channels);
         }
       }
 

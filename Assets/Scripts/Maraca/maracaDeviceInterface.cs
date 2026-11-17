@@ -48,7 +48,7 @@ public class maracaDeviceInterface : deviceInterface {
 
     double dspTime = AudioSettings.dspTime;
     float[] b = AudioBufferPool.GetCleared(ref _scratch_b, buffer.Length);
-    signal.processBuffer(b, dspTime, channels);
+    signal.Pull(b, dspTime, channels);
 
     MaracaProcessAudioBuffer(buffer, b, buffer.Length, channels, ref _phaseB, _sampleDuration);
   }

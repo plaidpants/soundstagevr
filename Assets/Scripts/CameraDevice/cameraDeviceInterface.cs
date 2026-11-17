@@ -169,7 +169,7 @@ public class cameraDeviceInterface : deviceInterface {
     double dspTime = AudioSettings.dspTime;
 
     float[] playBuffer = AudioBufferPool.GetCleared(ref _scratch_playBuffer, buffer.Length);
-    externalPulse.processBuffer(playBuffer, dspTime, channels);
+    externalPulse.Pull(playBuffer, dspTime, channels);
 
     hits += CountPulses(playBuffer, buffer.Length, channels, lastPlaySig);
   }

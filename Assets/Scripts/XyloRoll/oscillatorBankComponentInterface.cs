@@ -23,9 +23,14 @@ public class oscillatorBankComponentInterface : componentInterface {
   public dial[] freqDials;
   public slider[] waveSliders;
 
-  public float[] ampPercent;
-  public float[] freqPercent;
-  public float[] wavePercent;
+  // (2026-11) These were only made in Start, which never runs while the bank is hidden
+  // (the xylophone roll in sample mode): a roll loaded in sample mode then failed to
+  // save - IndexOutOfRange in GetData every second, and no patch could be shared or
+  // saved with it. They now always exist (and aren't serialized: the prefab's empty
+  // arrays used to replace them).
+  [System.NonSerialized] public float[] ampPercent = new float[2];
+  [System.NonSerialized] public float[] freqPercent = new float[2];
+  [System.NonSerialized] public float[] wavePercent = new float[2];
 
   void Start() {
     ampPercent = new float[2];

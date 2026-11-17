@@ -242,13 +242,13 @@ public class timelineComponentInterface : componentInterface {
     double dspTime = AudioSettings.dspTime;
 
     if (playSignal != null) {
-      playSignal.processBuffer(buffer, dspTime, channels);
+      playSignal.Pull(buffer, dspTime, channels);
       int hits = CountPulses(buffer, buffer.Length, channels, lastPlaySig);
       if (hits % 2 == 1) playFromStart();
     }
 
     if (recSignal != null) {
-      recSignal.processBuffer(buffer, dspTime, channels);
+      recSignal.Pull(buffer, dspTime, channels);
       int hits = CountPulses(buffer, buffer.Length, channels, lastRecSig);
       if (hits % 2 == 1) toggleRec();
     }

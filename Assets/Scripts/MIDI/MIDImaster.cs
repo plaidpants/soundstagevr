@@ -305,8 +305,12 @@ public static class WinMidiOut {
 
   public static void Close(MIDIdevice d) {
     if (d.outHandle == System.IntPtr.Zero) return;
+    var sw = System.Diagnostics.Stopwatch.StartNew();
     try { midiOutReset(d.outHandle); midiOutClose(d.outHandle); } catch (System.Exception) { }
     d.outHandle = System.IntPtr.Zero;
+    // (a PC test run froze for ~9 s right after a device using the USB MIDI interface was
+    // deleted: say so if closing is what takes the time)
+    if (sw.ElapsedMilliseconds > 100) Debug.LogWarning("[MIDI] closing output " + d.name + " took " + sw.ElapsedMilliseconds + " ms");
   }
 
   public static string ErrorText(int err) {
@@ -362,8 +366,10 @@ public static class WinMidiIn {
     if (d.inHandle == System.IntPtr.Zero) return;
     System.IntPtr h = d.inHandle;
     d.inHandle = System.IntPtr.Zero;
+    var sw = System.Diagnostics.Stopwatch.StartNew();
     try { midiInStop(h); midiInReset(h); midiInClose(h); } catch (System.Exception) { }
     open.TryRemove(d.inKey, out _);
+    if (sw.ElapsedMilliseconds > 100) Debug.LogWarning("[MIDI] closing input " + d.name + " took " + sw.ElapsedMilliseconds + " ms");
   }
 
   // Windows' MIDI thread: hand the message to the devices listening (they only queue it)

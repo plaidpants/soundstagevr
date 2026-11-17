@@ -25,9 +25,14 @@ public static class NetTapes {
   }
 
   public static void Loaded(samplerLoad s, tape t) {
-    if (!NetSync.Active || t == null || !Find(s, out NetDevice dev, out int i)) return;
-    Debug.Log("[NetTapes] tape " + t.label + " into " + dev.name + " deck " + i);
-    NetSync.SendTape(new NetTapeMsg { netId = dev.netId, deck = i, label = t.label, file = t.filename });
+    if (t != null) Loaded(s, t.label, t.filename);
+  }
+
+  // (also the test harness, which puts tapes in with samplerLoad.SetSample)
+  public static void Loaded(samplerLoad s, string label, string file) {
+    if (!NetSync.Active || !Find(s, out NetDevice dev, out int i)) return;
+    Debug.Log("[NetTapes] tape " + label + " into " + dev.name + " deck " + i);
+    NetSync.SendTape(new NetTapeMsg { netId = dev.netId, deck = i, label = label, file = file });
   }
 
   public static void Ejected(samplerLoad s) {

@@ -61,41 +61,50 @@ public class bufferToWav : MonoBehaviour {
         b.Write(length * _samplelength); // subchunk 2 size
     }
 
+    // (2026-11) The looper or recorder can be deleted while it saves: its label (txt) and
+    // signal (sig) are then gone. That threw half-way, left the file open and
+    // savingInProgress stuck on, so nothing could be saved again. Now the file is always
+    // closed, a missing label or device is skipped, and the recording is still added.
     IEnumerator SaveRoutine(string filename, float[] clip, int length, TextMesh txt, signalGenerator sig)
     {
-        txt.gameObject.SetActive(true);
-        txt.text = "Saving...";
-        
+        if (txt != null) { txt.gameObject.SetActive(true); txt.text = "Saving..."; }
+
         FileStream _filestream = new FileStream(filename, FileMode.Create);
         BinaryWriter _binarystream = new BinaryWriter(_filestream);
-        WavHeader(_binarystream, length);
-
-        CompressClip(clip, clip.Length);
-
-        int counter = 0;
-        for (int i = 0; i < length; i++)
+        bool done = false;
+        try
         {
-            Int16 sample = Convert.ToInt16( Mathf.Clamp(clip[i],-1f,1f) * 32760 );
-            _binarystream.Write((short)sample);
-            counter++;
+            WavHeader(_binarystream, length);
 
-            if (counter > 10000)
+            CompressClip(clip, clip.Length);
+
+            int counter = 0;
+            for (int i = 0; i < length; i++)
             {
-                counter = 0;
-                txt.text = "Saving... " + (int)(100 * (float)i / length) + "% Complete";
-                yield return null;
-            }
-        }
+                Int16 sample = Convert.ToInt16( Mathf.Clamp(clip[i],-1f,1f) * 32760 );
+                _binarystream.Write((short)sample);
+                counter++;
 
-        _binarystream.Close();
-        _filestream.Close();
-        txt.text = "Saved";
-        
+                if (counter > 10000)
+                {
+                    counter = 0;
+                    if (txt != null) txt.text = "Saving... " + (int)(100 * (float)i / length) + "% Complete";
+                    yield return null;
+                }
+            }
+            done = true;
+        }
+        finally
+        {
+            _binarystream.Close();
+            _filestream.Close();
+            savingInProgress = false;
+        }
+        if (!done) yield break;
+
         sampleManager.instance.AddRecording(filename);
-        txt.text = "Saved";
-        savingInProgress = false;
-        txt.gameObject.SetActive(false);
-        sig.updateTape(filename);
+        if (txt != null) { txt.text = "Saved"; txt.gameObject.SetActive(false); }
+        if (sig != null) sig.updateTape(filename);
         yield return new WaitForSeconds(1.5f);
     }    
 }

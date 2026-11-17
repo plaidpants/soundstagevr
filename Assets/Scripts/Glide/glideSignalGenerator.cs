@@ -38,7 +38,7 @@ public class glideSignalGenerator : signalGenerator {
       }
     } else { // Glide
 
-      incoming.processBuffer(buffer, dspTime, channels);
+      incoming.Pull(buffer, dspTime, channels);
 
       for (int n = 0; n < buffer.Length; n += 2)
       {

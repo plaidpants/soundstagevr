@@ -60,7 +60,7 @@ public class midiNoteOut : signalGenerator {
   float lastBuffer = -1;
   public override void processBuffer(float[] buffer, double dspTime, int channels) {
     if (incoming == null) return;
-    incoming.processBuffer(buffer, dspTime, channels);
+    incoming.Pull(buffer, dspTime, channels);
 
     bool on = GetBinaryState(buffer, buffer.Length, channels, ref lastBuffer);
 

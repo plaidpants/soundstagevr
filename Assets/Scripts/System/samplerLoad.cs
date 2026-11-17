@@ -94,6 +94,7 @@ public class samplerLoad : MonoBehaviour {
         if (loaderObject != null) Destroy(loaderObject);
         StopCoroutine(_streamRoutine);
       }
+      AbandonLoadingClip();
 
       if (miniSpeaker != null) miniSpeaker.updateSecondary(false);
 
@@ -118,14 +119,24 @@ public class samplerLoad : MonoBehaviour {
       if (loaderObject != null) Destroy(loaderObject);
       StopCoroutine(_streamRoutine);
     }
+    AbandonLoadingClip();
 
     _streamRoutine = StartCoroutine(streamRoutine(fullpath));
   }
 
   GameObject loaderObject;
   Coroutine _streamRoutine;
+  AudioClip loadingClip; // the clip being loaded (freed once its samples are copied: ClipRelease)
+
+  // a load given up part-way: its clip is freed once the loader is done with it
+  void AbandonLoadingClip() {
+    if (loadingClip != null) ClipRelease.WhenDone(loadingClip);
+    loadingClip = null;
+  }
+
   IEnumerator streamRoutine(string fullpath) {
     AudioClip c = RuntimeAudioClipLoader.Manager.Load(fullpath, false, true, false);
+    loadingClip = c;
 
     loaderObject = Instantiate(loadingPrefab, transform, false) as GameObject;
     loaderObject.transform.localPosition = new Vector3(-.05f, .013f, 0.061f);
@@ -144,13 +155,17 @@ public class samplerLoad : MonoBehaviour {
 
     clipSamples = new float[c.samples * c.channels];
     c.GetData(clipSamples, 0);
+    loadingClip = null;
+    ClipRelease.Now(c); // the samples are copied: the clip isn't needed any more
 
-    //alocate the memory
+    //alocate the memory (the last clip's, if one is still pinned, is let go first)
+    if (m_ClipHandle.IsAllocated) m_ClipHandle.Free();
     m_ClipHandle = GCHandle.Alloc(clipSamples, GCHandleType.Pinned);
     for (int i = 0; i < players.Length; i++) players[i].LoadSamples(clipSamples, m_ClipHandle, c.channels);
   }
 
   void OnDestroy() {
+        AbandonLoadingClip();
         if (m_ClipHandle.IsAllocated)
         {
             m_ClipHandle.Free();

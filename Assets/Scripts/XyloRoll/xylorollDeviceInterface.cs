@@ -563,15 +563,40 @@ public class xylorollDeviceInterface : deviceInterface {
     StopAllCoroutines();
   }
 
+  // (2026-11) On the Quest this sometimes threw IndexOutOfRange every second, and the
+  // Quest's stack traces have no line numbers: say which part failed, and the sizes
+  // involved, then throw as before.
   public override InstrumentData GetData() {
+    string stage = "start";
+    try {
+      return GetDataChecked(ref stage);
+    } catch (System.Exception e) {
+      if (Time.unscaledTime - lastGetDataError > 5f) {
+        lastGetDataError = Time.unscaledTime;
+        oscillatorBankComponentInterface ob = oscBank != null ? oscBank.GetComponent<oscillatorBankComponentInterface>() : null;
+        Debug.LogError("[XyloRoll] GetData failed at '" + stage + "': " + e.GetType().Name + " - xyHandles " +
+          (_adsrInterface != null && _adsrInterface.xyHandles != null ? _adsrInterface.xyHandles.Length.ToString() : "null") +
+          ", osc amp/freq/wave " + (ob == null ? "no bank" : (ob.ampPercent == null ? "null" : ob.ampPercent.Length.ToString()) + "/" +
+          (ob.freqPercent == null ? "null" : ob.freqPercent.Length.ToString()) + "/" + (ob.wavePercent == null ? "null" : ob.wavePercent.Length.ToString())) +
+          ", keys " + keys.Length + ", keyStates " + keyStates.Length + ", octaves " + octaves + ", selected " + selectedKeys.Count +
+          ", timeline events " + (_timeline != null && _timeline._tlEvents != null ? _timeline._tlEvents.Count.ToString() : "?"));
+      }
+      throw;
+    }
+  }
+  float lastGetDataError = -10;
+
+  InstrumentData GetDataChecked(ref string stage) {
     XyloRollData data = new XyloRollData();
     data.deviceType = menuItem.deviceType.XyloRoll;
     GetTransformData(data);
 
+    stage = "adsr";
     data.ADSRdata = new Vector2[3];
     for (int i = 0; i < 3; i++) {
       data.ADSRdata[i] = _adsrInterface.xyHandles[i].percent;
     }
+    stage = "sliders";
     data.octaveSetting = octaveSlider.switchVal;
     data.octaves = octaves;
 
@@ -584,35 +609,43 @@ public class xylorollDeviceInterface : deviceInterface {
 
     data.inputSample = new string[2];
 
+    stage = "sample";
     samplerLoad tempSampLoad = sampleBank.GetComponent<samplerLoad>();
     if (tempSampLoad.queuedSample[0] != "") {
       data.inputSample[0] = tempSampLoad.queuedSample[0];
       data.inputSample[1] = tempSampLoad.queuedSample[1];
     } else tempSampLoad.getTapeInfo(out data.inputSample[0], out data.inputSample[1]);
 
+    stage = "oscillators";
     oscillatorBankComponentInterface _oscInterface = oscBank.GetComponent<oscillatorBankComponentInterface>();
-    data.oscAamp = _oscInterface.ampPercent[0];
-    data.oscAfreq = _oscInterface.freqPercent[0];
-    data.oscAwave = _oscInterface.wavePercent[0];
+    // (from the dials and sliders themselves: they hold the values even while the bank is
+    // hidden, before the bank has copied them)
+    data.oscAamp = _oscInterface.ampDials[0].percent;
+    data.oscAfreq = _oscInterface.freqDials[0].percent;
+    data.oscAwave = _oscInterface.waveSliders[0].percent;
 
-    data.oscBamp = _oscInterface.ampPercent[1];
-    data.oscBfreq = _oscInterface.freqPercent[1];
-    data.oscBwave = _oscInterface.wavePercent[1];
+    data.oscBamp = _oscInterface.ampDials[1].percent;
+    data.oscBfreq = _oscInterface.freqDials[1].percent;
+    data.oscBwave = _oscInterface.waveSliders[1].percent;
 
+    stage = "jacks/midi";
     data.jackOutID = output.transform.GetInstanceID();
 
     data.midiInConnection = _midiIn.connectedDevice;
     data.midiOutConnection = _midiOut.connectedDevice;
 
+    stage = "timeline";
     data.timelinePresent = true;
     data.timelineData = _timeline.GetTimelineData();
     data.timelineHeight = _timeline.heightHandle.transform.localPosition.y;
+    stage = "timeline events";
     List<timelineEvent.eventData> tempevents = new List<timelineEvent.eventData>();
     for (int i = 0; i < _timeline._tlEvents.Count; i++) {
       if (_timeline._tlEvents[i] != null) tempevents.Add(_timeline._tlEvents[i].getEventInfo());
     }
     data.timelineEvents = tempevents.ToArray();
 
+    stage = "selected keys";
        data.selectedKeys = selectedKeys;
 
         return data;

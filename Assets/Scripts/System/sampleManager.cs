@@ -52,6 +52,10 @@ public class sampleManager : MonoBehaviour {
   public string parseFilename(string f) {
 
     if (f == "") return "";
+    // A sample's name is saved with this machine's folder separator ("APP\\Drums\\kick.wav"
+    // on Windows). Patches and tapes from the PC reach the Quest (multiplayer, shared
+    // patches), where '\\' is an ordinary character: use '/' there. (2026-11)
+    if (Path.DirectorySeparatorChar == '/') f = f.Replace('\\', '/');
 
         if (f.Substring(0, 3) == "APP") {
       f = f.Remove(0, 3);

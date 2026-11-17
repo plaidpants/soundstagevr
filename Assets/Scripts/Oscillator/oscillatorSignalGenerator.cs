@@ -44,8 +44,8 @@ public class oscillatorSignalGenerator : signalGenerator
         float[] frequencyBuffer = AudioBufferPool.GetCleared(ref _scratch_frequencyBuffer, buffer.Length);
         float[] amplitudeBuffer = AudioBufferPool.GetCleared(ref _scratch_amplitudeBuffer, buffer.Length);
 
-        if (freqGen != null) freqGen.processBuffer(frequencyBuffer, dspTime, channels);
-        if (ampGen != null) ampGen.processBuffer(amplitudeBuffer, dspTime, channels);
+        if (freqGen != null) freqGen.Pull(frequencyBuffer, dspTime, channels);
+        if (ampGen != null) ampGen.Pull(amplitudeBuffer, dspTime, channels);
 
         // operates on every buffer pair
         OscillatorSignalGenerator(buffer, buffer.Length, channels, ref _phase, analogWave, frequency, amplitude, prevAmplitude, frequencyBuffer, amplitudeBuffer
