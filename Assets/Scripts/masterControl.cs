@@ -80,6 +80,13 @@ public class masterControl : MonoBehaviour {
     setGlowLevel(glowVal);
     setGlowQuality(PlayerPrefs.GetInt("glowQuality", 2));
     setEmissionLevel(PlayerPrefs.GetInt("emissionLevel", 0));
+    // 3D audio (binaural) setting: saved, and now switchable in the in-game settings
+    // panel too (before, only the desktop UI's audio settings set it, so on the Quest it
+    // was always off)
+    // Default: ALL on the headset (hearing where things are helps find them to play),
+    // OFF on the PC (it records / broadcasts the session). The button's choice is saved.
+    int binauralDefault = Application.platform == RuntimePlatform.Android ? (int)BinauralMode.All : (int)BinauralMode.None;
+    BinauralSetting = (BinauralMode)Mathf.Clamp(PlayerPrefs.GetInt("audioBinaural", binauralDefault), 0, 2);
 
     if (PlayerPrefs.GetInt("envSound") == 0) {
       MuteBackgroundSFX(true);
@@ -359,21 +366,34 @@ public class masterControl : MonoBehaviour {
   public BinauralMode BinauralSetting = BinauralMode.None;
 
   public void updateBinaural(int num) {
+    num = Mathf.Clamp(num, 0, 2);
+    PlayerPrefs.SetInt("audioBinaural", num);
     if (BinauralSetting == (BinauralMode)num) {
       return;
     }
     BinauralSetting = (BinauralMode)num;
+    Debug.Log("[masterControl] 3D audio: " + BinauralSetting);
 
     speakerDeviceInterface[] standaloneSpeakers = FindObjectsOfType<speakerDeviceInterface>();
     for (int i = 0; i < standaloneSpeakers.Length; i++) {
-      if (BinauralSetting == BinauralMode.None) standaloneSpeakers[i].audio.spatialize = false;
-      else standaloneSpeakers[i].audio.spatialize = true;
+      SetSpatial(standaloneSpeakers[i].audio, BinauralSetting != BinauralMode.None);
     }
     embeddedSpeaker[] embeddedSpeakers = FindObjectsOfType<embeddedSpeaker>();
     for (int i = 0; i < embeddedSpeakers.Length; i++) {
-      if (BinauralSetting == BinauralMode.All) embeddedSpeakers[i].audio.spatialize = true;
-      else embeddedSpeakers[i].audio.spatialize = false;
+      SetSpatial(embeddedSpeakers[i].audio, BinauralSetting == BinauralMode.All);
     }
+  }
+
+  // Off -> speakers -> all (the in-game settings panel's 3D AUDIO button)
+  public void CycleBinaural() { updateBinaural(((int)BinauralSetting + 1) % 3); }
+
+  // A speaker spatialized by the Oculus spatializer must also be fully 3D: the prefabs'
+  // AudioSources are 2D (spatial blend 0), so switching only 'spatialize' on gave no
+  // direction and no fall-off with distance (2026-11).
+  public static void SetSpatial(AudioSource a, bool on) {
+    if (a == null) return;
+    a.spatialize = on;
+    a.spatialBlend = on ? 1f : 0f;
   }
 
   public enum WireMode {

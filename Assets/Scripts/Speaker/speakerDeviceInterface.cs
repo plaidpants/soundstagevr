@@ -34,7 +34,7 @@ public class speakerDeviceInterface : deviceInterface {
   }
 
   void Start() {
-    audio.spatialize = (masterControl.instance.BinauralSetting != masterControl.BinauralMode.None);
+    masterControl.SetSpatial(audio, masterControl.instance.BinauralSetting != masterControl.BinauralMode.None);
   }
 
   public void Activate(int[] prevIDs) {

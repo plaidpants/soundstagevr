@@ -31,6 +31,7 @@ public class wirePanelComponentInterface : componentInterface {
   uiPanelSinglePress envpanel, windpanel, uisoundpanel, skypanel; // right column, buttonIDs 10-13
   uiPanelSinglePress netpanel; // right column row 4, buttonID 14 (Net/NetSession)
   uiPanelSinglePress roompanel, roommovepanel; // right column rows 5, 6, buttonIDs 15, 16 (Net/NetRoom)
+  uiPanelSinglePress binauralpanel; // right column row 7, buttonID 17: 3D audio off / speakers / all
 
   Color colorGreen = Color.HSVToRGB(.4f, 230f / 255, 118f / 255);
   Color colorRed = Color.HSVToRGB(0f, 230f / 255, 118f / 255);
@@ -56,6 +57,8 @@ public class wirePanelComponentInterface : componentInterface {
     netpanel = CloneButton("multiplayerPanel", 14, 4);
     roompanel = CloneButton("roomAlignPanel", 15, 5);
     roommovepanel = CloneButton("roomMovePanel", 16, 6);
+    binauralpanel = CloneButton("binauralPanel", 17, 7);
+    UpdateBinauralLabel();
     NetSession.StatusChanged += UpdateNetLabel;
     NetRoom.Changed += UpdateNetLabel;
     UpdateNetLabel();
@@ -131,7 +134,7 @@ public class wirePanelComponentInterface : componentInterface {
     g.name = "versionLabel";
     Vector3 p = src.localPosition;
     p.x = (0.1665f + midipanel.transform.localPosition.x) * .5f;
-    p.y = 0.012f + 0.038f * 7;
+    p.y = 0.012f + 0.038f * 8;
     g.transform.localPosition = p;
     g.transform.localScale = src.localScale * .7f;
     g.GetComponent<TextMesh>().text = "SOUNDSTAGE " + Application.version;
@@ -209,6 +212,13 @@ public class wirePanelComponentInterface : componentInterface {
     }
   }
 
+  void UpdateBinauralLabel() {
+    if (binauralpanel == null) return;
+    masterControl.BinauralMode m = masterControl.instance.BinauralSetting;
+    binauralpanel.label.text = "3D AUDIO: " + (m == masterControl.BinauralMode.None ? "OFF" : m == masterControl.BinauralMode.Speaker ? "SPEAKERS" : "ALL");
+    binauralpanel.newColor(m == masterControl.BinauralMode.None ? colorRed : colorGreen);
+  }
+
   void UpdateMsaaLabel() {
     if (msaapanel == null) return;
     int m = QuestPerformanceSetup.Msaa;
@@ -273,6 +283,9 @@ public class wirePanelComponentInterface : componentInterface {
     } else if (ID == 11) {
       if (EnvironmentControl.instance != null) EnvironmentControl.instance.SetWind(!EnvironmentControl.instance.WindOn);
       UpdateEnvironmentLabels();
+    } else if (ID == 17) {
+      masterControl.instance.CycleBinaural();
+      UpdateBinauralLabel();
     } else if (ID == 15) {
       NetRoom.AlignButton();
       UpdateNetLabel();
