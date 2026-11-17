@@ -64,7 +64,8 @@ public class audioSettingsManager : MonoBehaviour {
     if (!on) return;
     int num = System.Int32.Parse(binauralGroup.ActiveToggles().First().transform.parent.name);
     PlayerPrefs.SetInt("audioBinaural", num);
-    MC.updateBinaural(num);
+    if (MC == null) MC = masterControl.instance; // the desktop UI is a prefab now: no scene link
+    if (MC != null) MC.updateBinaural(num);
   }
 
   public void UpdateQuality(bool on) {

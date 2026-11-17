@@ -37,6 +37,7 @@ public class SnapTurn : MonoBehaviour {
       foreach (manipulator m in FindObjectsOfType<manipulator>()) if (!m.IsLeftHand) rightHand = m;
     }
 
+    if (!OVRSafe.Available) return;
     float x = OVRInput.Get(OVRInput.Axis2D.PrimaryThumbstick, OVRInput.Controller.RTouch).x;
     if (Mathf.Abs(x) < rearmThreshold) { armed = true; return; }
     if (!armed || Mathf.Abs(x) < flickThreshold) return;

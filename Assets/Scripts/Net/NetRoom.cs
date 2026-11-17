@@ -129,6 +129,7 @@ public class NetRoom : MonoBehaviour {
   bool Pressed() {
     bool now;
     if (HandInput.HandsActive()) now = HandInput.Get(1).pinchIndex > (pressedLast ? .5f : .85f);
+    else if (!OVRSafe.Available) now = Input.GetKey(KeyCode.Delete);
     else now = OVRInput.Get(OVRInput.Button.Two, OVRInput.Controller.RTouch); // B (A opens the menu)
     bool edge = now && !pressedLast;
     pressedLast = now;

@@ -160,6 +160,7 @@ public class NetControls : MonoBehaviour {
     // Then it may have changed the device's structure: share the patch again.
     if (obj is handle || obj is button || obj is key || NetTools.IsTool(obj) || obj is omniPlug || obj is omniJack) return;
     if (obj is tape) return; // NetTapes
+    if (obj is midiPanel) return; // the MIDI device list: picking from it is local (and shared by NetMidi) - a patch reload here closed the list before anything could be picked
     if (obj.name == "sizeHandle" && (obj.GetComponentInParent<keyboardDeviceInterface>() != null || obj.GetComponentInParent<xylorollDeviceInterface>() != null)) return; // NetControls.Resized
     if (obj.GetComponentInParent<libraryDeviceInterface>() != null) return; // the tape library's wheels: browsing, nothing to share
     NetDevice dev = obj.GetComponentInParent<NetDevice>();

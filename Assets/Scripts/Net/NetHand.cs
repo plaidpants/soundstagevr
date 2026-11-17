@@ -32,7 +32,58 @@ public class NetHand : MonoBehaviour {
 
   // ---- what the remote player is using ----
 
+  // Without a headset running (the PC in desktop mode) the hand mesh and skeleton can't be
+  // built - they come from the headset runtime - so a tracked hand is drawn as a palm
+  // and five fingertips, from fingertip positions the player's headset sends.
+  static bool NoRuntime { get { return NetSpectator.Active; } }
+  GameObject dotsObj;
+  Transform[] dots;
+  LineRenderer[] fingers;
+
+  public void SetTips(Vector3[] tips) {
+    if (!NoRuntime || tips == null || tips.Length < 5) return;
+    if (dotsObj == null) BuildDots();
+    for (int i = 0; i < 5; i++) {
+      dots[i + 1].localPosition = tips[i];
+      fingers[i].SetPosition(1, tips[i]);
+    }
+  }
+
+  void BuildDots() {
+    dotsObj = new GameObject("handDots");
+    dotsObj.transform.SetParent(transform, false);
+    dots = new Transform[6];
+    fingers = new LineRenderer[5];
+    Material m = new Material(Shader.Find("Sprites/Default"));
+    m.color = new Color(.45f, .75f, 1f);
+    for (int i = 0; i < 6; i++) {
+      GameObject d = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+      Destroy(d.GetComponent<Collider>());
+      d.GetComponent<Renderer>().sharedMaterial = m;
+      d.transform.SetParent(dotsObj.transform, false);
+      d.transform.localScale = Vector3.one * (i == 0 ? .045f : .016f);
+      dots[i] = d.transform;
+    }
+    for (int i = 0; i < 5; i++) {
+      LineRenderer l = new GameObject("finger").AddComponent<LineRenderer>();
+      l.transform.SetParent(dotsObj.transform, false);
+      l.useWorldSpace = false;
+      l.sharedMaterial = m;
+      l.widthMultiplier = .008f;
+      l.positionCount = 2;
+      l.SetPosition(0, Vector3.zero);
+      fingers[i] = l;
+    }
+  }
+
   public void Show(bool handTracking, bool visible) {
+    if (NoRuntime) {
+      if (!handTracking && controllerObj == null) BuildController();
+      if (dotsObj != null) dotsObj.SetActive(visible && handTracking);
+      if (controllerObj != null) controllerObj.SetActive(visible && !handTracking);
+      handVisible = false;
+      return;
+    }
     if (handTracking && handObj == null) BuildHand();
     if (!handTracking && controllerObj == null) BuildController();
     if (handObj != null) handObj.SetActive(visible && handTracking);

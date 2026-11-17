@@ -473,6 +473,13 @@ public class xylorollDeviceInterface : deviceInterface {
   // remembered here with its tick; if ours at that tick differs, ours is set to the
   // host's and the steps since are replayed (silently) - on the audio thread, at the
   // next step.
+  volatile bool arpCorrected;
+  public void NetArpLog() {
+    if (!arpCorrected) return;
+    arpCorrected = false;
+    Debug.Log("[NetClock] arpeggiator on " + name + " moved onto the host's note");
+  }
+
   public class ArpSnap { public long tick; public int cur, mod, playing; }
   readonly ArpSnap[] arpHistory = new ArpSnap[32];
   int arpHistoryNext;
@@ -526,11 +533,14 @@ public class xylorollDeviceInterface : deviceInterface {
     arpCur = p.cur; arpMod = p.mod; arpPlayingKey = p.playing;
     for (long i = 0; i < steps; i++) ArpAdvance(sortedKeys);
     System.Array.Clear(arpHistory, 0, arpHistory.Length); // what we remembered was off
-    Debug.Log("[NetClock] arpeggiator on " + name + " moved onto the host's note");
+    arpCorrected = true; // logged from Update: this runs on the audio thread, where Unity's name can't be read
   }
 
   public void arpStep() {
-    int[] sortedKeys = selectedKeys.ToArray();
+    // runs on the audio thread while a player may be changing the notes on the main
+    // thread: a list changed mid-copy throws - skip this step then
+    int[] sortedKeys;
+    try { sortedKeys = selectedKeys.ToArray(); } catch (System.ArgumentException) { return; }
     if (arpPattern != 4) System.Array.Sort(sortedKeys);
     if (arpPattern != 0 && sortedKeys.Length > 1) ArpApplyPending(sortedKeys);
 

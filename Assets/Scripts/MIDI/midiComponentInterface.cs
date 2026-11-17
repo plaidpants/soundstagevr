@@ -60,7 +60,17 @@ public class midiComponentInterface : componentInterface {
     MIDImaster.instance.RefreshDevices(input);
     int ID = MIDImaster.instance.GetIDbyName(input, s);
     if (ID == -1) {
-      Debug.Log("FAILED ID BY NAME");
+      // Not on this machine. In multiplayer it's usually another machine's device (the
+      // PC's MIDI keyboard, saved in the shared patch): show it as connected there, and
+      // keep the name, so this copy of the patch says the same as the PC's (otherwise
+      // the copies differ, get shared back and forth, and the PC's connection is lost).
+      if (NetMidi.IsRemote(input, s, out string owner)) {
+        NetShowRemote(s + " (" + owner + ")", true, s);
+      } else {
+        Debug.Log("[MIDI] " + s + " isn't on this machine (another player's?)");
+        connectedDevice = s;
+        mainMidiPanel.label.text = s;
+      }
     } else {
       mainMidiPanel.label.text = input ? MIDImaster.instance.inputDevices[ID].name : MIDImaster.instance.outputDevices[ID].name;
       listopen = false;
@@ -70,7 +80,10 @@ public class midiComponentInterface : componentInterface {
   }
 
   void OnDestroy() {
-    if (curMIDIdevice != null) MIDImaster.instance.Disconnect(curMIDIdevice, input, this);
+    // (try: when quitting, MIDImaster is closing inputs on another thread at the same time)
+    if (curMIDIdevice != null && MIDImaster.instance != null) {
+      try { MIDImaster.instance.Disconnect(curMIDIdevice, input, this); } catch (System.Exception) { }
+    }
   }
 
   Coroutine _textKillRoutine;
@@ -90,6 +103,8 @@ public class midiComponentInterface : componentInterface {
       MIDImaster.instance.Disconnect(lastMidiDevice, input, this);
     }
 
+    NetMidi.LocalConnected(this, name, curMIDIdevice != null); // multiplayer: others show it too
+    Debug.Log("[MIDI] " + (curMIDIdevice != null ? "connected " : "couldn't connect ") + name + (input ? " (in)" : " (out)") + " to " + (_deviceInterface != null ? _deviceInterface.name : name));
     if (curMIDIdevice != null) {
       connectedDevice = name;
       s = "CONNECTED!";
@@ -110,6 +125,8 @@ public class midiComponentInterface : componentInterface {
   }
 
   void OnDisable() {
+    panelOn = false;
+    while (midiQueue.TryDequeue(out _)) { } // MIDI in switched off: drop what's waiting
     StopAllCoroutines();
     statusText.gameObject.SetActive(false);
   }
@@ -122,12 +139,23 @@ public class midiComponentInterface : componentInterface {
 
   void Update() {
     if (channelSlider != null) channel = channelSlider.switchVal;
+    PlayQueuedMidi();
   }
 
   bool listopen = false;
   public override void hit(bool on, int ID = -1) {
     if (!on) return;
     if (ID == -1) toggleList();
+    else if (ID >= RemoteBase) {
+      int k = ID - RemoteBase;
+      listopen = false;
+      if (k < remoteShown.Count) {
+        mainMidiPanel.label.text = remoteShown[k].name + " (" + remoteShown[k].owner + ")";
+        statusLightMat.SetColor("_TintColor", connectingColor);
+        NetMidi.RequestRemote(this, remoteShown[k]);
+      }
+      CloseList();
+    }
 
     else {
       mainMidiPanel.label.text = input ? MIDImaster.instance.inputDevices[ID].name : MIDImaster.instance.outputDevices[ID].name;
@@ -146,10 +174,34 @@ public class midiComponentInterface : componentInterface {
     midiPanelList.Clear();
   }
 
+  // ---- multiplayer (Net/NetMidi.cs): MIDI inputs on another player's machine (the PC) ----
+  // listed after this machine's own, as "name (PC)"; picking one asks that machine to
+  // connect it here - it then plays this device for everyone.
+  System.Collections.Generic.List<NetMidi.RemoteInput> remoteShown = new System.Collections.Generic.List<NetMidi.RemoteInput>();
+  const int RemoteBase = 1000;
+
+  public void NetShowRemote(string label, bool connected, string deviceName = null) {
+    mainMidiPanel.label.text = label;
+    if (deviceName != null) connectedDevice = connected ? deviceName : "";
+    statusLightMat.SetColor("_TintColor", connected ? connectedColor : disconnectedColor);
+  }
+
   void OpenList() {
     MIDImaster.instance.RefreshDevices(input);
 
     int count = input ? MIDImaster.instance.inputDevices.Count : MIDImaster.instance.outputDevices.Count;
+    remoteShown.Clear();
+    remoteShown.AddRange(NetMidi.RemoteDevices(input));
+    for (int k = 0; k < remoteShown.Count; k++) {
+      midiPanel m = (Instantiate(midiPanelPrefab, transform, false) as GameObject).GetComponent<midiPanel>();
+      m.transform.localPosition = new Vector3(0, (count + k) * .03f + .045f, .015f);
+      m.transform.localRotation = Quaternion.identity;
+      m.transform.localScale = new Vector3(0.15f, .02f, 1.25f);
+      m.label.text = remoteShown[k].name + " (" + remoteShown[k].owner + ")";
+      m.buttonID = RemoteBase + k;
+      midiPanelList.Add(m);
+    }
+    if (remoteShown.Count > 0 && count == 0) return; // nothing local, but other players' inputs
 
     for (int i = 0; i < count; i++) {
       midiPanel m = (Instantiate(midiPanelPrefab, transform, false) as GameObject).GetComponent<midiPanel>();
@@ -174,34 +226,81 @@ public class midiComponentInterface : componentInterface {
     }
   }
 
+  // The MIDI library calls these on its own thread. Playing a device from there (Unity
+  // calls, the keyboard's timeline...) threw, the library reported "DeviceException:
+  // Error in the application", and input stopped after the first note. They're queued
+  // now and played on the main thread in Update (2026-11).
+  struct MidiIn { public byte kind, ch, a; public int b; } // kind 0 note on, 1 note off, 2 CC
+  readonly System.Collections.Concurrent.ConcurrentQueue<MidiIn> midiQueue = new System.Collections.Concurrent.ConcurrentQueue<MidiIn>();
+
   public void InputNoteOn(Midi.NoteOnMessage msg) {
-    if (channel == 0 || channel == (int)msg.Channel + 1) {
-      _deviceInterface.OnMidiNote((int)msg.Channel + 1, msg.Velocity != 0, (int)msg.Pitch);
+    if (!panelOn) return;
+    midiQueue.Enqueue(new MidiIn { kind = (byte)(msg.Velocity != 0 ? 0 : 1), ch = (byte)((int)msg.Channel + 1), a = (byte)(int)msg.Pitch });
+  }
+
+  // raw short message from WinMidiIn (on the Windows MIDI callback thread: only queue it)
+  public void RawMidiIn(int status, int d1, int d2) {
+    int type = status & 0xF0;
+    byte ch = (byte)((status & 0x0F) + 1);
+    // (not switched off with the panel, unlike MIDI out: the panel's open/closed state
+    // isn't shared, and an input another player connected here must play while this
+    // machine's copy of the panel is closed)
+    if (type == 0x90 && d2 > 0) {
+      midiQueue.Enqueue(new MidiIn { kind = 0, ch = ch, a = (byte)d1 });
+    } else if (type == 0x80 || type == 0x90) {
+      midiQueue.Enqueue(new MidiIn { kind = 1, ch = ch, a = (byte)d1 });
+    } else if (type == 0xB0) {
+      midiQueue.Enqueue(new MidiIn { kind = 2, ch = ch, a = (byte)d1, b = d2 });
     }
   }
 
   public void InputNoteOff(Midi.NoteOffMessage msg) {
-    if (channel == 0 || channel == (int)msg.Channel + 1) {
-      _deviceInterface.OnMidiNote((int)msg.Channel + 1, false, (int)msg.Pitch);
-    }
-
+    midiQueue.Enqueue(new MidiIn { kind = 1, ch = (byte)((int)msg.Channel + 1), a = (byte)(int)msg.Pitch });
   }
 
   public void InputControlChange(Midi.ControlChangeMessage msg) {
-    if (channel == 0 || channel == (int)msg.Channel + 1) {
-      _deviceInterface.OnMidiCC((int)msg.Channel + 1, (int)msg.Control, msg.Value);
+    if (!panelOn) return;
+    midiQueue.Enqueue(new MidiIn { kind = 2, ch = (byte)((int)msg.Channel + 1), a = (byte)(int)msg.Control, b = msg.Value });
+  }
+
+  // (also called by MIDImaster.Update: this component's own Update doesn't run while
+  // its panel is closed)
+  float lastInLog = -10;
+  public void PlayQueuedMidi() {
+    while (midiQueue.TryDequeue(out MidiIn m)) {
+      if (Time.unscaledTime - lastInLog > 2f) {
+        lastInLog = Time.unscaledTime;
+        Debug.Log("[MIDI] in from " + connectedDevice + ": " + (m.kind == 2 ? "CC " + m.a + "=" + m.b : "note " + m.a + (m.kind == 0 ? " on" : " off")) + " ch " + m.ch + " -> " + (_deviceInterface != null ? _deviceInterface.name : "?") + (channel != 0 && channel != m.ch ? " (ignored: listening on channel " + channel + ")" : ""));
+      }
+      if (channel != 0 && channel != m.ch) continue;
+      try {
+        if (m.kind == 2) {
+          _deviceInterface.OnMidiCC(m.ch, m.a, m.b);
+          NetMidi.CC(_deviceInterface, m.ch, m.a, m.b); // multiplayer
+        } else {
+          _deviceInterface.OnMidiNote(m.ch, m.kind == 0, m.a);
+          NetMidi.Note(_deviceInterface, m.ch, m.kind == 0, m.a); // multiplayer
+        }
+      } catch (System.Exception e) { Debug.LogWarning("[MIDI] " + e.Message); }
     }
   }
 
+  // Switched off (the device's MIDI OUT / IN panel hidden): it stays connected - so it
+  // comes back as it was - but sends and plays nothing. Before, a hidden MIDI OUT kept
+  // sending. (A flag, not activeInHierarchy: notes can come from the audio thread.)
+  volatile bool panelOn = true;
+  void OnEnable() { panelOn = true; }
+
   public void OutputNote(bool on, int ID, bool add48 = true) {
     if (input || curMIDIdevice == null) return;
+    if (!panelOn && on) return; // (note-offs still go, so nothing is left hanging)
 
     if (add48) ID += 48;
     MIDImaster.instance.outputNote(curMIDIdevice, on, ID, channel);
   }
 
   public void OutputCC(int val, int ID) {
-    if (input || curMIDIdevice == null) return;
+    if (input || curMIDIdevice == null || !panelOn) return;
     MIDImaster.instance.outputCC(curMIDIdevice, val, ID, channel);
   }
 }

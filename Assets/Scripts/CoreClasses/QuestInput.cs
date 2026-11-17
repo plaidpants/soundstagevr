@@ -51,6 +51,8 @@ public static class QuestInput {
   }
 
   public static float GetAxis(string name) {
+    if (DesktopMode.MouseHand && name == "triggerL") return DesktopMode.Trigger ? 1f : 0f; // no headset: the mouse is the right hand
+    if (!OVRSafe.Available) return 0f;
     OVRInput.Controller c = ControllerFor(name);
     switch (Base(name)) {
       case "trigger": return OVRInput.Get(OVRInput.Axis1D.PrimaryIndexTrigger, c);
@@ -62,6 +64,8 @@ public static class QuestInput {
   }
 
   public static bool GetButton(string name) {
+    if (DesktopMode.MouseHand && DesktopMode.KeyFor(name, out KeyCode k)) return Input.GetKey(k);
+    if (!OVRSafe.Available) return false;
     OVRInput.Controller c = ControllerFor(name);
     switch (Base(name)) {
       case "menuButton": return OVRInput.Get(OVRInput.Button.One, c);
@@ -74,6 +78,8 @@ public static class QuestInput {
   }
 
   public static bool GetButtonDown(string name) {
+    if (DesktopMode.MouseHand && DesktopMode.KeyFor(name, out KeyCode k)) return Input.GetKeyDown(k);
+    if (!OVRSafe.Available) return false;
     OVRInput.Controller c = ControllerFor(name);
     switch (Base(name)) {
       case "menuButton": return OVRInput.GetDown(OVRInput.Button.One, c);
@@ -86,6 +92,8 @@ public static class QuestInput {
   }
 
   public static bool GetButtonUp(string name) {
+    if (DesktopMode.MouseHand && DesktopMode.KeyFor(name, out KeyCode k)) return Input.GetKeyUp(k);
+    if (!OVRSafe.Available) return false;
     OVRInput.Controller c = ControllerFor(name);
     switch (Base(name)) {
       case "menuButton": return OVRInput.GetUp(OVRInput.Button.One, c);

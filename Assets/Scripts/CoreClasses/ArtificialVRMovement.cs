@@ -50,6 +50,7 @@ public class ArtificialVRMovement : MonoBehaviour
 
         Vector3 horizontalMovementVector = Vector3.Cross(verticalMovementVector,-Vector3.up);
 
+        if (!OVRSafe.Available) return;
         Vector2 stick = OVRInput.Get(OVRInput.Axis2D.PrimaryThumbstick, OVRInput.Controller.LTouch);
         if (stick.magnitude < deadZone) return;
         if (platformSetup.calibrating) return;

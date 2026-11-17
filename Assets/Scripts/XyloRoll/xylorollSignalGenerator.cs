@@ -133,30 +133,28 @@ public class xylorollSignalGenerator : signalGenerator {
     float[] b1 = AudioBufferPool.GetCleared(ref _scratch_b1, buffer.Length);
     float[] b2 = AudioBufferPool.GetCleared(ref _scratch_b2, buffer.Length);
 
-    if (oscInput) {
-      for (int i = 0; i < voices.Count; i++) {
-        if (voices[i].adsr.active) {
-          voices[i].osc[0].processBuffer(b1, dspTime, channels);
-          voices[i].osc[1].processBuffer(b2, dspTime, channels);
-
-
+    // (setMonophone, on the main thread, moves a voice to the end of the list - remove,
+    // then add - while this runs on the audio thread: a voice can be briefly missing, so
+    // each one is fetched safely and this buffer just skips the moment it isn't there)
+    for (int i = 0; i < voices.Count; i++) {
+      monophone v;
+      try { v = voices[i]; } catch (System.ArgumentOutOfRangeException) { break; }
+      if (v == null) continue;
+      if (oscInput) {
+        if (v.adsr.active) {
+          v.osc[0].processBuffer(b1, dspTime, channels);
+          v.osc[1].processBuffer(b2, dspTime, channels);
           XylorollMergeSignalsWithOsc(buffer, buffer.Length, b1, b2);
-
         } else {
-          voices[i].curKey = -1;
-          voices[i].releasing = false;
+          v.curKey = -1;
+          v.releasing = false;
         }
-      }
-    } else {
-      for (int i = 0; i < voices.Count; i++) {
-
-        if (voices[i].adsr.active) {
-          voices[i].sampler.processBuffer(b1, dspTime, channels);
-          voices[i].adsr.processBuffer(b2, dspTime, channels);
-
+      } else {
+        if (v.adsr.active) {
+          v.sampler.processBuffer(b1, dspTime, channels);
+          v.adsr.processBuffer(b2, dspTime, channels);
           XylorollMergeSignalsWithoutOsc(buffer, buffer.Length, b1, b2);
-        } else voices[i].curKey = -1;
-
+        } else v.curKey = -1;
       }
     }
   }

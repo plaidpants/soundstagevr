@@ -110,6 +110,15 @@ public class SENaturalBloomAndDirtyLens : MonoBehaviour
 		}
 
 
+		// No material: this copy's shader reference didn't come with it (the desktop UI's
+		// cameras, 2026-11). Borrow the main camera's shader, or pass the image through.
+		if (material == null)
+		{
+			if (shader == null && main != null) shader = main.shader;
+			if (shader != null) material = new Material(shader);
+			if (material == null) { Graphics.Blit(source, destination); return; }
+		}
+
 		#if UNITY_EDITOR
 		if (source.format == RenderTextureFormat.ARGBHalf)
 			inputIsHDR = true;

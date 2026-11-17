@@ -30,7 +30,7 @@ public class timelineGridUI : MonoBehaviour {
     foreach (KeyValuePair<manipulator, GameObject> entry in activePreviews) {
       Vector3 s = entry.Value.transform.localScale;
       s.y = _interface._gridParams.trackHeight;
-      s.x = _interface._gridParams.unitSize / _interface._gridParams.snapFraction;
+      if (_interface._gridParams.snapFraction != 0) s.x = _interface._gridParams.unitSize / _interface._gridParams.snapFraction; // not set up yet: keep
       entry.Value.transform.localScale = s;
     }
 
@@ -48,7 +48,7 @@ public class timelineGridUI : MonoBehaviour {
       activePreviews[o] = Instantiate(eventPreviewPrefab, transform.parent, false);
       Vector3 s = activePreviews[o].transform.localScale;
       s.y = _interface._gridParams.trackHeight;
-      s.x = _interface._gridParams.unitSize / _interface._gridParams.snapFraction;
+      if (_interface._gridParams.snapFraction != 0) s.x = _interface._gridParams.unitSize / _interface._gridParams.snapFraction; // not set up yet: keep
       activePreviews[o].transform.localScale = s;
     }
   }

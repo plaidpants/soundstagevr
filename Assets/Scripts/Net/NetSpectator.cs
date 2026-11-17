@@ -16,10 +16,13 @@ public class NetSpectator : MonoBehaviour {
     }
   }
 
-  public float speed = 2f, lookSpeed = 3f;
+  public float speed = 1f, lookSpeed = 3f;
 
   OVRCameraRig rig;
   float yaw, pitch;
+  Vector3 lastMouse;
+  bool haveMouse;
+  public static Vector2 MouseDelta; // pixels this frame (DesktopMode uses it too)
 
   [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
   static void Boot() {
@@ -27,7 +30,7 @@ public class NetSpectator : MonoBehaviour {
     GameObject g = new GameObject("NetSpectator");
     DontDestroyOnLoad(g);
     g.AddComponent<NetSpectator>();
-    Debug.Log("[NetSpectator] no headset: desktop spectator (right mouse = look, WASD/QE = move)");
+    Debug.Log("[NetSpectator] no headset: desktop camera (right mouse = look, WASD/QE = move; the mouse hand is in Desktop/DesktopMode.cs)");
   }
 
   void Update() {
@@ -37,11 +40,19 @@ public class NetSpectator : MonoBehaviour {
       Vector3 e = rig.transform.eulerAngles;
       yaw = e.y;
       pitch = 0;
+      // no headset, so no head height: the camera would sit on the floor
+      Transform eye = rig.centerEyeAnchor;
+      if (eye != null && eye.position.y < .5f) rig.transform.position += Vector3.up * 1.6f;
     }
 
+    // mouse movement from its position (the project's Input Manager has no "Mouse X" / "Mouse Y")
+    Vector3 mp = Input.mousePosition;
+    Vector2 md = haveMouse ? (Vector2)(mp - lastMouse) : Vector2.zero;
+    lastMouse = mp; haveMouse = true;
+    MouseDelta = md;
     if (Input.GetMouseButton(1)) {
-      yaw += Input.GetAxis("Mouse X") * lookSpeed;
-      pitch = Mathf.Clamp(pitch - Input.GetAxis("Mouse Y") * lookSpeed, -85f, 85f);
+      yaw += md.x * lookSpeed * .1f;
+      pitch = Mathf.Clamp(pitch - md.y * lookSpeed * .1f, -85f, 85f);
     }
     rig.transform.rotation = Quaternion.Euler(pitch, yaw, 0);
 
@@ -53,7 +64,12 @@ public class NetSpectator : MonoBehaviour {
     Vector3 up = Vector3.zero;
     if (Input.GetKey(KeyCode.E)) up += Vector3.up;
     if (Input.GetKey(KeyCode.Q)) up += Vector3.down;
-    float s = speed * (Input.GetKey(KeyCode.LeftShift) ? 4f : 1f) * Time.deltaTime;
+    // Shift faster, Ctrl slower (for lining up on small controls)
+    float mult = Input.GetKey(KeyCode.LeftShift) ? 3f : (Input.GetKey(KeyCode.LeftControl) ? .25f : 1f);
+    float s = speed * mult * Time.deltaTime;
     rig.transform.position += (rig.transform.rotation * move + up) * s;
+    // mouse wheel (when not holding anything): step forward / back
+    if (!DesktopMode.Holding && Input.mouseScrollDelta.y != 0 && !Input.GetMouseButton(0))
+      rig.transform.position += rig.transform.forward * Input.mouseScrollDelta.y * .1f * mult;
   }
 }

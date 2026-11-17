@@ -330,12 +330,17 @@ public class masterControl : MonoBehaviour {
     }
   }
 
+  // desktop UI (Windows): open the folders in Explorer
   public void openRecordings() {
-//    System.Diagnostics.Process.Start("explorer.exe", "/root," + SaveDir + Path.DirectorySeparatorChar + "Samples" + Path.DirectorySeparatorChar + "Recordings" + Path.DirectorySeparatorChar);
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+    System.Diagnostics.Process.Start("explorer.exe", "\"" + SaveDir + Path.DirectorySeparatorChar + "Samples" + Path.DirectorySeparatorChar + "Recordings" + "\"");
+#endif
   }
 
   public void openSavedScenes() {
-//    System.Diagnostics.Process.Start("explorer.exe", "/root," + SaveDir + Path.DirectorySeparatorChar + "Saves" + Path.DirectorySeparatorChar);
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+    System.Diagnostics.Process.Start("explorer.exe", "\"" + SaveDir + Path.DirectorySeparatorChar + "Saves" + "\"");
+#endif
   }
 
   public void openVideoTutorials() {

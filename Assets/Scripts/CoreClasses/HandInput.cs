@@ -31,6 +31,7 @@ public static class HandInput {
   // only valid while the runtime is tracking hands (controllers + hands, not concurrent),
   // so a tracked hand is the faster signal.
   public static bool HandsActive() {
+    if (!OVRSafe.Available) return false;
     OVRPlugin.Controller c = OVRPlugin.GetActiveController();
     if (c == OVRPlugin.Controller.Hands || c == OVRPlugin.Controller.LHand || c == OVRPlugin.Controller.RHand) return true;
     Refresh();
@@ -44,6 +45,7 @@ public static class HandInput {
 
   // Forces a fresh read (used right before rendering for lower-latency poses).
   public static void Refresh(bool force = false) {
+    if (!OVRSafe.Available) return;
     if (!force && lastFrame == Time.frameCount) return;
     lastFrame = Time.frameCount;
     Read(0, OVRPlugin.Hand.HandLeft);

@@ -75,6 +75,7 @@ public class platformSetup : MonoBehaviour {
   }
 
   void UpdateControllerCalibration() {
+    if (!OVRSafe.Available) return;
     bool lClick = OVRInput.Get(OVRInput.Button.PrimaryThumbstick, OVRInput.Controller.LTouch);
     bool rClick = OVRInput.Get(OVRInput.Button.PrimaryThumbstick, OVRInput.Controller.RTouch);
     bool lDown = OVRInput.GetDown(OVRInput.Button.PrimaryThumbstick, OVRInput.Controller.LTouch);

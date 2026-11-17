@@ -27,6 +27,7 @@ public struct HandsPacket {
   public uint leftRot, rightRot;
   public uint[] leftBones, rightBones;
   public float leftScale, rightScale; // hand size (tracked hands)
+  public Vector3[] leftTips, rightTips; // fingertips relative to the hand (for the PC, which can't build the hand mesh)
 }
 
 public class NetPlayer : NetworkBehaviour {
@@ -183,6 +184,8 @@ public class NetPlayer : NetworkBehaviour {
     if (p.handTracking) {
       p.leftBones = ReadBones(OVRPlugin.Hand.HandLeft, ref p.leftOn, out p.leftScale);
       p.rightBones = ReadBones(OVRPlugin.Hand.HandRight, ref p.rightOn, out p.rightScale);
+      p.leftTips = ReadTips(0, l);
+      p.rightTips = ReadTips(1, r);
     }
 
     if (isServer) RpcHands(p);
@@ -207,6 +210,19 @@ public class NetPlayer : NetworkBehaviour {
     }
     manipulator mp = manips[index];
     return mp != null && mp.controllerRep != null ? mp.controllerRep.transform : null;
+  }
+
+  static readonly Vector3[][] tipBuf = { new Vector3[5], new Vector3[5] };
+  static Vector3[] ReadTips(int index, Transform hand) {
+    if (hand == null) return null;
+    foreach (HandFingertips hf in HandFingertips.active) {
+      if (hf.owner == null || hf.owner.ControllerIndex != index) continue;
+      System.Collections.Generic.IList<Transform> pts = hf.HitPoints;
+      if (pts.Count < 5) return null;
+      for (int i = 0; i < 5; i++) tipBuf[index][i] = pts[i] != null ? hand.InverseTransformPoint(pts[i].position) : Vector3.zero;
+      return tipBuf[index];
+    }
+    return null;
   }
 
   static uint[] ReadBones(OVRPlugin.Hand which, ref bool on, out float scale) {
@@ -247,7 +263,10 @@ public class NetPlayer : NetworkBehaviour {
     headPredict.Feed(p.headPos, Compression.DecompressQuaternion(p.headRot), p.time);
     leftPredict.Feed(p.leftPos, Compression.DecompressQuaternion(p.leftRot), p.time);
     rightPredict.Feed(p.rightPos, Compression.DecompressQuaternion(p.rightRot), p.time);
-    if (p.handTracking) { leftNet.SetScale(p.leftScale); rightNet.SetScale(p.rightScale); }
+    if (p.handTracking) {
+      leftNet.SetScale(p.leftScale); rightNet.SetScale(p.rightScale);
+      leftNet.SetTips(p.leftTips); rightNet.SetTips(p.rightTips);
+    }
     leftNet.SetBones(p.leftBones);
     rightNet.SetBones(p.rightBones);
     leftNet.Show(p.handTracking, p.leftOn);

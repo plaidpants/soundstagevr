@@ -135,6 +135,9 @@ public static class NetSync {
     NetworkServer.RegisterHandler<NetTempoMsg>(NetClock.OnServerTempo);
     NetworkServer.RegisterHandler<NetTapeMsg>(OnServerTape);
     NetworkServer.RegisterHandler<NetRoomMsg>(NetRoom.OnServer);
+    NetworkServer.RegisterHandler<NetMidiMsg>((conn, m) => { NetMidi.Apply(m); SendToRemotes(m, conn); });
+    NetworkServer.RegisterHandler<NetMidiListMsg>((conn, m) => { NetMidi.OnList(m); SendToRemotes(m, conn); });
+    NetworkServer.RegisterHandler<NetMidiSelectMsg>((conn, m) => { NetMidi.OnSelect(m); SendToRemotes(m, conn); });
     NetRoom.ServerStarted();
     migrating = false;
     if (keepIds) {
@@ -170,6 +173,9 @@ public static class NetSync {
     NetworkClient.RegisterHandler<NetClockMsg>(NetClock.Apply);
     NetworkClient.RegisterHandler<NetTapeMsg>(NetTapes.Apply);
     NetworkClient.RegisterHandler<NetRoomMsg>(NetRoom.Apply);
+    NetworkClient.RegisterHandler<NetMidiMsg>(NetMidi.Apply);
+    NetworkClient.RegisterHandler<NetMidiListMsg>(NetMidi.OnList);
+    NetworkClient.RegisterHandler<NetMidiSelectMsg>(NetMidi.OnSelect);
     NetworkClient.RegisterHandler<NetSuccessionMsg>(m => { if (NetSession.instance != null) NetSession.instance.successionRank = m.rank; });
     pendingByTemp.Clear();
   }
@@ -244,6 +250,14 @@ public static class NetSync {
   static void OnServerCable(NetworkConnectionToClient conn, NetCableMsg m) {
     NetCables.Apply(m);
     SendToRemotes(m, conn);
+  }
+
+  public static void SendMidiRelay<T>(T m, NetworkConnectionToClient except) where T : struct, NetworkMessage { SendToRemotes(m, except); }
+
+  public static void SendMidi(NetMidiMsg m) {
+    if (!Active) return;
+    if (IsHost) SendToRemotes(m, null);
+    else NetworkClient.Send(m);
   }
 
   public static void SendRoomToRemotes(NetRoomMsg m, NetworkConnectionToClient except) { SendToRemotes(m, except); }
@@ -478,6 +492,11 @@ public static class NetSync {
     InstrumentData data = di.GetData();
     type = data.deviceType;
     data.position = Vector3.zero; data.rotation = Quaternion.identity; data.scale = Vector3.one; data.ID = 0;
+    // The xylophone roll's held keys (in the order pressed, for the arpeggiator) change
+    // with every note and differ in order between machines; key presses are shared as
+    // key messages, so they're no reason to share the whole patch (2026-11: every mallet
+    // hit made the session reload).
+    if (data is XyloRollData xr) xr.selectedKeys = null;
     using (var ms = new MemoryStream()) {
       using (var w = new StreamWriter(ms, new UTF8Encoding(false))) deviceSerializer.Serialize(w, data);
       byte[] b = ms.ToArray();

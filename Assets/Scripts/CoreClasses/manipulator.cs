@@ -255,7 +255,15 @@ public class manipulator : MonoBehaviour {
   // fingertips do that, and the pinch point brushing past keys caused stray notes.
   // It still selects/grabs through OnCollisionStay as before.
   readonly HashSet<manipObject> touchedObjects = new HashSet<manipObject>();
+
+  // Desktop mouse hand (Desktop/DesktopMode.cs): what it points at is picked by a ray,
+  // not by what the controller model happens to bump into; and it doesn't touch things
+  // (keys play on click, not when the pointer brushes past them).
+  [System.NonSerialized] public bool pointerMode;
+  [System.NonSerialized] public Transform pointerTarget;
+
   void OnCollisionEnter(Collision coll) {
+    if (pointerMode) return;
     manipObject o = coll.transform.GetComponent<manipObject>();
     if (o != null && !handsMode && touchedObjects.Add(o)) TouchTracker.Touch(o, true, this);
   }
@@ -267,6 +275,7 @@ public class manipulator : MonoBehaviour {
 
 
   void OnCollisionStay(Collision coll) {
+    if (pointerMode) return;
     hitTransforms.Add(coll.transform);
   }
 
@@ -361,7 +370,9 @@ public class manipulator : MonoBehaviour {
     if (handsMode && selectedObject != null && HandInput.Get(controllerIndex).pinchIndex > 0.3f) return;
     Transform candidate = null;
 
-    if (handsMode) {
+    if (pointerMode) {
+      candidate = pointerTarget;
+    } else if (handsMode) {
       candidate = PickHandCandidate();
     } else if (selectedObject != null) {
       if (hitTransforms.Contains(selectedTransform)) candidate = selectedTransform;
@@ -788,7 +799,7 @@ public class manipulator : MonoBehaviour {
     updateProngs();
     bool triggerButtonDown, triggerButtonUp, menuButtonDown;
 
-        OVRPlugin.Controller currentControl = OVRPlugin.GetActiveController(); //get current controller scheme
+        OVRPlugin.Controller currentControl = OVRSafe.Available ? OVRPlugin.GetActiveController() : OVRPlugin.Controller.None; //get current controller scheme
         bool currentControlHands = HandInput.HandsActive();
         bool currentControlChanged = false;
         float pinchIndexStrength = 0;

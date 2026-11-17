@@ -277,6 +277,7 @@ UnityPlayer.dll
 
 # Added 2026-11 (Quest upgrade cleanup)
 /BuildQuest/
+/BuildWindows/
 /Logs/
 /_old_builds/
 /SoundStage_Data/

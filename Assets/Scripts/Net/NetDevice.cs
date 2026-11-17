@@ -137,6 +137,7 @@ public class NetDevice : MonoBehaviour {
   bool haveContentHash;
 
   public void Rebaseline() { haveContentHash = false; }
+  float lastContentShare = -10;
 
   void CheckContent() {
     contentTimer += Time.unscaledDeltaTime;
@@ -151,6 +152,11 @@ public class NetDevice : MonoBehaviour {
     int h = NetSync.ContentHash(di, out _);
     if (!haveContentHash) { contentHash = h; haveContentHash = true; return; }
     if (h == contentHash) return;
+    // at most one whole-patch share every few seconds per device (MIDI into the xylophone
+    // roll changed its saved notes all the time: the PC rebuilt and sent the whole patch
+    // every second and slowed to a crawl)
+    if (Time.unscaledTime - lastContentShare < 3f) return;
+    lastContentShare = Time.unscaledTime;
     contentHash = h;
     Debug.Log("[NetDevice] " + name + " content changed here: sharing the patch");
     NetSync.LocalPatchReplaced();

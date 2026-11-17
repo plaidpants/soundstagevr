@@ -249,6 +249,7 @@ public class NetClock : MonoBehaviour {
     for (int i = 0; i < m.arpIds.Length; i++) {
       if (!NetDevice.byId.TryGetValue(m.arpIds[i], out NetDevice d) || d == null) continue;
       xylorollDeviceInterface xy = d.GetComponent<xylorollDeviceInterface>();
+      if (xy != null) xy.NetArpLog();
       if (xy == null || !xy.NetArpActive || xy.NetArpConfig != m.arpConfig[i]) continue;
       xy.NetArpSet(m.arpTick[i], m.arpState[i * 3], m.arpState[i * 3 + 1], m.arpState[i * 3 + 2]);
     }
