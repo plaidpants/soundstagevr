@@ -149,6 +149,7 @@ public static class NetSync {
     NetSamples.RegisterServer();
     NetLoopers.RegisterServer();
     NetScales.RegisterServer();
+    NetSampler.RegisterServer();
     NetRoom.ServerStarted();
     migrating = false;
     if (keepIds) {
@@ -191,6 +192,7 @@ public static class NetSync {
     NetSamples.RegisterClient();
     NetLoopers.RegisterClient();
     NetScales.RegisterClient();
+    NetSampler.RegisterClient();
     NetworkClient.RegisterHandler<NetSuccessionMsg>(m => { if (NetSession.instance != null) NetSession.instance.successionRank = m.rank; });
     pendingByTemp.Clear();
   }
@@ -468,6 +470,12 @@ public static class NetSync {
 
   // Clear the patch (like pauseMenu NEW) and load set, quietly.
   static void ReplacePatch(xmlSaveLoad set, System.Action<int, GameObject> onDevice) {
+    // loops aren't in the patch: keep each looper's through the reload (by position)
+    var loops = new List<KeyValuePair<Vector3, waveTranscribeLooper.Snapshot>>();
+    foreach (waveTranscribeLooper l in Object.FindObjectsOfType<waveTranscribeLooper>()) {
+      var s = l.TakeSnapshot();
+      if (s != null) loops.Add(new KeyValuePair<Vector3, waveTranscribeLooper.Snapshot>(l.transform.position, s));
+    }
     applyingPatch = true;
     try {
       // Destroyed immediately, not at the end of the frame: the old devices' jacks would
@@ -488,6 +496,24 @@ public static class NetSync {
     } finally {
       NetDevice.silentCreate = false;
       applyingPatch = false;
+    }
+    if (loops.Count > 0 && NetSession.instance != null) NetSession.instance.StartCoroutine(RestoreLoops(loops));
+  }
+
+  static IEnumerator RestoreLoops(List<KeyValuePair<Vector3, waveTranscribeLooper.Snapshot>> loops) {
+    // after the new loopers' Start (which clears them) and their first length update
+    yield return null;
+    yield return null;
+    yield return null;
+    foreach (waveTranscribeLooper l in Object.FindObjectsOfType<waveTranscribeLooper>()) {
+      int best = -1; float bestD = .05f;
+      for (int i = 0; i < loops.Count; i++) {
+        float d = Vector3.Distance(loops[i].Key, l.transform.position);
+        if (d < bestD) { bestD = d; best = i; }
+      }
+      if (best < 0) continue;
+      l.RestoreSnapshot(loops[best].Value);
+      loops.RemoveAt(best);
     }
   }
 

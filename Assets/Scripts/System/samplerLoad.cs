@@ -166,6 +166,7 @@ public class samplerLoad : MonoBehaviour {
 
     clipSamples = new float[c.samples * c.channels];
     c.GetData(clipSamples, 0);
+    clipSamples = ToOutputRate(clipSamples, c.channels, c.frequency, fullpath);
     loadingClip = null;
     ClipRelease.Now(c); // the samples are copied: the clip isn't needed any more
 
@@ -173,6 +174,35 @@ public class samplerLoad : MonoBehaviour {
     if (m_ClipHandle.IsAllocated) m_ClipHandle.Free();
     m_ClipHandle = GCHandle.Alloc(clipSamples, GCHandleType.Pinned);
     for (int i = 0; i < players.Length; i++) players[i].LoadSamples(clipSamples, m_ClipHandle, c.channels);
+  }
+
+  // The players step through a clip one frame per output frame (times the speed), so a
+  // clip has to be at the output rate (2026-11-18): the Quest runs at 48 kHz and the PC
+  // at 44.1 kHz, and a 44.1 kHz sample played 9% fast and 1.5 semitones high on the
+  // Quest, a 48 kHz one (a Quest recording) slow and low on the PC - so the same sample
+  // was neither the same pitch nor in time on the two. Linear interpolation, like the
+  // looper's.
+  static float[] ToOutputRate(float[] src, int ch, int rate, string path) {
+    int outRate = AudioSettings.outputSampleRate;
+    if (rate <= 0 || outRate <= 0 || rate == outRate || ch <= 0) return src;
+    int inFrames = src.Length / ch;
+    if (inFrames < 2) return src;
+    long outFrames = (long)inFrames * outRate / rate;
+    if (outFrames < 2 || outFrames * ch > int.MaxValue / 2) return src;
+    float[] dst = new float[outFrames * ch];
+    double step = (double)rate / outRate;
+    for (long f = 0; f < outFrames; f++) {
+      double pos = f * step;
+      int a = (int)pos;
+      if (a >= inFrames - 1) a = inFrames - 2;
+      float t = (float)(pos - a);
+      if (t > 1) t = 1;
+      int ia = a * ch, ib = ia + ch;
+      long o = f * ch;
+      for (int c = 0; c < ch; c++) dst[o + c] = src[ia + c] + (src[ib + c] - src[ia + c]) * t;
+    }
+    Debug.Log("[samplerLoad] " + System.IO.Path.GetFileName(path) + ": " + rate + " Hz -> " + outRate + " Hz");
+    return dst;
   }
 
   // ---- samples coming from other players ----
