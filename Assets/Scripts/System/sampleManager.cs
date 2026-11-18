@@ -187,6 +187,7 @@ public class sampleManager : MonoBehaviour {
     Directory.CreateDirectory(dir + Path.DirectorySeparatorChar + SessionSamples.Category); // samples from multiplayer sessions
     loadSampleDictionary(dir, "DOC");
     AddCustomSamples();
+    SessionSamples.Sync(); // samples received from other players, still in the cache
 
   }
 }

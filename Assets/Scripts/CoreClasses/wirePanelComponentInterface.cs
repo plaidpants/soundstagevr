@@ -29,11 +29,11 @@ public class wirePanelComponentInterface : componentInterface {
   uiPanelSinglePress brightnesspanel; // cloned from midipanel at runtime (buttonID 8)
   uiPanelSinglePress msaapanel; // cloned from midipanel at runtime (buttonID 9)
   uiPanelSinglePress envpanel, windpanel, uisoundpanel, skypanel; // right column, buttonIDs 10-13
-  uiPanelSinglePress netpanel; // right column row 4, buttonID 14 (Net/NetSession)
+  uiPanelSinglePress netpanel; // right column row 4, buttonID 14: MULTIPLAYER: LOCAL / INTERNET (Net/NetSession)
+  uiPanelSinglePress netonpanel; // left column row 4, buttonID 19: MULTIPLAYER: ON / OFF (internet ON: NetCodeDialog)
+  TextMesh netstatus; // left column row 5: OFFLINE / SEARCHING... / HOSTING (n) 90MS / JOINED (n) 89MS
   uiPanelSinglePress roompanel, roommovepanel; // right column rows 5, 6, buttonIDs 15, 16 (Net/NetRoom)
   uiPanelSinglePress harnesspanel; // right column row 8, buttonID 18: the test harness (TestHarness)
-  uiPanelSinglePress internetroompanel; // right column row 9, buttonID 19: next internet room (NetInternet)
-  uiPanelSinglePress internetprevpanel; // left column row 9, buttonID 20: previous internet room
   uiPanelSinglePress sharedsamplespanel; // left column row 8, buttonID 21: size of / clear the received-samples cache (SampleCache)
   float clearArmedUntil; // the shared-samples button clears on a second press within 4 s
   uiPanelSinglePress binauralpanel; // right column row 7, buttonID 17: 3D audio off / speakers / all
@@ -66,10 +66,9 @@ public class wirePanelComponentInterface : componentInterface {
     UpdateBinauralLabel();
     harnesspanel = CloneButton("harnessPanel", 18, 8);
     UpdateHarnessLabel();
-    internetroompanel = CloneButton("internetRoomPanel", 19, 9);
-    internetprevpanel = CloneButton("internetPrevRoomPanel", 20, 9);
-    if (internetprevpanel != null) internetprevpanel.transform.localPosition = AboveTop(9, midipanel.transform.localPosition.x);
-    NetInternet.OccupancyChanged += UpdateNetLabel;
+    netonpanel = CloneButton("multiplayerOnPanel", 19, 4);
+    if (netonpanel != null) netonpanel.transform.localPosition = AboveTop(4, midipanel.transform.localPosition.x);
+    CreateNetStatusLabel();
     sharedsamplespanel = CloneButton("sharedSamplesPanel", 21, 8);
     if (sharedsamplespanel != null) sharedsamplespanel.transform.localPosition = AboveTop(8, midipanel.transform.localPosition.x);
     UpdateSharedSamplesLabel();
@@ -156,6 +155,25 @@ public class wirePanelComponentInterface : componentInterface {
     g.GetComponent<TextMesh>().text = "SOUNDSTAGE " + Application.version;
   }
 
+  // The multiplayer status line: a text, not a button, under MULTIPLAYER ON / OFF.
+  void CreateNetStatusLabel() {
+    Transform src = transform.Find("WireLabel");
+    if (src == null || midipanel == null) return;
+    GameObject g = Instantiate(src.gameObject, src.parent, false);
+    g.name = "netStatusLabel";
+    NetCodeDialog.MeasureButton(midipanel, out float w, out float cx);
+    Vector3 p = src.localPosition;
+    p.x = midipanel.transform.localPosition.x + cx;
+    p.y = 0.012f + 0.038f * 5;
+    g.transform.localPosition = p;
+    g.transform.localScale = src.localScale * .7f;
+    netstatus = g.GetComponent<TextMesh>();
+    netstatus.anchor = TextAnchor.MiddleCenter;
+    netstatus.alignment = TextAlignment.Center;
+    netStatusWidth = w;
+  }
+  float netStatusWidth;
+
   // Buttons cloned from MIDI OUT also copy its "(REQUIRES VIRTUAL MIDI DEVICE)" note.
   static void HideMidiNote(GameObject g) {
     foreach (TextMesh t in g.GetComponentsInChildren<TextMesh>(true))
@@ -187,22 +205,25 @@ public class wirePanelComponentInterface : componentInterface {
 
   void UpdateNetLabel() {
     if (netpanel == null) return;
-    netpanel.label.text = NetSession.StatusText();
-    netpanel.newColor(NetSession.CurrentMode == NetSession.Mode.Off ? colorRed : colorGreen);
-    if (internetroompanel != null && internetprevpanel != null) {
-      bool internet = NetSession.CurrentMode == NetSession.Mode.Internet;
-      int n = NetInternet.Rooms, r = NetInternet.Room;
-      int next = r % n + 1, prev = (r + n - 2) % n + 1;
-      if (internet) {
-        string nt = NetInternet.RoomText(next), pt = NetInternet.RoomText(prev);
-        internetroompanel.label.text = "ROOM " + next + (nt != "" ? ": " + nt : "") + " >";
-        internetprevpanel.label.text = "< ROOM " + prev + (pt != "" ? ": " + pt : "");
-      } else {
-        internetroompanel.label.text = "INTERNET ROOM: " + r + " >";
-        internetprevpanel.label.text = "< INTERNET ROOM";
+    bool internet = NetSession.Kind == NetSession.Mode.Internet;
+    netpanel.label.text = internet ? "MULTIPLAYER: INTERNET" : "MULTIPLAYER: LOCAL";
+    netpanel.newColor(colorGreen);
+    bool on = NetSession.On && !NetSession.Ended;
+    if (netonpanel != null) {
+      netonpanel.label.text = !on ? "MULTIPLAYER: OFF" : internet ? "ROOM " + NetInternet.Code + ": ON" : "MULTIPLAYER: ON";
+      netonpanel.newColor(on ? colorGreen : colorRed);
+    }
+    if (netstatus != null) {
+      netstatus.text = NetSession.StatusText();
+      netstatus.transform.localScale = transform.Find("WireLabel") != null ? transform.Find("WireLabel").localScale * .7f : netstatus.transform.localScale;
+      Renderer r = netstatus.GetComponent<Renderer>();
+      if (r != null && netStatusWidth > 0) {
+        Bounds lb = r.localBounds;
+        Vector3 a = transform.InverseTransformPoint(netstatus.transform.TransformPoint(lb.min));
+        Vector3 b = transform.InverseTransformPoint(netstatus.transform.TransformPoint(lb.max));
+        float w = Mathf.Abs(b.x - a.x);
+        if (w > netStatusWidth && w > 1e-5f) netstatus.transform.localScale *= netStatusWidth / w;
       }
-      internetroompanel.newColor(internet ? colorGreen : colorRed);
-      internetprevpanel.newColor(internet ? colorGreen : colorRed);
     }
     if (roompanel != null) {
       roompanel.label.text = NetRoom.StatusText();
@@ -243,7 +264,6 @@ public class wirePanelComponentInterface : componentInterface {
     TestHarness.Changed -= UpdateHarnessLabel;
     NetSession.StatusChanged -= UpdateNetLabel;
     NetRoom.Changed -= UpdateNetLabel;
-    NetInternet.OccupancyChanged -= UpdateNetLabel;
     SampleCache.Changed -= UpdateSharedSamplesLabel;
   }
 
@@ -355,13 +375,15 @@ public class wirePanelComponentInterface : componentInterface {
       NetRoom.MoveButton();
       UpdateNetLabel();
     } else if (ID == 14) {
-      NetSession.CycleMode(); // OFF -> LOCAL -> INTERNET
+      NetSession.ToggleKind(); // LOCAL <-> INTERNET (turns multiplayer off if it was on)
       UpdateNetLabel();
     } else if (ID == 19) {
-      NetSession.StepRoom(+1);
-      UpdateNetLabel();
-    } else if (ID == 20) {
-      NetSession.StepRoom(-1);
+      if (NetSession.On && !NetSession.Ended) NetSession.SetOn(false);
+      else if (NetSession.Kind == NetSession.Mode.Local) NetSession.SetOn(true);
+      else {
+        Transform wl = transform.Find("WireLabel");
+        NetCodeDialog.Open(midipanel, wl != null ? wl.GetComponent<TextMesh>() : null, 0.1665f); // terms, then the room code
+      }
       UpdateNetLabel();
     } else if (ID == 21) {
       if (Time.unscaledTime < clearArmedUntil) {

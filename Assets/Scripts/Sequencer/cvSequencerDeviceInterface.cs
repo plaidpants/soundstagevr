@@ -17,7 +17,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 
-public class cvSequencerDeviceInterface : deviceInterface, INetBeatSync {
+public class cvSequencerDeviceInterface : deviceInterface, INetBeatSync, INetPulseSync {
 
   // out generators are nested in the jackOutPrefabs! 
   public GameObject jackOutPrefab, cvJackOutPrefab;
@@ -58,7 +58,7 @@ public class cvSequencerDeviceInterface : deviceInterface, INetBeatSync {
   signalGenerator externalPulse;
   beatTracker _beatManager;
 
-  double _phase = 0;
+  PulseClock pulse = new PulseClock(); // started from the control input: the master clock minus an offset (Net/PulseClock.cs)
   double _sampleDuration = 0;
   float[] lastPlaySig = new float[] { 0, 0 };
 
@@ -156,10 +156,18 @@ public class cvSequencerDeviceInterface : deviceInterface, INetBeatSync {
 
   // ---- multiplayer (Net/NetBeatSync.cs): keep the step lined up with the host's ----
   public bool NetSyncable {
-    get { return externalPulse == null && _beatManager != null && _beatManager.MC && _beatManager.Active && _beatManager.TicksPerMeasure > 0 && dimensions[0] > 0; }
+    get { return _beatManager != null && (externalPulse == null ? _beatManager.MC : masterControl.instance.BeatRunning) && _beatManager.Active && _beatManager.TicksPerMeasure > 0 && dimensions[0] > 0; }
   }
-  public int NetConfig { get { return dimensions[0] * 1000 + _beatManager.TicksPerMeasure; } }
-  public double NetAnchor() { return NetBeat.StepAnchor(targetStep, _beatManager, dimensions[0]); }
+  public int NetConfig { get { return dimensions[0] * 1000 + _beatManager.TicksPerMeasure + (externalPulse != null ? 500000 : 0); } }
+  public double NetAnchor() {
+    return externalPulse != null ? NetBeat.StepAnchor(targetStep, pulse.Tick(_beatManager), dimensions[0])
+                                 : NetBeat.StepAnchor(targetStep, _beatManager, dimensions[0]);
+  }
+  // started from the control input (Net/PulseClock.cs)
+  public bool NetPulseDriven { get { return externalPulse != null; } }
+  public bool NetPlaying { get { return _beatManager != null && _beatManager.Active; } }
+  public void NetStartPlaying() { forcePlay(true); }
+  public double NetPulseOffset { get { return pulse.Offset; } set { pulse.Offset = value; } }
   public double NetPeriod { get { return dimensions[0]; } }
   public double NetTolerance { get { return .5; } }
   public void NetShift(double d) {
@@ -247,11 +255,12 @@ public class cvSequencerDeviceInterface : deviceInterface, INetBeatSync {
 
     float[] playBuffer = AudioBufferPool.GetCleared(ref _scratch_playBuffer, buffer.Length);
     externalPulse.Pull(playBuffer, dspTime, channels);
+    if (pulse.BeginBuffer()) _beatManager.Resync(pulse.Frac); // took the host's start point
 
     for (int i = 0; i < playBuffer.Length; i += channels) {
       if (playBuffer[i] > lastPlaySig[1] && lastPlaySig[1] <= lastPlaySig[0]) {
         _beatManager.beatResetEvent();
-        _phase = 0;
+        pulse.Pulse();
         forcePlay(true);
       }
       lastPlaySig[0] = lastPlaySig[1];
@@ -259,10 +268,7 @@ public class cvSequencerDeviceInterface : deviceInterface, INetBeatSync {
     }
 
     for (int i = 0; i < buffer.Length; i += channels) {
-      _phase += _sampleDuration;
-
-      if (_phase > masterControl.instance.measurePeriod) _phase -= masterControl.instance.measurePeriod;
-      _beatManager.beatUpdateEvent((float)(_phase / masterControl.instance.measurePeriod));
+      _beatManager.beatUpdateEvent(pulse.Advance(_sampleDuration));
     }
   }
 
@@ -520,6 +526,7 @@ public class cvSequencerDeviceInterface : deviceInterface, INetBeatSync {
 
     data.onSwitch = playButton.isHit;
     data.jackInID = controlInput.transform.GetInstanceID();
+    data.pulseOffset = pulse.Offset;
 
     data.dimensions = dimensions;
     data.cubeStates = cubeBools;
@@ -561,6 +568,7 @@ public class cvSequencerDeviceInterface : deviceInterface, INetBeatSync {
   public override void Load(InstrumentData d) {
     cvSequencerData data = d as cvSequencerData;
     base.Load(data);
+    pulse.Offset = data.pulseOffset; // where a control-input start left it (0 in older scenes)
 
     playButton.startToggled = data.onSwitch;
 
@@ -612,6 +620,7 @@ public class cvSequencerDeviceInterface : deviceInterface, INetBeatSync {
 public class cvSequencerData : InstrumentData {
   public bool onSwitch;
   public int jackInID;
+  public double pulseOffset; // master-clock measures at the last control-input start (PulseClock)
   public int[] dimensions;
   public bool[][] cubeStates;
 

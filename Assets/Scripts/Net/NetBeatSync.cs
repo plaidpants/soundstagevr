@@ -25,6 +25,11 @@ public static class NetBeat {
   // shared step-sequencer maths: step minus ticks played, mod length
   public static double StepAnchor(int step, beatTracker bt, int len) {
     long tick = masterControl.instance.measureCount * bt.TicksPerMeasure + bt.CurBeat;
+    return StepAnchor(step, tick, len);
+  }
+
+  // the same with a tick count of its own (a sequencer started from its control input: PulseClock)
+  public static double StepAnchor(int step, long tick, int len) {
     long a = (step - tick) % len;
     return a < 0 ? a + len : a;
   }

@@ -23,6 +23,7 @@ public struct NetClockMsg : NetworkMessage {
   public int[] seqIndex;     // which one on the device,
   public double[] seqAnchor; // position minus clock time played,
   public int[] seqConfig;    // length / speed (only compared when the same here)
+  public double[] seqOffset; // started from the control input: its start point (PulseClock); NaN: on the master clock
   public int[] arpIds;       // running xylophone-roll arpeggiators: device ID,
   public long[] arpTick;     // the clock tick of their last step,
   public int[] arpState;     // which note, direction, note playing (3 per arpeggiator),
@@ -186,7 +187,7 @@ public class NetClock : MonoBehaviour {
       phases.Add(o._phase);
       freqs.Add(o.frequency);
     }
-    var sIds = new List<int>(); var sIdx = new List<int>(); var sAnchor = new List<double>(); var sCfg = new List<int>();
+    var sIds = new List<int>(); var sIdx = new List<int>(); var sAnchor = new List<double>(); var sCfg = new List<int>(); var sOff = new List<double>();
     var aIds = new List<int>(); var aTick = new List<long>(); var aState = new List<int>(); var aCfg = new List<int>();
     foreach (NetDevice d in NetDevice.all) {
       if (d == null || d.netId == 0) continue;
@@ -199,6 +200,7 @@ public class NetClock : MonoBehaviour {
       for (int k = 0; k < list.Length; k++) {
         if (!list[k].NetSyncable) continue;
         sIds.Add(d.netId); sIdx.Add(k); sAnchor.Add(list[k].NetAnchor()); sCfg.Add(list[k].NetConfig);
+        sOff.Add(list[k] is INetPulseSync ps && ps.NetPulseDriven ? ps.NetPulseOffset : double.NaN);
       }
     }
     return new NetClockMsg {
@@ -207,7 +209,7 @@ public class NetClock : MonoBehaviour {
       measure = masterControl.instance.MeasurePhaseSeconds,
       running = masterControl.instance.BeatRunning,
       measureCount = masterControl.instance.measureCount,
-      seqIds = sIds.ToArray(), seqIndex = sIdx.ToArray(), seqAnchor = sAnchor.ToArray(), seqConfig = sCfg.ToArray(),
+      seqIds = sIds.ToArray(), seqIndex = sIdx.ToArray(), seqAnchor = sAnchor.ToArray(), seqConfig = sCfg.ToArray(), seqOffset = sOff.ToArray(),
       arpIds = aIds.ToArray(), arpTick = aTick.ToArray(), arpState = aState.ToArray(), arpConfig = aCfg.ToArray(),
       lfoIds = ids.ToArray(), lfoPhase = phases.ToArray(), lfoFreq = freqs.ToArray()
     };
@@ -234,6 +236,20 @@ public class NetClock : MonoBehaviour {
       INetBeatSync[] list = d.GetComponentsInChildren<INetBeatSync>(true);
       if (m.seqIndex[i] >= list.Length) continue;
       INetBeatSync sq = list[m.seqIndex[i]];
+      // started from the control input on the host: same start point here, and playing
+      // (a reload here stopped it, and its own pulse came a little after the host's)
+      double hostOff = m.seqOffset != null && i < m.seqOffset.Length ? m.seqOffset[i] : double.NaN;
+      if (!double.IsNaN(hostOff) && sq is INetPulseSync ps && ps.NetPulseDriven) {
+        bool started = false;
+        if (!ps.NetPlaying) { ps.NetStartPlaying(); started = true; }
+        if (System.Math.Abs(ps.NetPulseOffset - hostOff) > 1e-6) {
+          ps.NetPulseOffset = hostOff;
+          seqOff.Remove(key);
+          Debug.Log("[NetClock] " + d.name + " #" + m.seqIndex[i] + (started ? " started: playing on the host" : "") + " (took the host's start point)");
+          continue; // line the step up once the new start point is in use
+        }
+        if (started) { Debug.Log("[NetClock] " + d.name + " #" + m.seqIndex[i] + " started: playing on the host"); continue; }
+      }
       if (!sq.NetSyncable || sq.NetConfig != m.seqConfig[i]) {
         seqOff.Remove(key);
         // (once in a while: a sequencer playing on the host that can't be lined up here

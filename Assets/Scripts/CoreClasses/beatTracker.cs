@@ -118,6 +118,16 @@ public class beatTracker : ScriptableObject {
     curBeat = candidate;
   }
 
+  // Jump to position t without playing the ticks in between (multiplayer: a sequencer
+  // started from its control input taking the host's start point, Net/PulseClock.cs).
+  public void Resync(float t) {
+    if (timeValues.Length == 0) return;
+    int candidate = 0;
+    for (int i = 0; i < timeValues.Length; i++) if (timeValues[i] <= t) candidate = i;
+    curBeat = candidate;
+    lastTime = t;
+  }
+
   public void beatUpdateEvent(float t) {
     if (timeValues.Length == 0) return;
 

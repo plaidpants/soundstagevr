@@ -57,6 +57,7 @@ public class DesktopMode : MonoBehaviour {
 
   // controller buttons on the keyboard (names as QuestInput uses them; ...L = right controller)
   public static bool KeyFor(string name, out KeyCode k) {
+    if (NetCodeDialog.Typing && name == "secondaryButtonL") { k = KeyCode.None; return true; } // typing a room code
     switch (name) {
       case "menuButtonL": k = KeyCode.Tab; return true;        // A: menu
       case "secondaryButtonL": k = KeyCode.Delete; return true; // B

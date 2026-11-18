@@ -57,13 +57,14 @@ public class NetSpectator : MonoBehaviour {
     rig.transform.rotation = Quaternion.Euler(pitch, yaw, 0);
 
     Vector3 move = Vector3.zero;
-    if (Input.GetKey(KeyCode.W)) move += Vector3.forward;
-    if (Input.GetKey(KeyCode.S)) move += Vector3.back;
-    if (Input.GetKey(KeyCode.A)) move += Vector3.left;
-    if (Input.GetKey(KeyCode.D)) move += Vector3.right;
+    bool keys = !NetCodeDialog.Typing; // typing a room code on the keyboard
+    if (keys && Input.GetKey(KeyCode.W)) move += Vector3.forward;
+    if (keys && Input.GetKey(KeyCode.S)) move += Vector3.back;
+    if (keys && Input.GetKey(KeyCode.A)) move += Vector3.left;
+    if (keys && Input.GetKey(KeyCode.D)) move += Vector3.right;
     Vector3 up = Vector3.zero;
-    if (Input.GetKey(KeyCode.E)) up += Vector3.up;
-    if (Input.GetKey(KeyCode.Q)) up += Vector3.down;
+    if (keys && Input.GetKey(KeyCode.E)) up += Vector3.up;
+    if (keys && Input.GetKey(KeyCode.Q)) up += Vector3.down;
     // Shift faster, Ctrl slower (for lining up on small controls)
     float mult = Input.GetKey(KeyCode.LeftShift) ? 3f : (Input.GetKey(KeyCode.LeftControl) ? .25f : 1f);
     float s = speed * mult * Time.deltaTime;

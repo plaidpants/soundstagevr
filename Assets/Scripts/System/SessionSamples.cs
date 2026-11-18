@@ -1,8 +1,10 @@
 // Samples from multiplayer sessions in the tape library (milestone 4, step 5; 2026-11-18).
 //
 // The library's "Sessions" category lists:
-//   - samples received from other players in this run (they live in the hidden cache,
-//     SampleCache), under their original names, so they can be put on tapes again;
+//   - every sample received from other players that's still in the hidden cache
+//     (SampleCache), under its original name (names.txt in the cache folder; "SHARED
+//     <hash>" for ones received before names were kept), so they can be put on tapes
+//     again; the list follows the cache (new arrivals, eviction, SHARED SAMPLES clear);
 //   - samples kept for good: saving a scene copies every received sample it uses out of
 //     the cache into Samples/Sessions ("<name>_<first 6 of hash>.wav") and the saved
 //     scene points there. The cache can then be cleared or evicted without breaking it.
@@ -33,7 +35,96 @@ public static class SessionSamples {
     if (sampleManager.instance == null || string.IsNullOrEmpty(sample)) return;
     string hash = SampleIndex.HashOf(sample);
     if (hash == "") return;
+    RememberName(hash, NameOf(sample));
     Add(NameOf(sample), SampleIndex.PathOf(sample) + SampleIndex.Tag + hash);
+  }
+
+  // ---- the cache's samples in the list ----
+
+  static bool subscribed;
+
+  // At start-up (sampleManager.Init) and whenever the cache changes: list what's in the
+  // cache, drop what's gone from it. Kept copies (Samples/Sessions) always stay.
+  public static void Sync() {
+    if (sampleManager.instance == null || sampleManager.instance.sampleDictionary == null) return;
+    if (!subscribed) { subscribed = true; SampleCache.Changed += Sync; }
+    Dictionary<string, string> list = Ensure();
+    string keptPrefix = "DOC" + Path.DirectorySeparatorChar + Category + Path.DirectorySeparatorChar;
+    bool changed = false;
+
+    // gone from the cache (and not kept)
+    foreach (string label in new List<string>(list.Keys)) {
+      string v = list[label];
+      string h = SampleIndex.HashOf(v);
+      if (h == "" || SampleIndex.PathOf(v).StartsWith(keptPrefix, StringComparison.Ordinal)) continue;
+      string cached = SampleCache.PathFor(h);
+      if (cached != null && File.Exists(cached)) continue;
+      if (SessionSamples.Alias(h) != null) continue;
+      list.Remove(label);
+      changed = true;
+    }
+
+    // in the cache but not listed
+    var keptTags = new HashSet<string>();
+    foreach (string v in list.Values) {
+      string n = Path.GetFileNameWithoutExtension(SampleIndex.PathOf(v).Replace('\\', '/').Substring(SampleIndex.PathOf(v).Replace('\\', '/').LastIndexOf('/') + 1));
+      int u = n.LastIndexOf('_');
+      if (u >= 0 && n.Length - u - 1 == 6) keptTags.Add(n.Substring(u + 1));
+    }
+    var listed = new HashSet<string>();
+    foreach (string v in list.Values) { string h = SampleIndex.HashOf(v); if (h != "") listed.Add(h); }
+    try {
+      foreach (string f in Directory.GetFiles(SampleCache.Dir, "*.wav")) {
+        string h = Path.GetFileNameWithoutExtension(f);
+        if (h.Length != 64 || listed.Contains(h) || keptTags.Contains(h.Substring(0, 6))) continue;
+        string name = NameFor(h) ?? "SHARED " + h.Substring(0, 6).ToUpperInvariant();
+        string label = name;
+        for (int n = 2; list.ContainsKey(label); n++) label = name + " " + n;
+        list[label] = "NET" + Path.DirectorySeparatorChar + Sanitize(name) + ".wav" + SampleIndex.Tag + h;
+        listed.Add(h);
+        changed = true;
+      }
+    } catch (Exception e) { Debug.LogWarning("[SessionSamples] couldn't list the received samples: " + e.Message); }
+    if (changed) Refresh();
+  }
+
+  // names of received samples, by hash (the cache's files are named by hash)
+  static Dictionary<string, string> names;
+  static string NamesFile { get { return Path.Combine(SampleCache.Dir, "names.txt"); } }
+
+  static string NameFor(string hash) {
+    LoadNames();
+    return names.TryGetValue(hash, out string n) ? n : null;
+  }
+
+  static void RememberName(string hash, string name) {
+    LoadNames();
+    name = Sanitize(name);
+    if (names.TryGetValue(hash, out string had) && had == name) return;
+    names[hash] = name;
+    try {
+      var sb = new StringBuilder();
+      foreach (var kv in names) {
+        string cached = SampleCache.PathFor(kv.Key);
+        if (kv.Key == hash || (cached != null && File.Exists(cached))) sb.Append(kv.Key).Append('\t').Append(kv.Value).Append('\n'); // forget removed ones
+      }
+      string tmp = NamesFile + ".tmp";
+      File.WriteAllText(tmp, sb.ToString());
+      if (File.Exists(NamesFile)) File.Delete(NamesFile);
+      File.Move(tmp, NamesFile);
+    } catch (Exception e) { Debug.LogWarning("[SessionSamples] couldn't save sample names: " + e.Message); }
+  }
+
+  static void LoadNames() {
+    if (names != null) return;
+    names = new Dictionary<string, string>();
+    try {
+      if (!File.Exists(NamesFile)) return;
+      foreach (string line in File.ReadAllLines(NamesFile)) {
+        string[] p = line.Split('\t');
+        if (p.Length == 2 && p[0].Length == 64) names[p[0]] = p[1];
+      }
+    } catch { }
   }
 
   static void Add(string label, string sample) {

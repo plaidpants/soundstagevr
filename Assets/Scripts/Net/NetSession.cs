@@ -12,10 +12,14 @@
 //
 // Milestone 0 shares only the players (head + hands). Patch sync comes next.
 //
-// Milestone 5: MULTIPLAYER cycles OFF / LOCAL / INTERNET. INTERNET works the same way
-// over Unity Relay: everyone on the same build with the same ROOM number finds each other
-// (NetInternet), the transport is UtpRelayTransport instead of KCP, and the rest of the
-// game code doesn't know the difference.
+// Milestone 5: INTERNET works the same way over Unity Relay: everyone on the same build
+// with the same ROOM CODE finds each other (NetInternet), the transport is
+// UtpRelayTransport instead of KCP, and the rest of the game code doesn't know the
+// difference.
+//
+// Settings (2026-11-18): MULTIPLAYER: LOCAL / INTERNET picks the kind, MULTIPLAYER ON /
+// OFF starts and stops it (internet: through the room code dialog, NetCodeDialog), and a
+// status line shows OFFLINE / SEARCHING... / HOSTING (n) 90MS / JOINED (n) 89MS.
 
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -71,12 +75,33 @@ public class NetSession : MonoBehaviour {
   bool sessionOverride; // desktop spectator: LOCAL for this run without saving it
   string lastStatus = "";
 
-  public static Mode CurrentMode {
+  // What's running: Off, or the kind (Local / Internet) when multiplayer is on.
+  public static Mode CurrentMode { get { return On ? Kind : Mode.Off; } }
+
+  // LOCAL or INTERNET (kept while multiplayer is off)
+  public static Mode Kind {
     get {
-      Mode m = (Mode)PlayerPrefs.GetInt("netMode", 0);
-      if (instance != null && instance.sessionOverride && m == Mode.Off) return Mode.Local;
-      return m;
+      MigratePrefs();
+      return PlayerPrefs.GetInt("netKind", (int)Mode.Local) == (int)Mode.Internet ? Mode.Internet : Mode.Local;
     }
+  }
+
+  // MULTIPLAYER ON / OFF. The PC joins local sessions until its button is first used.
+  public static bool On {
+    get {
+      MigratePrefs();
+      if (!PlayerPrefs.HasKey("netOn")) return instance != null && instance.sessionOverride && Kind == Mode.Local;
+      return PlayerPrefs.GetInt("netOn") == 1;
+    }
+  }
+
+  // before 2026-11-18 one setting: netMode 0 off / 1 local / 2 internet
+  static void MigratePrefs() {
+    if (PlayerPrefs.HasKey("netKind") || !PlayerPrefs.HasKey("netMode")) return;
+    int m = PlayerPrefs.GetInt("netMode");
+    PlayerPrefs.SetInt("netKind", m == 2 ? (int)Mode.Internet : (int)Mode.Local);
+    if (m != 0) PlayerPrefs.SetInt("netOn", 1);
+    PlayerPrefs.DeleteKey("netMode");
   }
 
   [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -93,47 +118,56 @@ public class NetSession : MonoBehaviour {
     if (NetSpectator.Active || Application.isEditor || Application.platform == RuntimePlatform.WindowsPlayer) sessionOverride = true;
     Debug.Log("[NetSession] multiplayer " + CurrentMode + (sessionOverride ? " (PC: always on)" : "") +
               ", spectator=" + NetSpectator.Active + ", xr=" + UnityEngine.XR.XRSettings.isDeviceActive);
+    // Internet never starts by itself: a session left on would keep using relay bandwidth
+    // on later, solo days. It stays set to INTERNET, and MULTIPLAYER ON (room code
+    // dialog, last code filled in) starts it. Local still starts on its own.
+    if (CurrentMode == Mode.Internet) {
+      PlayerPrefs.SetInt("netOn", 0);
+      Debug.Log("[NetSession] internet multiplayer is off at start-up: press MULTIPLAYER ON to join a room");
+    }
     if (CurrentMode != Mode.Off) StartSearch();
     RaiseStatus();
   }
 
-  public static void SetMode(Mode m) {
-    Mode was = CurrentMode;
-    PlayerPrefs.SetInt("netMode", (int)m);
+  // an internet session that hit its idle / 3-hour limit (ON again starts a new one)
+  public static bool Ended { get { return instance != null && instance.state == State.Ended; } }
+
+  // MULTIPLAYER: LOCAL / INTERNET. Changing it while multiplayer is on turns it off.
+  public static void SetKind(Mode k) {
+    if (k == Mode.Off || k == Kind) return;
+    bool wasOn = On;
+    PlayerPrefs.SetInt("netKind", (int)k);
+    if (wasOn) SetOn(false);
+    instance?.RaiseStatus();
+  }
+
+  public static void ToggleKind() { SetKind(Kind == Mode.Local ? Mode.Internet : Mode.Local); }
+
+  // MULTIPLAYER ON / OFF (internet ON goes through JoinRoom, after the code dialog)
+  public static void SetOn(bool on) {
+    PlayerPrefs.SetInt("netOn", on ? 1 : 0);
     if (instance == null) return;
     instance.sessionOverride = false;
-    if (m == Mode.Off || m != was) instance.StopAll();
-    if (m != Mode.Off && instance.state == State.Off) instance.StartSearch();
+    NetLimits.endedReason = 0;
+    NetNotice.Hide();
+    if (!on) {
+      instance.StopAll();
+    } else if (instance.state == State.Off || instance.state == State.Ended) {
+      instance.StartSearch();
+    }
     instance.RaiseStatus();
   }
 
-  // OFF -> LOCAL -> INTERNET -> OFF (the settings button)
-  public static void CycleMode() {
-    // after an internet session ended (idle / one hour), the button starts a new one
-    if (instance != null && instance.state == State.Ended && CurrentMode == Mode.Internet) {
-      NetLimits.endedReason = 0;
-      NetNotice.Hide();
-      instance.StartSearch();
-      return;
-    }
-    Mode m = CurrentMode;
-    SetMode(m == Mode.Off ? Mode.Local : m == Mode.Local ? Mode.Internet : Mode.Off);
-  }
-
-  // ROOM buttons: step through rooms 1-10 (dir +1 / -1, wrapping). An internet session in
-  // the old room is left at once; the new room is only searched 2.5 s after the last
-  // press, so clicking through rooms doesn't start a session in each one.
-  public static void StepRoom(int dir) {
-    int n = NetInternet.Rooms;
-    NetInternet.Room = (NetInternet.Room - 1 + dir + n) % n + 1;
-    if (instance != null && CurrentMode == Mode.Internet) {
-      instance.StopAll();
-      NetLimits.endedReason = 0;
-      instance.SetState(State.Searching);
-      NetInternet.status = "CHANGING ROOM...";
-      instance.Invoke(nameof(StartSearch), 2.5f);
-    }
-    instance?.RaiseStatus();
+  // Internet: join (or start) the room with this code.
+  public static void JoinRoom(string code) {
+    if (!NetInternet.Valid(code)) return;
+    bool sameRoom = code == NetInternet.Code && On && Kind == Mode.Internet && instance != null &&
+                    (instance.state == State.Host || instance.state == State.Client || instance.state == State.Searching);
+    if (sameRoom) return; // already there
+    PlayerPrefs.SetInt("netKind", (int)Mode.Internet);
+    if (instance != null) instance.StopAll();
+    NetInternet.Code = code;
+    SetOn(true);
   }
 
   void StartSearch() {
@@ -364,7 +398,7 @@ public class NetSession : MonoBehaviour {
     UseTransport(utp);
     SetState(State.Searching);
     int run = ++searchRun;
-    Debug.Log("[NetSession] searching the internet, room " + NetInternet.Room + (wait > 0 ? " (in " + wait + " s)" : ""));
+    Debug.Log("[NetSession] searching the internet, room " + NetInternet.Code + (wait > 0 ? " (in " + wait + " s)" : ""));
     if (!await NetInternet.SignIn()) { RetryInternetLater(run); return; }
     if (wait > 0) await Task.Delay((int)(wait * 1000));
     if (!Still(run)) return;
@@ -430,8 +464,8 @@ public class NetSession : MonoBehaviour {
     List<NetInternet.Found> list = await NetInternet.List();
     if (run != searchRun || state != State.Host || NetworkServer.connections.Count > 1) return;
     foreach (NetInternet.Found f in list) {
-      if (f.players > 1) Debug.Log("[NetSession] another session in room " + NetInternet.Room + " has " + f.players + " players: joining it");
-      else if (NetInternet.OurIdIsHigher(f.lobbyId)) Debug.Log("[NetSession] another lone host in room " + NetInternet.Room + ": joining it instead");
+      if (f.players > 1) Debug.Log("[NetSession] another session in room " + NetInternet.Code + " has " + f.players + " players: joining it");
+      else if (NetInternet.OurIdIsHigher(f.lobbyId)) Debug.Log("[NetSession] another lone host in room " + NetInternet.Code + ": joining it instead");
       else continue;
       CancelInvoke();
       run = ++searchRun;
@@ -444,8 +478,8 @@ public class NetSession : MonoBehaviour {
     }
   }
 
-  // NetLimits: the session hit its idle / one-hour limit. Leave and stay out until someone
-  // presses MULTIPLAYER (the patch stays as it is).
+  // NetLimits: the session hit its idle / 3-hour limit. Leave and stay out until someone
+  // presses MULTIPLAYER ON again (the patch stays as it is).
   public void EndInternet(int reason) {
     if (state == State.Ended) return;
     NetLimits.endedReason = reason;
@@ -472,7 +506,6 @@ public class NetSession : MonoBehaviour {
     if (state == State.Host && CurrentMode == Mode.Internet) NetInternet.HostUpdate(NetworkServer.connections.Count);
     if (CurrentMode == Mode.Internet) {
       if (pendingEnd == 0) NetLimits.Tick(state == State.Host, state == State.Host || (state == State.Client && NetworkClient.isConnected));
-      NetInternet.OccupancyUpdate();
     }
     statusTimer += Time.unscaledDeltaTime;
     if (statusTimer < 1f) return;
@@ -489,29 +522,37 @@ public class NetSession : MonoBehaviour {
 
   public static int PlayerCount { get { return NetPlayer.all.Count; } }
 
-  // Short enough to fit the settings button.
+  // The status line under the MULTIPLAYER buttons (same wording for local and internet).
   public static string StatusText() {
-    if (instance == null || CurrentMode == Mode.Off) return "MULTIPLAYER: OFF";
-    if (CurrentMode == Mode.Internet) {
-      string room = "ROOM " + NetInternet.Room;
-      switch (instance.state) {
-        case State.Searching: return room + ": " + (NetInternet.status != "" ? NetInternet.status : "SEARCHING...");
-        case State.Ended: return room + ": " + NetLimits.EndedText();
-        case State.Host: return room + ": HOSTING (" + Mathf.Max(1, PlayerCount) + ")" + (NetInternet.Listed ? "" : " NOT LISTED");
-        case State.Client:
-          if (!NetworkClient.isConnected) return room + ": JOINING...";
-          return room + " (" + PlayerCount + ") " + Mathf.RoundToInt((float)(NetworkTime.rtt * 1000)) + "MS";
-      }
-      return "INTERNET";
-    }
+    if (instance == null) return "OFFLINE";
+    if (instance.state == State.Ended) return NetLimits.EndedText();
+    if (CurrentMode == Mode.Off) return "OFFLINE";
+    bool internet = CurrentMode == Mode.Internet;
     switch (instance.state) {
-      case State.Searching: return "SEARCHING...";
-      case State.Host: return "HOSTING (" + Mathf.Max(1, PlayerCount) + ")";
+      case State.Searching: return internet && NetInternet.status != "" ? NetInternet.status : "SEARCHING...";
+      case State.Host:
+        string h = "HOSTING (" + Mathf.Max(1, PlayerCount) + ")";
+        int ping = HostPing();
+        if (ping >= 0) h += " " + ping + "MS";
+        if (internet && !NetInternet.Listed) h += " NOT LISTED";
+        return h;
       case State.Client:
         if (!NetworkClient.isConnected) return "JOINING...";
         return "JOINED (" + PlayerCount + ") " + Mathf.RoundToInt((float)(NetworkTime.rtt * 1000)) + "MS";
     }
-    return "MULTIPLAYER: ON";
+    return "OFFLINE";
+  }
+
+  // the host's average round trip to the players who joined it; -1 with nobody joined
+  static int HostPing() {
+    double sum = 0;
+    int n = 0;
+    foreach (NetworkConnectionToClient c in NetworkServer.connections.Values) {
+      if (c == null || c == NetworkServer.localConnection) continue;
+      sum += c.rtt;
+      n++;
+    }
+    return n == 0 ? -1 : Mathf.RoundToInt((float)(sum / n * 1000));
   }
 }
 

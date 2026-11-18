@@ -124,10 +124,10 @@ public static class NetLimits {
     switch (m.reason) {
       case 0: NetNotice.Hide(); break;
       case 1: NetNotice.Show("NOBODY IS PLAYING", "SESSION ENDS IN {0} - TOUCH ANYTHING TO STAY", m.secondsLeft); break;
-      case 2: NetNotice.Show("THE " + (HourEndAt / 3600).ToString("0") + "-HOUR LIMIT IS ALMOST UP", "SESSION ENDS IN {0} - PRESS MULTIPLAYER AFTERWARDS TO START A NEW ONE", m.secondsLeft); break;
+      case 2: NetNotice.Show("THE " + (HourEndAt / 3600).ToString("0") + "-HOUR LIMIT IS ALMOST UP", "SESSION ENDS IN {0} - PRESS MULTIPLAYER ON AFTERWARDS TO START A NEW ONE", m.secondsLeft); break;
       case 3:
       case 4:
-        NetNotice.Show(m.reason == 4 ? "THE " + (HourEndAt / 3600).ToString("0") + "-HOUR LIMIT IS UP" : "SESSION ENDED: NOBODY WAS PLAYING", "PRESS MULTIPLAYER TO START A NEW SESSION", 0, 8f);
+        NetNotice.Show(m.reason == 4 ? "THE " + (HourEndAt / 3600).ToString("0") + "-HOUR LIMIT IS UP" : "SESSION ENDED: NOBODY WAS PLAYING", "PRESS MULTIPLAYER ON TO START A NEW SESSION", 0, 8f);
         if (NetSession.instance != null && !NetworkServer.active) NetSession.instance.EndInternet(m.reason);
         break;
     }

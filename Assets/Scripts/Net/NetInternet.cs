@@ -1,18 +1,25 @@
 // Internet sessions through Unity Gaming Services (milestone 5).
 //
-// Same idea as the local network, no codes to type: everyone on the same build who picks
-// the same ROOM number (1-9, settings panel) ends up in one session. A host publishes a
-// public Lobby carrying its Relay join code, tagged with the network version (S1), the
-// room (S2) and its player count (N1); a searching headset lists the lobbies for its
-// room, joins the fullest / newest one's relay, and otherwise hosts.
+// Private rooms with codes (2026-11-18): everyone on the same build who enters the same
+// 6-character ROOM CODE ends up in one session; whoever comes first hosts. A code is made
+// with NEW (or typed in) and stays valid for as long as people keep it - recent codes are
+// remembered. Rooms can't be found or joined without the code:
+// - the host publishes a public Lobby tagged with the network version (S1), a slow hash
+//   of the code (S2, PBKDF2 - so a listing doesn't give the code away) and its player
+//   count (N1);
+// - its Relay join code is stored encrypted with a key made from the code, so only
+//   someone who knows the code can connect.
+// A searching headset lists the lobbies with its code's hash, joins the fullest / newest
+// one's relay, and otherwise hosts.
 //
-// - Sign-in is anonymous (a per-install player ID kept by Unity's Authentication).
+// - Sign-in is anonymous (a per-install player ID kept by Unity's Authentication);
+//   ForgetId() deletes it from Unity (privacy policy: FORGET MY INTERNET ID).
 // - The host heartbeats its lobby every 15 s; a lobby that stops (host crashed / lost)
 //   drops out of the list after ~30 s. A lobby whose relay we couldn't join is skipped
 //   for 2 minutes.
-// - Host migration reuses NetSession's: the next in line hosts a new lobby, the others
-//   search again and find it.
-// - A lone host checks the list every 10 s for another session in the room (two
+// - Host migration reuses NetSession's: the next in line hosts a new lobby (same code),
+//   the others search again and find it.
+// - A lone host checks the list every 10 s for another session with its code (two
 //   headsets started together), with the same tie-break as on the local network.
 //
 // Needs the project linked to Unity Cloud (Project Settings > Services) with Relay and
@@ -20,6 +27,8 @@
 
 using System;
 using System.Collections.Generic;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading.Tasks;
 using Unity.Services.Authentication;
 using Unity.Services.Core;
@@ -43,56 +52,158 @@ public static class NetInternet {
   static int publishedPlayers = -1;
   static bool busy;
 
-  public const int Rooms = 10;
-  public static int Room {
-    get { return Mathf.Clamp(PlayerPrefs.GetInt("netRoom", 1), 1, Rooms); }
-    set { PlayerPrefs.SetInt("netRoom", Mathf.Clamp(value, 1, Rooms)); }
+  // ---- room codes ----
+
+  public const int CodeLength = 6;
+  // no 0/O, 1/I: easy to read out and type
+  public const string CodeChars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+  // the code in use (the last one joined); "" before the first
+  public static string Code {
+    get { return Normalize(PlayerPrefs.GetString("netCode", "")); }
+    set {
+      string c = Normalize(value);
+      if (c == Code) return;
+      PlayerPrefs.SetString("netCode", c);
+      AddRecent(c);
+      lookup = null; // new code: work out its hash and key again
+    }
   }
 
-  // ---- who's in which room (shown on the ROOM buttons) ----
-
-  public static event Action OccupancyChanged;
-  static readonly Dictionary<int, int> occupancy = new Dictionary<int, int>();
-  static bool occupancyKnown, occupancyBusy;
-  static float occupancyTimer = 999f;
-
-  // players in a room ("" until the first look)
-  public static string RoomText(int room) {
-    if (!occupancyKnown) return "";
-    return occupancy.TryGetValue(room, out int n) && n > 0 ? n + " PLAYING" : "EMPTY";
+  // upper case, only code characters (a pasted or typed code: o -> 0 isn't a code character)
+  public static string Normalize(string c) {
+    var sb = new StringBuilder();
+    foreach (char ch in (c ?? "").ToUpperInvariant()) if (CodeChars.IndexOf(ch) >= 0) sb.Append(ch);
+    return sb.Length > CodeLength ? sb.ToString(0, CodeLength) : sb.ToString();
   }
 
-  // every frame in INTERNET mode: list all sessions of this build every 10 s
-  public static void OccupancyUpdate() {
-    occupancyTimer += Time.unscaledDeltaTime;
-    if (occupancyTimer < 10f || occupancyBusy) return;
-    if (PlayerActivity.IdleSeconds > 60f) return; // nobody here to look at the buttons
-    if (UnityServices.State != ServicesInitializationState.Initialized || !AuthenticationService.Instance.IsSignedIn) return;
-    occupancyTimer = 0;
-    RefreshOccupancy();
+  public static bool Valid(string c) { return Normalize(c).Length == CodeLength && Normalize(c) == c; }
+
+  public static string NewCode() {
+    var b = new byte[CodeLength];
+    using (var rng = RandomNumberGenerator.Create()) rng.GetBytes(b);
+    var sb = new StringBuilder();
+    foreach (byte x in b) sb.Append(CodeChars[x % CodeChars.Length]); // 256 % 32 == 0: no bias
+    return sb.ToString();
   }
 
-  static async void RefreshOccupancy() {
-    occupancyBusy = true;
-    try {
-      await WaitForQuerySlot();
-      QueryResponse r = await LobbyService.Instance.QueryLobbiesAsync(new QueryLobbiesOptions {
-        Count = 100,
-        Filters = new List<QueryFilter> { new QueryFilter(QueryFilter.FieldOptions.S1, Version, QueryFilter.OpOptions.EQ) },
-      });
-      occupancy.Clear();
-      foreach (Lobby l in r.Results) {
-        if (l.Data == null || !l.Data.TryGetValue("room", out DataObject ro) || !int.TryParse(ro.Value, out int room)) continue;
-        int n = 1;
-        if (l.Data.TryGetValue("players", out DataObject pl)) int.TryParse(pl.Value, out n);
-        occupancy[room] = (occupancy.TryGetValue(room, out int had) ? had : 0) + n;
+  public const int MaxRecent = 4;
+  public static List<string> Recent() {
+    var l = new List<string>();
+    foreach (string c in PlayerPrefs.GetString("netRecentCodes", "").Split(','))
+      if (Valid(c) && !l.Contains(c)) l.Add(c);
+    return l;
+  }
+
+  static void AddRecent(string c) {
+    if (!Valid(c)) return;
+    List<string> l = Recent();
+    l.Remove(c);
+    l.Insert(0, c);
+    if (l.Count > MaxRecent) l.RemoveRange(MaxRecent, l.Count - MaxRecent);
+    PlayerPrefs.SetString("netRecentCodes", string.Join(",", l));
+  }
+
+  // What the code becomes for the Lobby: a tag to look the room up by, and a key for the
+  // relay join code. PBKDF2 makes guessing codes from a lobby listing slow. Worked out
+  // once per code, off the main thread.
+  class Lookup { public string code, tag; public byte[] key; }
+  static Lookup lookup;
+  static async Task<Lookup> CodeLookup() {
+    string c = Code;
+    if (lookup != null && lookup.code == c) return lookup;
+    Lookup l = await Task.Run(() => {
+      byte[] salt = Encoding.UTF8.GetBytes("SoundStage room code v1");
+      using (var kdf = new Rfc2898DeriveBytes(Encoding.UTF8.GetBytes(c), salt, 20000, HashAlgorithmName.SHA256)) {
+        byte[] d = kdf.GetBytes(40);
+        var tag = new StringBuilder();
+        for (int i = 0; i < 8; i++) tag.Append(d[i].ToString("x2"));
+        byte[] key = new byte[32];
+        Array.Copy(d, 8, key, 0, 32);
+        return new Lookup { code = c, tag = tag.ToString(), key = key };
       }
-      occupancyKnown = true;
-      OccupancyChanged?.Invoke();
+    });
+    lookup = l;
+    return l;
+  }
+
+  // The relay join code, encrypted: "nonce:ciphertext:mac" (hex). Keystream and MAC are
+  // HMAC-SHA256 with the code's key.
+  static string Seal(string text, byte[] key) {
+    byte[] nonce = new byte[12];
+    using (var rng = RandomNumberGenerator.Create()) rng.GetBytes(nonce);
+    byte[] plain = Encoding.UTF8.GetBytes(text);
+    byte[] ks = Keystream(key, nonce, plain.Length);
+    for (int i = 0; i < plain.Length; i++) plain[i] ^= ks[i];
+    return Hex(nonce) + ":" + Hex(plain) + ":" + Hex(Mac(key, nonce, plain));
+  }
+
+  static string Open(string sealedText, byte[] key) {
+    try {
+      string[] p = sealedText.Split(':');
+      if (p.Length != 3) return null;
+      byte[] nonce = Unhex(p[0]), data = Unhex(p[1]), mac = Unhex(p[2]);
+      if (nonce == null || data == null || mac == null || data.Length > 64) return null;
+      byte[] want = Mac(key, nonce, data);
+      int diff = mac.Length ^ want.Length;
+      for (int i = 0; i < Math.Min(mac.Length, want.Length); i++) diff |= mac[i] ^ want[i];
+      if (diff != 0) return null; // another code's room (or tampered)
+      byte[] ks = Keystream(key, nonce, data.Length);
+      for (int i = 0; i < data.Length; i++) data[i] ^= ks[i];
+      return Encoding.UTF8.GetString(data);
+    } catch { return null; }
+  }
+
+  static byte[] Keystream(byte[] key, byte[] nonce, int n) {
+    using (var h = new HMACSHA256(key)) {
+      byte[] m = new byte[nonce.Length + 1];
+      Array.Copy(nonce, m, nonce.Length);
+      m[nonce.Length] = 1;
+      byte[] k = h.ComputeHash(m);
+      if (n > k.Length) throw new ArgumentException("too long");
+      return k;
+    }
+  }
+
+  static byte[] Mac(byte[] key, byte[] nonce, byte[] data) {
+    using (var h = new HMACSHA256(key)) {
+      byte[] m = new byte[nonce.Length + 1 + data.Length];
+      Array.Copy(nonce, m, nonce.Length);
+      m[nonce.Length] = 2;
+      Array.Copy(data, 0, m, nonce.Length + 1, data.Length);
+      return h.ComputeHash(m);
+    }
+  }
+
+  static string Hex(byte[] b) { var sb = new StringBuilder(); foreach (byte x in b) sb.Append(x.ToString("x2")); return sb.ToString(); }
+  static byte[] Unhex(string s) {
+    if (s == null || s.Length % 2 != 0) return null;
+    var b = new byte[s.Length / 2];
+    for (int i = 0; i < b.Length; i++) b[i] = Convert.ToByte(s.Substring(i * 2, 2), 16);
+    return b;
+  }
+
+  // ---- your anonymous ID (privacy) ----
+
+  public static string PlayerId {
+    get {
+      try { return UnityServices.State == ServicesInitializationState.Initialized && AuthenticationService.Instance.IsSignedIn ? AuthenticationService.Instance.PlayerId : ""; }
+      catch { return ""; }
+    }
+  }
+
+  // FORGET MY INTERNET ID: deletes this install's anonymous player from Unity (a new one
+  // is made next time). Call with multiplayer off.
+  public static async Task<bool> ForgetId() {
+    try {
+      if (!await SignIn()) return false;
+      string id = AuthenticationService.Instance.PlayerId;
+      await AuthenticationService.Instance.DeleteAccountAsync();
+      Debug.Log("[NetInternet] deleted the anonymous player " + id + " from Unity");
+      return true;
     } catch (Exception e) {
-      Debug.LogWarning("[NetInternet] couldn't list the rooms: " + e.Message);
-    } finally {
-      occupancyBusy = false;
+      Fail("couldn't delete the internet ID", e);
+      return false;
     }
   }
 
@@ -123,7 +234,7 @@ public static class NetInternet {
 
   public struct Found { public string lobbyId, joinCode; public int players; public DateTime created; }
 
-  // Sessions in our room, best first (most players, then newest).
+  // Sessions with our code, best first (most players, then newest).
   // Lobby allows about one query a second per player: space them out (the room list and
   // the search would otherwise collide and get "request_rate_limited").
   static float lastQuery = -10f;
@@ -138,12 +249,13 @@ public static class NetInternet {
   public static async Task<List<Found>> List() {
     var result = new List<Found>();
     try {
+      Lookup code = await CodeLookup();
       await WaitForQuerySlot();
       var opts = new QueryLobbiesOptions {
         Count = 10,
         Filters = new List<QueryFilter> {
           new QueryFilter(QueryFilter.FieldOptions.S1, Version, QueryFilter.OpOptions.EQ),
-          new QueryFilter(QueryFilter.FieldOptions.S2, Room.ToString(), QueryFilter.OpOptions.EQ),
+          new QueryFilter(QueryFilter.FieldOptions.S2, code.tag, QueryFilter.OpOptions.EQ),
           new QueryFilter(QueryFilter.FieldOptions.N1, MaxPlayers.ToString(), QueryFilter.OpOptions.LT),
         },
         Order = new List<QueryOrder> { new QueryOrder(false, QueryOrder.FieldOptions.Created) },
@@ -152,10 +264,12 @@ public static class NetInternet {
       foreach (Lobby l in r.Results) {
         if (l.Id == LobbyId) continue; // our own
         if (badLobbies.TryGetValue(l.Id, out float until) && Time.realtimeSinceStartup < until) continue;
-        if (l.Data == null || !l.Data.TryGetValue("relay", out DataObject code)) continue;
+        if (l.Data == null || !l.Data.TryGetValue("relay", out DataObject sealedCode)) continue;
+        string joinCode = Open(sealedCode.Value, code.key);
+        if (joinCode == null) continue; // not this code's room
         int n = 1;
         if (l.Data.TryGetValue("players", out DataObject pl)) int.TryParse(pl.Value, out n);
-        result.Add(new Found { lobbyId = l.Id, joinCode = code.Value, players = n, created = l.Created });
+        result.Add(new Found { lobbyId = l.Id, joinCode = joinCode, players = n, created = l.Created });
       }
       result.Sort((a, b) => a.players != b.players ? b.players.CompareTo(a.players) : b.created.CompareTo(a.created));
     } catch (Exception e) {
@@ -175,7 +289,7 @@ public static class NetInternet {
       status = "JOINING...";
       JoinAllocation a = await RelayService.Instance.JoinAllocationAsync(f.joinCode);
       utp.SetRelayData(a.ToRelayServerData(Protocol), false);
-      Debug.Log("[NetInternet] joining room " + Room + " session " + f.lobbyId + " (" + f.players + " players), relay " + a.RelayServer.IpV4);
+      Debug.Log("[NetInternet] joining room " + Code + " session " + f.lobbyId + " (" + f.players + " players), relay " + a.RelayServer.IpV4);
       return true;
     } catch (Exception e) {
       MarkBad(f.lobbyId);
@@ -206,19 +320,20 @@ public static class NetInternet {
     hosting = true;
     publishRetry = 0;
     try {
+      Lookup code = await CodeLookup();
       var data = new Dictionary<string, DataObject> {
         { "ver", new DataObject(DataObject.VisibilityOptions.Public, Version, DataObject.IndexOptions.S1) },
-        { "room", new DataObject(DataObject.VisibilityOptions.Public, Room.ToString(), DataObject.IndexOptions.S2) },
+        { "room", new DataObject(DataObject.VisibilityOptions.Public, code.tag, DataObject.IndexOptions.S2) },
         { "players", new DataObject(DataObject.VisibilityOptions.Public, "1", DataObject.IndexOptions.N1) },
-        { "relay", new DataObject(DataObject.VisibilityOptions.Public, hostJoinCode) },
+        { "relay", new DataObject(DataObject.VisibilityOptions.Public, Seal(hostJoinCode, code.key)) },
       };
-      Lobby l = await LobbyService.Instance.CreateLobbyAsync("SoundStage room " + Room, MaxPlayers,
+      Lobby l = await LobbyService.Instance.CreateLobbyAsync("SoundStage", MaxPlayers,
         new CreateLobbyOptions { IsPrivate = false, Data = data });
       LobbyId = l.Id;
       publishedPlayers = 1;
       heartbeatTimer = playersTimer = 0;
       status = "";
-      Debug.Log("[NetInternet] hosting room " + Room + " (session " + l.Id + ")");
+      Debug.Log("[NetInternet] hosting room " + Code + " (session " + l.Id + ")");
     } catch (Exception e) {
       // nobody can find us until this works: HostUpdate tries again every 15 s
       Fail("couldn't publish the session (is Lobby turned on in the Unity dashboard?)", e);

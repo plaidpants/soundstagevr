@@ -101,6 +101,9 @@ public static class NetSync {
   static readonly System.Text.RegularExpressions.Regex idElements =
     new System.Text.RegularExpressions.Regex(@"<(\w*ID)>-?\d+</\1>");
 
+  static readonly System.Text.RegularExpressions.Regex pulseOffsets =
+    new System.Text.RegularExpressions.Regex(@"<pulseOffset>[^<]*</pulseOffset>");
+
   static int PortableHash(InstrumentData data) {
     Vector3 p = data.position, sc = data.scale; Quaternion q = data.rotation; int id = data.ID;
     data.position = Vector3.zero; data.rotation = Quaternion.identity; data.scale = Vector3.one; data.ID = 0;
@@ -109,6 +112,7 @@ public static class NetSync {
       using (var w = new StringWriter()) { deviceSerializer.Serialize(w, data); xml = w.ToString(); }
     } finally { data.position = p; data.rotation = q; data.scale = sc; data.ID = id; }
     xml = idElements.Replace(xml, "");
+    xml = pulseOffsets.Replace(xml, ""); // lined up by NetClock, not a reason to reload (PulseClock)
     xml = SampleIndex.Normalize(xml); // samples compare by content, not by their path on each machine
     unchecked {
       int h = (int)2166136261;
@@ -144,6 +148,7 @@ public static class NetSync {
     NetLimits.RegisterServer();
     NetSamples.RegisterServer();
     NetLoopers.RegisterServer();
+    NetScales.RegisterServer();
     NetRoom.ServerStarted();
     migrating = false;
     if (keepIds) {
@@ -185,6 +190,7 @@ public static class NetSync {
     NetLimits.RegisterClient();
     NetSamples.RegisterClient();
     NetLoopers.RegisterClient();
+    NetScales.RegisterClient();
     NetworkClient.RegisterHandler<NetSuccessionMsg>(m => { if (NetSession.instance != null) NetSession.instance.successionRank = m.rank; });
     pendingByTemp.Clear();
   }
