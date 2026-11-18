@@ -43,9 +43,57 @@ public static class NetInternet {
   static int publishedPlayers = -1;
   static bool busy;
 
+  public const int Rooms = 10;
   public static int Room {
-    get { return Mathf.Clamp(PlayerPrefs.GetInt("netRoom", 1), 1, 9); }
-    set { PlayerPrefs.SetInt("netRoom", Mathf.Clamp(value, 1, 9)); }
+    get { return Mathf.Clamp(PlayerPrefs.GetInt("netRoom", 1), 1, Rooms); }
+    set { PlayerPrefs.SetInt("netRoom", Mathf.Clamp(value, 1, Rooms)); }
+  }
+
+  // ---- who's in which room (shown on the ROOM buttons) ----
+
+  public static event Action OccupancyChanged;
+  static readonly Dictionary<int, int> occupancy = new Dictionary<int, int>();
+  static bool occupancyKnown, occupancyBusy;
+  static float occupancyTimer = 999f;
+
+  // players in a room ("" until the first look)
+  public static string RoomText(int room) {
+    if (!occupancyKnown) return "";
+    return occupancy.TryGetValue(room, out int n) && n > 0 ? n + " PLAYING" : "EMPTY";
+  }
+
+  // every frame in INTERNET mode: list all sessions of this build every 10 s
+  public static void OccupancyUpdate() {
+    occupancyTimer += Time.unscaledDeltaTime;
+    if (occupancyTimer < 10f || occupancyBusy) return;
+    if (PlayerActivity.IdleSeconds > 60f) return; // nobody here to look at the buttons
+    if (UnityServices.State != ServicesInitializationState.Initialized || !AuthenticationService.Instance.IsSignedIn) return;
+    occupancyTimer = 0;
+    RefreshOccupancy();
+  }
+
+  static async void RefreshOccupancy() {
+    occupancyBusy = true;
+    try {
+      await WaitForQuerySlot();
+      QueryResponse r = await LobbyService.Instance.QueryLobbiesAsync(new QueryLobbiesOptions {
+        Count = 100,
+        Filters = new List<QueryFilter> { new QueryFilter(QueryFilter.FieldOptions.S1, Version, QueryFilter.OpOptions.EQ) },
+      });
+      occupancy.Clear();
+      foreach (Lobby l in r.Results) {
+        if (l.Data == null || !l.Data.TryGetValue("room", out DataObject ro) || !int.TryParse(ro.Value, out int room)) continue;
+        int n = 1;
+        if (l.Data.TryGetValue("players", out DataObject pl)) int.TryParse(pl.Value, out n);
+        occupancy[room] = (occupancy.TryGetValue(room, out int had) ? had : 0) + n;
+      }
+      occupancyKnown = true;
+      OccupancyChanged?.Invoke();
+    } catch (Exception e) {
+      Debug.LogWarning("[NetInternet] couldn't list the rooms: " + e.Message);
+    } finally {
+      occupancyBusy = false;
+    }
   }
 
   static string Version { get { return ((uint)NetSession.Handshake).ToString("X8"); } }
@@ -76,9 +124,21 @@ public static class NetInternet {
   public struct Found { public string lobbyId, joinCode; public int players; public DateTime created; }
 
   // Sessions in our room, best first (most players, then newest).
+  // Lobby allows about one query a second per player: space them out (the room list and
+  // the search would otherwise collide and get "request_rate_limited").
+  static float lastQuery = -10f;
+  static async Task WaitForQuerySlot() {
+    // reserve the next free slot first, so two callers waiting at once don't collide
+    float now = Time.realtimeSinceStartup;
+    float slot = Mathf.Max(now, lastQuery + 1.2f);
+    lastQuery = slot;
+    if (slot > now) await Task.Delay((int)((slot - now) * 1000));
+  }
+
   public static async Task<List<Found>> List() {
     var result = new List<Found>();
     try {
+      await WaitForQuerySlot();
       var opts = new QueryLobbiesOptions {
         Count = 10,
         Filters = new List<QueryFilter> {

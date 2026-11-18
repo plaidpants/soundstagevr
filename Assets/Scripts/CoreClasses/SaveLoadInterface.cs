@@ -136,6 +136,7 @@ public class SaveLoadInterface : MonoBehaviour {
   public void Save(string filename) {
     masterControl.instance.currentScene = filename;
     BuildSet(null).SaveToFile(filename);
+    SessionSamples.KeepForScene(filename); // received samples it uses: out of the cache, into Samples/Sessions
   }
 
   // The whole patch as a save-file set. order (optional) gets the device behind each

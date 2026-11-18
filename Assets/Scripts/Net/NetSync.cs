@@ -109,6 +109,7 @@ public static class NetSync {
       using (var w = new StringWriter()) { deviceSerializer.Serialize(w, data); xml = w.ToString(); }
     } finally { data.position = p; data.rotation = q; data.scale = sc; data.ID = id; }
     xml = idElements.Replace(xml, "");
+    xml = SampleIndex.Normalize(xml); // samples compare by content, not by their path on each machine
     unchecked {
       int h = (int)2166136261;
       foreach (char ch in xml) h = (h ^ ch) * 16777619;
@@ -140,6 +141,9 @@ public static class NetSync {
     NetworkServer.RegisterHandler<NetMidiMsg>((conn, m) => { NetMidi.Apply(m); SendToRemotes(m, conn); });
     NetworkServer.RegisterHandler<NetMidiListMsg>((conn, m) => { NetMidi.OnList(m); SendToRemotes(m, conn); });
     NetworkServer.RegisterHandler<NetMidiSelectMsg>((conn, m) => { NetMidi.OnSelect(m); SendToRemotes(m, conn); });
+    NetLimits.RegisterServer();
+    NetSamples.RegisterServer();
+    NetLoopers.RegisterServer();
     NetRoom.ServerStarted();
     migrating = false;
     if (keepIds) {
@@ -178,6 +182,9 @@ public static class NetSync {
     NetworkClient.RegisterHandler<NetMidiMsg>(NetMidi.Apply);
     NetworkClient.RegisterHandler<NetMidiListMsg>(NetMidi.OnList);
     NetworkClient.RegisterHandler<NetMidiSelectMsg>(NetMidi.OnSelect);
+    NetLimits.RegisterClient();
+    NetSamples.RegisterClient();
+    NetLoopers.RegisterClient();
     NetworkClient.RegisterHandler<NetSuccessionMsg>(m => { if (NetSession.instance != null) NetSession.instance.successionRank = m.rank; });
     pendingByTemp.Clear();
   }
@@ -390,6 +397,7 @@ public static class NetSync {
   // ---------------- client side ----------------
 
   static void OnClientPatch(NetPatchMsg m) {
+    Debug.Log("[NetSync] got the session's patch (" + (m.patch != null ? m.patch.Length / 1024 : 0) + " KB): loading it");
     if (awaitingPatch) {
       exampleManager em = Object.FindObjectOfType<exampleManager>();
       if (em != null) em.CancelLoad();
@@ -502,6 +510,10 @@ public static class NetSync {
     using (var ms = new MemoryStream()) {
       using (var w = new StreamWriter(ms, new UTF8Encoding(false))) deviceSerializer.Serialize(w, data);
       byte[] b = ms.ToArray();
+      // a tape's string gains its hash the first time it's set up: compare samples by
+      // content so that isn't a change worth sharing
+      string xml = Encoding.UTF8.GetString(b);
+      if (xml.IndexOf(SampleIndex.Tag, System.StringComparison.Ordinal) >= 0) b = Encoding.UTF8.GetBytes(SampleIndex.Normalize(xml));
       unchecked {
         int h = (int)2166136261;
         for (int i = 0; i < b.Length; i++) h = (h ^ b[i]) * 16777619;

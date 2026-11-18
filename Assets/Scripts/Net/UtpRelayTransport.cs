@@ -184,6 +184,13 @@ public class UtpRelayTransport : Transport {
     ServerStop();
   }
 
+  // Reliable chunks still queued for a connection (0 = the client's own link): big
+  // transfers wait while this is high, so they never pile up in front of everything else.
+  public int PendingReliable(int connectionId) {
+    if (connectionId == 0) return clientPeer != null ? clientPeer.pending.Count : 0;
+    return peers.TryGetValue(connectionId, out Peer p) ? p.pending.Count : 0;
+  }
+
   // ---- sending ----
 
   void Send(Peer p, ArraySegment<byte> segment, int channelId) {

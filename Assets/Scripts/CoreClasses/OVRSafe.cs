@@ -11,7 +11,8 @@ public static class OVRSafe {
   public static bool Available {
     get {
       if (state == 0) {
-        try { var v = OVRPlugin.version; state = v != null ? 1 : 2; }
+        if (NoVR.On) state = 2; // started with -novr: leave the headset runtime alone
+        else try { var v = OVRPlugin.version; state = v != null ? 1 : 2; }
         catch (System.Exception) { state = 2; }
         if (state == 2) Debug.Log("[OVRSafe] no OVRPlugin library: controllers and hands are off (desktop mode)");
       }

@@ -134,7 +134,7 @@ public class cvSequencerDeviceInterface : deviceInterface, INetBeatSync {
     for (int i = 0; i < curDimensions[1]; i++) {
 
       seqList[i].setSignal(cubeBools[targetStep][i]); 
-      cvSeqList[i].setSignal(cubeDials[i][targetStep].percent); // TODO: why did I have to switch targetStep and i??
+      cvSeqList[i].setSignal(cubeDials[i][targetStep].percent); // cubeDials is [row][step], cubeBools [step][row] (they're built differently)
 
       // Note: direct access to unity scene graph is not allowed from audio dsp calls!! 
       // save local copy of desired value or find the object outside of audio dsp

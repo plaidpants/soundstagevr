@@ -154,9 +154,25 @@ public class NetPlayer : NetworkBehaviour {
 
   // ---------- local player: read and send ----------
 
+  // A remote player whose poses stop arriving (headset taken off or switched to Link, app
+  // paused) still counts as connected until the 30 s timeout. Hide their head and hands
+  // after a moment instead of leaving them frozen in place - possibly right in front of
+  // you, if it's your own headset now on Link. They reappear with the next pose.
+  const float StaleAfter = 1.5f;
+  float lastPoseAt;
+  bool stale;
+
   void LateUpdate() {
     if (isLocalPlayer) { LocalUpdate(); return; }
     if (!headPredict.Has) return;
+    if (!stale && Time.realtimeSinceStartup - lastPoseAt > StaleAfter) {
+      stale = true;
+      foreach (Renderer r in parts) if (r != null) r.enabled = false;
+      if (leftNet != null) leftNet.Show(false, false);
+      if (rightNet != null) rightNet.Show(false, false);
+      Debug.Log("[NetPlayer] no poses from a player for " + StaleAfter + " s: hiding their avatar");
+    }
+    if (stale) return;
     MarkSolid();
     float dt = Time.deltaTime;
     headPredict.Apply(head, dt);
@@ -263,6 +279,11 @@ public class NetPlayer : NetworkBehaviour {
 
   void ApplyHands(HandsPacket p) {
     if (isLocalPlayer || leftNet == null) return;
+    lastPoseAt = Time.realtimeSinceStartup;
+    if (stale) {
+      stale = false;
+      foreach (Renderer r in parts) if (r != null) r.enabled = true;
+    }
     headPredict.Feed(p.headPos, Compression.DecompressQuaternion(p.headRot), p.time);
     leftPredict.Feed(p.leftPos, Compression.DecompressQuaternion(p.leftRot), p.time);
     rightPredict.Feed(p.rightPos, Compression.DecompressQuaternion(p.rightRot), p.time);

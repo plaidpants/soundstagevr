@@ -49,14 +49,26 @@ public class sampleManager : MonoBehaviour {
     }
   }
 
+  // A sample string ("APP\\Drums\\kick.wav", maybe with "|sha=<hash>" after it, see
+  // SampleIndex) -> the local file to load. With a hash, a local file holding that content
+  // wins over the path (renamed or moved samples, a sample saved under another name on
+  // another machine).
   public string parseFilename(string f) {
+    if (string.IsNullOrEmpty(f)) return "";
+    SampleIndex.Split(f, out string path, out string hash);
+    return SampleIndex.Resolve(ParsePath(path), hash);
+  }
 
-    if (f == "") return "";
+  // The path part only: "APP" / "DOC" prefixes -> this machine's folders.
+  public string ParsePath(string f) {
+
+    if (string.IsNullOrEmpty(f)) return "";
     // A sample's name is saved with this machine's folder separator ("APP\\Drums\\kick.wav"
     // on Windows). Patches and tapes from the PC reach the Quest (multiplayer, shared
     // patches), where '\\' is an ordinary character: use '/' there. (2026-11)
     if (Path.DirectorySeparatorChar == '/') f = f.Replace('\\', '/');
 
+        if (f.Length < 3) return f;
         if (f.Substring(0, 3) == "APP") {
       f = f.Remove(0, 3);
       f = f.Insert(0, Directory.GetParent(Application.persistentDataPath).FullName + Path.DirectorySeparatorChar + "samples");
@@ -172,6 +184,7 @@ public class sampleManager : MonoBehaviour {
     dir = masterControl.instance.SaveDir + Path.DirectorySeparatorChar + "Samples";
     Directory.CreateDirectory(dir + Path.DirectorySeparatorChar + "Custom");
     Directory.CreateDirectory(dir + Path.DirectorySeparatorChar + "Recordings");
+    Directory.CreateDirectory(dir + Path.DirectorySeparatorChar + SessionSamples.Category); // samples from multiplayer sessions
     loadSampleDictionary(dir, "DOC");
     AddCustomSamples();
 

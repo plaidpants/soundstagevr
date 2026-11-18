@@ -111,17 +111,30 @@ public class tape : manipObject {
   public void Setup(string s, string f) {
     if (masterObj == null) masterObj = transform.parent;
     label = s;
-    filename = f;
-    // the colour comes from the sample (2026-11), so a tape keeps its colour when it's
-    // loaded again from a patch, and is the same colour on every headset
+    // the file string carries the sample's content hash (SampleIndex), so the scene knows
+    // the sound itself, not just its name on this machine. Only an already known hash here:
+    // a Tapes shelf makes dozens of tapes at once (an unknown one is worked out in the
+    // background; saving / sharing the tape adds it then).
+    filename = f = SampleIndex.WithHash(f, false);
+    // the colour comes from the sample's path (2026-11), so a tape keeps its colour when
+    // it's loaded again from a patch, and is the same colour on every headset (the path
+    // travels with the hash)
     if (!string.IsNullOrEmpty(f)) {
+      string key = SampleIndex.PathOf(f);
       uint h = 2166136261;
-      foreach (char ch in f) h = (h ^ ch) * 16777619;
+      foreach (char ch in key) h = (h ^ ch) * 16777619;
       setHue((h % PaletteSize) / (float)PaletteSize);
     }
     labelMesh.text = s;
     origPos = transform.localPosition;
     origRot = transform.localRotation;
+  }
+
+  // A line under the label while the sample isn't playable here yet (NetSamples):
+  // LOADING / MISSING / NO SPACE, "" to clear.
+  public void SetStatus(string status) {
+    if (labelMesh == null) return;
+    labelMesh.text = string.IsNullOrEmpty(status) ? label : label + "\n" + status;
   }
 
   public bool inDeck() {

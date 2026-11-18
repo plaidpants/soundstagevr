@@ -25,7 +25,7 @@ using UnityEngine;
 
 public class NetSession : MonoBehaviour {
   public enum Mode { Off = 0, Local = 1, Internet = 2 }
-  public enum State { Off, Searching, Host, Client }
+  public enum State { Off, Searching, Host, Client, Ended } // Ended: an internet session hit its idle / hour limit (NetLimits)
 
   public static NetSession instance;
   public static event System.Action StatusChanged;
@@ -109,16 +109,29 @@ public class NetSession : MonoBehaviour {
 
   // OFF -> LOCAL -> INTERNET -> OFF (the settings button)
   public static void CycleMode() {
+    // after an internet session ended (idle / one hour), the button starts a new one
+    if (instance != null && instance.state == State.Ended && CurrentMode == Mode.Internet) {
+      NetLimits.endedReason = 0;
+      NetNotice.Hide();
+      instance.StartSearch();
+      return;
+    }
     Mode m = CurrentMode;
     SetMode(m == Mode.Off ? Mode.Local : m == Mode.Local ? Mode.Internet : Mode.Off);
   }
 
-  // ROOM button: 1-9; leaves an internet session in the old room and looks in the new one
-  public static void NextRoom() {
-    NetInternet.Room = NetInternet.Room % 9 + 1;
+  // ROOM buttons: step through rooms 1-10 (dir +1 / -1, wrapping). An internet session in
+  // the old room is left at once; the new room is only searched 2.5 s after the last
+  // press, so clicking through rooms doesn't start a session in each one.
+  public static void StepRoom(int dir) {
+    int n = NetInternet.Rooms;
+    NetInternet.Room = (NetInternet.Room - 1 + dir + n) % n + 1;
     if (instance != null && CurrentMode == Mode.Internet) {
       instance.StopAll();
-      instance.StartSearch();
+      NetLimits.endedReason = 0;
+      instance.SetState(State.Searching);
+      NetInternet.status = "CHANGING ROOM...";
+      instance.Invoke(nameof(StartSearch), 2.5f);
     }
     instance?.RaiseStatus();
   }
@@ -316,6 +329,7 @@ public class NetSession : MonoBehaviour {
     if (state != State.Searching) return;
     EnsureNetwork();
     NetSync.keepIds = true;
+    migratingHost = true;
     BecomeHost();
   }
 
@@ -391,12 +405,17 @@ public class NetSession : MonoBehaviour {
     manager.StartClient();
   }
 
+  bool migratingHost; // TakeOver: same session (same hour), not a new one
+
   async void HostInternet(int run) {
     if (run != searchRun) return;
+    bool migration = migratingHost;
+    migratingHost = false;
     SetState(State.Searching);
     if (!await NetInternet.PrepareHost(utp)) { RetryInternetLater(run); return; }
     if (!Still(run)) return;
     UseTransport(utp);
+    if (migration) NetLimits.TookOver(); else NetLimits.SessionStarted();
     SetState(State.Host);
     manager.StartHost();
     await NetInternet.Publish();
@@ -425,6 +444,23 @@ public class NetSession : MonoBehaviour {
     }
   }
 
+  // NetLimits: the session hit its idle / one-hour limit. Leave and stay out until someone
+  // presses MULTIPLAYER (the patch stays as it is).
+  public void EndInternet(int reason) {
+    if (state == State.Ended) return;
+    NetLimits.endedReason = reason;
+    StopAll();
+    SetState(State.Ended);
+  }
+
+  int pendingEnd;
+  public void EndInternetSoon(int reason) { // host: let the "ended" message go out first
+    if (pendingEnd != 0) return;
+    pendingEnd = reason;
+    Invoke(nameof(EndPending), .5f);
+  }
+  void EndPending() { int r = pendingEnd; pendingEnd = 0; EndInternet(r); }
+
   void OnApplicationQuit() {
     NetInternet.Unpublish(); // best effort: an unremoved session drops out of the list ~30 s later
   }
@@ -434,6 +470,10 @@ public class NetSession : MonoBehaviour {
   float statusTimer;
   void Update() {
     if (state == State.Host && CurrentMode == Mode.Internet) NetInternet.HostUpdate(NetworkServer.connections.Count);
+    if (CurrentMode == Mode.Internet) {
+      if (pendingEnd == 0) NetLimits.Tick(state == State.Host, state == State.Host || (state == State.Client && NetworkClient.isConnected));
+      NetInternet.OccupancyUpdate();
+    }
     statusTimer += Time.unscaledDeltaTime;
     if (statusTimer < 1f) return;
     statusTimer = 0;
@@ -456,6 +496,7 @@ public class NetSession : MonoBehaviour {
       string room = "ROOM " + NetInternet.Room;
       switch (instance.state) {
         case State.Searching: return room + ": " + (NetInternet.status != "" ? NetInternet.status : "SEARCHING...");
+        case State.Ended: return room + ": " + NetLimits.EndedText();
         case State.Host: return room + ": HOSTING (" + Mathf.Max(1, PlayerCount) + ")" + (NetInternet.Listed ? "" : " NOT LISTED");
         case State.Client:
           if (!NetworkClient.isConnected) return room + ": JOINING...";
@@ -490,6 +531,7 @@ public class SoundStageNetworkManager : NetworkManager {
     base.OnServerReady(conn);
     NetSync.ServerSendPatch(conn);
     NetSync.SendSuccession();
+    NetLimits.ServerWelcome(conn);
   }
 
   public override void OnServerConnect(NetworkConnectionToClient conn) {

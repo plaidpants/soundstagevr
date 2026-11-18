@@ -72,7 +72,7 @@ public class samplerLoad : MonoBehaviour {
   public void getTapeInfo(out string label, out string file) {
     if (currentTape != null) {
       label = CurTapeLabel;
-      file = CurFile;
+      file = CurFile = SampleIndex.WithHash(CurFile); // saved / shared: with the sample's hash
     } else {
       label = file = "";
     }
@@ -89,6 +89,7 @@ public class samplerLoad : MonoBehaviour {
   public void UnloadTape(tape t) {
 
     if (currentTape == t) {
+      StopWaiting(); // clears the tape's LOADING / MISSING line
       currentTape = null;
       if (_streamRoutine != null) {
         if (loaderObject != null) Destroy(loaderObject);
@@ -110,10 +111,20 @@ public class samplerLoad : MonoBehaviour {
   public void LoadClip(string path) {
 
     string fullpath = sampleManager.instance.parseFilename(path);
+    string hash = SampleIndex.HashOf(path);
 
     if (!File.Exists(fullpath)) {
+      // not on this machine: ask the other players for it (NetSamples), play it when it
+      // arrives; the tape says what's happening meanwhile
+      if (hash != "") WaitFor(hash);
       return;
     }
+    // here, but with other content (a different file of that name): play it for now,
+    // and fetch the scene's version if someone in the session has it
+    if (hash != "" && NetSync.InSession && SampleIndex.Hash(fullpath) != hash && SampleCache.Find(hash) == null) WaitFor(hash);
+    else StopWaiting();
+    // a sample from another player: list it in the library's Sessions category
+    if (hash != "" && fullpath.StartsWith(SampleCache.Dir, System.StringComparison.OrdinalIgnoreCase)) SessionSamples.Noticed(path);
 
     if (_streamRoutine != null) {
       if (loaderObject != null) Destroy(loaderObject);
@@ -164,7 +175,47 @@ public class samplerLoad : MonoBehaviour {
     for (int i = 0; i < players.Length; i++) players[i].LoadSamples(clipSamples, m_ClipHandle, c.channels);
   }
 
+  // ---- samples coming from other players ----
+
+  string waitingHash = "";
+
+  void WaitFor(string hash) {
+    if (waitingHash != hash) {
+      StopWaiting();
+      waitingHash = hash;
+      NetSamples.Arrived += OnSampleArrived;
+      NetSamples.StateChanged += OnSampleState;
+    }
+    NetSamples.Need(hash);
+    ShowState(NetSamples.StateOf(hash));
+  }
+
+  void StopWaiting() {
+    if (waitingHash == "") return;
+    waitingHash = "";
+    NetSamples.Arrived -= OnSampleArrived;
+    NetSamples.StateChanged -= OnSampleState;
+    if (currentTape != null) currentTape.SetStatus("");
+  }
+
+  void OnSampleArrived(string hash) {
+    if (hash != waitingHash) return;
+    StopWaiting();
+    if (currentTape != null) LoadClip(CurFile);
+  }
+
+  void OnSampleState(string hash, NetSamples.State s) {
+    if (hash == waitingHash) ShowState(s);
+  }
+
+  void ShowState(NetSamples.State s) {
+    if (currentTape == null) return;
+    currentTape.SetStatus(s == NetSamples.State.Loading ? "LOADING" : s == NetSamples.State.Missing ? "MISSING" :
+                          s == NetSamples.State.NoSpace ? "NO SPACE" : s == NetSamples.State.TooBig ? "TOO BIG" : "");
+  }
+
   void OnDestroy() {
+        StopWaiting();
         AbandonLoadingClip();
         if (m_ClipHandle.IsAllocated)
         {
@@ -193,7 +244,9 @@ public class samplerLoad : MonoBehaviour {
   public void SetSample(string s, string f) {
     if (s == "") return;
 
-    if (!File.Exists(sampleManager.instance.parseFilename(f))) {
+    // a sample that isn't here still gets its tape when the scene knows its content
+    // (hash): it's fetched from the other players, and the tape says so meanwhile
+    if (!File.Exists(sampleManager.instance.parseFilename(f)) && SampleIndex.HashOf(f) == "") {
       return;
     }
 

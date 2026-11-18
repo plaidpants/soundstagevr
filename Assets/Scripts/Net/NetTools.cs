@@ -1,8 +1,8 @@
 // Hand-held parts of devices in multiplayer (2026-11): drumsticks, maracas, the
 // microphone grip. While a player holds one, the others see it in that player's hand;
 // when it's let go it glides back to its resting place on the device, as it does for
-// the holder. Visual only for now: the sound these make on other headsets comes with
-// the control sync (milestone 2).
+// the holder. The sounds they make (air horn, maraca shake) are sent separately here
+// too; drum hits with the sticks go through NetControls.
 //
 // A held part is named by its device's network ID plus its index in the device's tool
 // list (NetDevice.tools: same prefab, same order on every headset).

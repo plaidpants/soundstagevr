@@ -123,7 +123,10 @@ public class looperDeviceInterface : deviceInterface {
   }
 
   public override void hit(bool on, int ID = -1) {
-    if (ID == 3 && on) transcriber.Save();
+    // SAVE: only where a player pressed it. Another player's press arrives as a shared
+    // button (NetControls.applying); their recording then comes over as a file and
+    // replaces this loop (NetLoopers), so everyone ends up with the same one.
+    if (ID == 3 && on && !NetControls.applying) transcriber.Save();
     if (ID == 4 && on) transcriber.Flush();
 
     if (ID == 0) {

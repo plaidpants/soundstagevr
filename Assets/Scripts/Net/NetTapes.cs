@@ -6,8 +6,8 @@
 // Pulling a tape out sends the same with no file. Only what players do is sent: the
 // hooks are in tape's own drop / pull-out paths, not in samplerLoad, which loading a
 // patch or applying one of these also goes through.
-// Samples have to exist on every headset (built-in ones do; your own recordings and
-// custom samples don't yet - sample transfer is a later milestone).
+// The file string carries the sample's hash (SampleIndex): a headset that doesn't have
+// that sample gets it from the other players (NetSamples) and plays it once it arrives.
 
 using Mirror;
 using UnityEngine;
@@ -25,7 +25,7 @@ public static class NetTapes {
   }
 
   public static void Loaded(samplerLoad s, tape t) {
-    if (t != null) Loaded(s, t.label, t.filename);
+    if (t != null) Loaded(s, t.label, SampleIndex.WithHash(t.filename)); // shared: with the sample's hash
   }
 
   // (also the test harness, which puts tapes in with samplerLoad.SetSample)
@@ -47,7 +47,7 @@ public static class NetTapes {
     samplerLoad s = all[m.deck];
     if (string.IsNullOrEmpty(m.label)) { s.ForceEject(); return; }
     s.getTapeInfo(out string label, out string file);
-    if (file == m.file) return; // already in
+    if (SampleIndex.SameSample(file, m.file)) return; // already in (same sound, whatever its name here)
     s.ForceEject();
     s.SetSample(m.label, m.file);
     dev.Rebaseline();

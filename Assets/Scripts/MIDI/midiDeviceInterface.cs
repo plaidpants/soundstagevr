@@ -24,7 +24,7 @@ public class midiDeviceInterface : deviceInterface {
 
   Dictionary<int, midiCC>[] midiCCchannels = new Dictionary<int, midiCC>[17];
   Dictionary<int, midiNote>[] midiNotechannels = new Dictionary<int, midiNote>[17];
-  List<simpleMIDI> midiToDo = new List<simpleMIDI>();
+  List<simpleMIDI> midiQueue = new List<simpleMIDI>();
 
   int noteCount = 0;
   int ccCount = 0;
@@ -55,20 +55,20 @@ public class midiDeviceInterface : deviceInterface {
   }
 
   void Update() {
-    if (midiToDo.Count > 0) {
-      for (int i = 0; i < midiToDo.Count; i++) {
-        if (midiToDo[i].CC) {
-          midiCC m = createMidiCC(midiToDo[i].channel, midiToDo[i].ID);
-          m.UpdateValue(midiToDo[i].value);
-          m.UpdateJackID(midiToDo[i].jackID);
+    if (midiQueue.Count > 0) {
+      for (int i = 0; i < midiQueue.Count; i++) {
+        if (midiQueue[i].CC) {
+          midiCC m = createMidiCC(midiQueue[i].channel, midiQueue[i].ID);
+          m.UpdateValue(midiQueue[i].value);
+          m.UpdateJackID(midiQueue[i].jackID);
         } else {
-          midiNote m = createMidiNote(midiToDo[i].channel, midiToDo[i].ID);
-          m.UpdateValue(midiToDo[i].value != 0);
-          m.UpdateJackID(midiToDo[i].jackID);
+          midiNote m = createMidiNote(midiQueue[i].channel, midiQueue[i].ID);
+          m.UpdateValue(midiQueue[i].value != 0);
+          m.UpdateJackID(midiQueue[i].jackID);
         }
       }
 
-      midiToDo.Clear();
+      midiQueue.Clear();
     }
   }
 
@@ -110,13 +110,13 @@ public class midiDeviceInterface : deviceInterface {
   public override void OnMidiNote(int channel, bool on, int pitch) {
     midiNote m = getMidiNote(channel, pitch);
     if (m != null) m.UpdateValue(on);
-    else midiToDo.Add(new simpleMIDI(channel, pitch, on ? 127 : 0, false));
+    else midiQueue.Add(new simpleMIDI(channel, pitch, on ? 127 : 0, false));
   }
 
   public override void OnMidiCC(int channel, int ID, int value) {
     midiCC m = getMidiCC(channel, ID);
     if (m != null) m.UpdateValue(value);
-    else midiToDo.Add(new simpleMIDI(channel, ID, value, true));
+    else midiQueue.Add(new simpleMIDI(channel, ID, value, true));
   }
 
   public override InstrumentData GetData() {
@@ -153,7 +153,7 @@ public class midiDeviceInterface : deviceInterface {
     if (data.connection != "") _midiComponentInterface.ConnectByName(data.connection);
 
     for (int i = 0; i < data.outputs.Length; i++) {
-      midiToDo.Add(new simpleMIDI(data.outputs[i].channel, data.outputs[i].ID, data.outputs[i].value, data.outputs[i].CC, data.outputs[i].jackID));
+      midiQueue.Add(new simpleMIDI(data.outputs[i].channel, data.outputs[i].ID, data.outputs[i].value, data.outputs[i].CC, data.outputs[i].jackID));
     }
 
     Update();

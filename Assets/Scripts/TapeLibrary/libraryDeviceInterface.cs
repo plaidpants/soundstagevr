@@ -110,6 +110,42 @@ public class libraryDeviceInterface : deviceInterface {
     }
   }
 
+  // What to say in an empty category (2026-11-18: the old text only fitted the PC).
+  static string EmptyNote(string category) {
+    bool quest = Application.platform == RuntimePlatform.Android;
+    bool desktop = !quest && (NoVR.On || !OVRSafe.Available); // PC without a headset
+    if (category == "Custom") {
+      if (quest) {
+        // where the files go, as the Quest shows it on a computer (USB cable) or in SideQuest
+        string dir = (masterControl.instance.SaveDir + "/Samples/Custom").Replace('\\', '/');
+        int a = dir.IndexOf("/Android/", System.StringComparison.Ordinal);
+        if (a >= 0) dir = dir.Substring(a + 1);
+        int f = dir.IndexOf("/files/", System.StringComparison.Ordinal);
+        if (f >= 0) dir = dir.Substring(0, f + 1) + "\n" + dir.Substring(f + 1);
+        return "Add your own samples (.wav .ogg .mp3):\n" +
+               "connect the Quest to a computer with a\n" +
+               "USB cable (or use SideQuest) and copy them to\n" +
+               dir + "\n" +
+               "then restart SoundStage.";
+      }
+      if (desktop) return "Add your own samples (.wav .ogg .mp3):\n" +
+                          "press Tab for the menu and choose\n" +
+                          "IMPORT SOUND SAMPLES.";
+      return "Add your own samples (.wav .ogg .mp3):\n" +
+             "take off your headset and choose\n" +
+             "IMPORT SOUND SAMPLES in the menu\n" +
+             "in SoundStage's desktop window.";
+    }
+    if (category == "Recordings")
+      return "Sounds saved with the RECORDER\n" +
+             "or the LOOPER (SAVE) show up here.";
+    if (category == SessionSamples.Category)
+      return "Samples other players use in a\n" +
+             "multiplayer session show up here.\n" +
+             "Save the scene to keep them.";
+    return "[category empty]";
+  }
+
   public string curPrimary = "";
   public string curSecondary = "";
   public void updateSecondaryPanels(string s) {
@@ -120,16 +156,7 @@ public class libraryDeviceInterface : deviceInterface {
     if (sampleManager.instance.sampleDictionary[s].Keys.ToList().Count == 0) {
       note.gameObject.SetActive(true);
 
-      if (s == "Custom") {
-        note.text = "Add custom samples from the desktop.\n" +
-                    "(Take off your headset and look at the menu\n" +
-                    "on the desktop view of the game)";
-      } else if (s == "Recordings") {
-        note.text = "Sounds saved with the\n" +
-                    "RECORDER will show up here.";
-      } else {
-        note.text = "[category empty]";
-      }
+      note.text = EmptyNote(s);
     } else {
       note.gameObject.SetActive(false);
     }

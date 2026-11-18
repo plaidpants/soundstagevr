@@ -32,7 +32,10 @@ public class wirePanelComponentInterface : componentInterface {
   uiPanelSinglePress netpanel; // right column row 4, buttonID 14 (Net/NetSession)
   uiPanelSinglePress roompanel, roommovepanel; // right column rows 5, 6, buttonIDs 15, 16 (Net/NetRoom)
   uiPanelSinglePress harnesspanel; // right column row 8, buttonID 18: the test harness (TestHarness)
-  uiPanelSinglePress internetroompanel; // right column row 9, buttonID 19: internet room 1-9 (NetInternet)
+  uiPanelSinglePress internetroompanel; // right column row 9, buttonID 19: next internet room (NetInternet)
+  uiPanelSinglePress internetprevpanel; // left column row 9, buttonID 20: previous internet room
+  uiPanelSinglePress sharedsamplespanel; // left column row 8, buttonID 21: size of / clear the received-samples cache (SampleCache)
+  float clearArmedUntil; // the shared-samples button clears on a second press within 4 s
   uiPanelSinglePress binauralpanel; // right column row 7, buttonID 17: 3D audio off / speakers / all
 
   Color colorGreen = Color.HSVToRGB(.4f, 230f / 255, 118f / 255);
@@ -64,6 +67,13 @@ public class wirePanelComponentInterface : componentInterface {
     harnesspanel = CloneButton("harnessPanel", 18, 8);
     UpdateHarnessLabel();
     internetroompanel = CloneButton("internetRoomPanel", 19, 9);
+    internetprevpanel = CloneButton("internetPrevRoomPanel", 20, 9);
+    if (internetprevpanel != null) internetprevpanel.transform.localPosition = AboveTop(9, midipanel.transform.localPosition.x);
+    NetInternet.OccupancyChanged += UpdateNetLabel;
+    sharedsamplespanel = CloneButton("sharedSamplesPanel", 21, 8);
+    if (sharedsamplespanel != null) sharedsamplespanel.transform.localPosition = AboveTop(8, midipanel.transform.localPosition.x);
+    UpdateSharedSamplesLabel();
+    SampleCache.Changed += UpdateSharedSamplesLabel;
     TestHarness.Changed += UpdateHarnessLabel;
     NetSession.StatusChanged += UpdateNetLabel;
     NetRoom.Changed += UpdateNetLabel;
@@ -179,10 +189,20 @@ public class wirePanelComponentInterface : componentInterface {
     if (netpanel == null) return;
     netpanel.label.text = NetSession.StatusText();
     netpanel.newColor(NetSession.CurrentMode == NetSession.Mode.Off ? colorRed : colorGreen);
-    if (internetroompanel != null) {
+    if (internetroompanel != null && internetprevpanel != null) {
       bool internet = NetSession.CurrentMode == NetSession.Mode.Internet;
-      internetroompanel.label.text = (internet ? "INTERNET ROOM: " : "INTERNET ROOM (OFF): ") + NetInternet.Room;
+      int n = NetInternet.Rooms, r = NetInternet.Room;
+      int next = r % n + 1, prev = (r + n - 2) % n + 1;
+      if (internet) {
+        string nt = NetInternet.RoomText(next), pt = NetInternet.RoomText(prev);
+        internetroompanel.label.text = "ROOM " + next + (nt != "" ? ": " + nt : "") + " >";
+        internetprevpanel.label.text = "< ROOM " + prev + (pt != "" ? ": " + pt : "");
+      } else {
+        internetroompanel.label.text = "INTERNET ROOM: " + r + " >";
+        internetprevpanel.label.text = "< INTERNET ROOM";
+      }
       internetroompanel.newColor(internet ? colorGreen : colorRed);
+      internetprevpanel.newColor(internet ? colorGreen : colorRed);
     }
     if (roompanel != null) {
       roompanel.label.text = NetRoom.StatusText();
@@ -192,6 +212,25 @@ public class wirePanelComponentInterface : componentInterface {
       roommovepanel.label.text = NetRoom.MoveText();
       roommovepanel.newColor(NetRoom.InRoom && NetRoom.MoveUnlocked ? colorGreen : colorRed);
     }
+  }
+
+  // Samples received from other players (SampleCache): their size, and a two-press clear.
+  void UpdateSharedSamplesLabel() {
+    if (sharedsamplespanel == null) return;
+    if (Time.unscaledTime < clearArmedUntil) {
+      sharedsamplespanel.label.text = "PRESS AGAIN TO CLEAR";
+      sharedsamplespanel.newColor(colorRed);
+      return;
+    }
+    long bytes = SampleCache.TotalBytes();
+    string size = bytes == 0 ? "NONE" : bytes < (1 << 20) ? System.Math.Max(1, (bytes + 512) >> 10) + " KB" : ((bytes + (1 << 19)) >> 20) + " MB";
+    sharedsamplespanel.label.text = "SHARED SAMPLES: " + size;
+    sharedsamplespanel.newColor(colorGreen);
+  }
+
+  void OnEnable() {
+    clearArmedUntil = 0;
+    UpdateSharedSamplesLabel(); // the size may have changed while the menu was closed
   }
 
   void UpdateHarnessLabel() {
@@ -204,6 +243,8 @@ public class wirePanelComponentInterface : componentInterface {
     TestHarness.Changed -= UpdateHarnessLabel;
     NetSession.StatusChanged -= UpdateNetLabel;
     NetRoom.Changed -= UpdateNetLabel;
+    NetInternet.OccupancyChanged -= UpdateNetLabel;
+    SampleCache.Changed -= UpdateSharedSamplesLabel;
   }
 
   void UpdateEnvironmentLabels() {
@@ -317,8 +358,20 @@ public class wirePanelComponentInterface : componentInterface {
       NetSession.CycleMode(); // OFF -> LOCAL -> INTERNET
       UpdateNetLabel();
     } else if (ID == 19) {
-      NetSession.NextRoom();
+      NetSession.StepRoom(+1);
       UpdateNetLabel();
+    } else if (ID == 20) {
+      NetSession.StepRoom(-1);
+      UpdateNetLabel();
+    } else if (ID == 21) {
+      if (Time.unscaledTime < clearArmedUntil) {
+        clearArmedUntil = 0;
+        SampleCache.Clear();
+      } else {
+        clearArmedUntil = Time.unscaledTime + 4f;
+        Invoke(nameof(UpdateSharedSamplesLabel), 4.05f); // back to the size if not pressed again
+      }
+      UpdateSharedSamplesLabel();
     } else if (ID == 13) {
       if (EnvironmentControl.instance != null) EnvironmentControl.instance.CycleSky();
       UpdateEnvironmentLabels();

@@ -179,9 +179,30 @@ public class dial : manipObject {
     deviceInterface dev = GetComponentInParent<deviceInterface>();
     TextMesh src = dev != null ? dev.GetComponentInChildren<TextMesh>(true) : null;
     if (src == null) return;
-    GameObject g = new GameObject("dialValuePopup");
-    popup = g.AddComponent<TextMesh>();
+    long tFind = sw.ElapsedMilliseconds;
+    // A copy of the device's own label, not a new TextMesh: on the PC AddComponent<TextMesh>
+    // took 0.7-11 s the first time (a new TextMesh starts with Unity's default font, which
+    // Windows has to look up among the system fonts).
+    // (Only a plain label is copied - one with scripts on it would run them - otherwise a
+    // new TextMesh as before.)
+    bool plain = true;
+    foreach (Component c in src.GetComponents<Component>())
+      if (!(c is Transform || c is TextMesh || c is MeshRenderer || c is MeshFilter)) plain = false;
+    GameObject g;
+    if (plain) {
+      g = Instantiate(src.gameObject);
+      g.transform.SetParent(null, false);
+      for (int i = g.transform.childCount - 1; i >= 0; i--) DestroyImmediate(g.transform.GetChild(i).gameObject);
+      g.SetActive(true);
+      popup = g.GetComponent<TextMesh>();
+    } else {
+      g = new GameObject();
+      popup = g.AddComponent<TextMesh>();
+    }
+    g.name = "dialValuePopup";
+    long tMake = sw.ElapsedMilliseconds;
     popup.font = src.font;
+    long tFont = sw.ElapsedMilliseconds;
     popup.fontSize = src.fontSize;
     popup.characterSize = src.characterSize;
     popup.anchor = TextAnchor.LowerCenter;
@@ -190,8 +211,9 @@ public class dial : manipObject {
     g.GetComponent<MeshRenderer>().sharedMaterial = src.GetComponent<Renderer>().sharedMaterial;
     Vector3 s = src.transform.lossyScale;
     g.transform.localScale = new Vector3(Mathf.Abs(s.x), Mathf.Abs(s.y), Mathf.Abs(s.z)) * 1.3f;
+    long tStyle = sw.ElapsedMilliseconds;
     UpdatePopup();
-    if (sw.ElapsedMilliseconds > 30) Debug.Log("[dial] value popup took " + sw.ElapsedMilliseconds + " ms to make");
+    if (sw.ElapsedMilliseconds > 30) Debug.Log("[dial] value popup took " + sw.ElapsedMilliseconds + " ms to make (find " + tFind + ", object " + (tMake - tFind) + ", font " + (tFont - tMake) + ", style " + (tStyle - tFont) + ", text " + (sw.ElapsedMilliseconds - tStyle) + "; font " + (src.font != null ? src.font.name + (src.font.dynamic ? " dynamic" : "") : "none") + ")");
   }
 
   void UpdatePopup() {

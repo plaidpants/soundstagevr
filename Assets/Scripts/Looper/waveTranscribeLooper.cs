@@ -193,12 +193,73 @@ public class waveTranscribeLooper : signalGenerator {
   }
 
   string curfilename = "";
+  string curfile = ""; // the tape's sample string (from Recordings here, or another player's)
+
+  // our own SAVE finished: a tape of it, and the recording goes to the other players
   public override void updateTape(string s) {
     s = System.IO.Path.GetFileNameWithoutExtension(s);
-    curfilename = s;
+    ShowTape(s, sampleManager.instance.sampleDictionary["Recordings"][s]);
+    if (NetSync.Active) NetLoopers.Saved(this, curfilename, SampleIndex.WithHash(curfile));
+  }
+
+  void ShowTape(string label, string file) {
+    curfilename = label;
+    curfile = file;
     if (curTape != null) Destroy(curTape.gameObject);
     curTape = (Instantiate(tapePrefab, tapeHolder, false) as GameObject).GetComponent<tape>();
-    curTape.Setup(s, sampleManager.instance.sampleDictionary["Recordings"][s]);
+    curTape.Setup(label, file);
+  }
+
+  // Another player saved this looper's loop: show their tape and, once their recording is
+  // here (NetSamples), play it as this loop - so every headset has the same one.
+  string remoteHash = "";
+  public void ApplyRemoteSave(string label, string file) {
+    ShowTape(label, file);
+    StopWaitingRemote();
+    remoteHash = SampleIndex.HashOf(file);
+    if (TakeRecording(file)) { remoteHash = ""; return; }
+    if (remoteHash == "") return;
+    NetSamples.Arrived += OnRemoteArrived;
+    NetSamples.StateChanged += OnRemoteState;
+    NetSamples.Need(remoteHash);
+    OnRemoteState(remoteHash, NetSamples.StateOf(remoteHash));
+  }
+
+  void OnRemoteArrived(string hash) {
+    if (hash != remoteHash) return;
+    StopWaitingRemote();
+    TakeRecording(curfile);
+  }
+
+  void OnRemoteState(string hash, NetSamples.State s) {
+    if (hash != remoteHash || curTape == null) return;
+    curTape.SetStatus(s == NetSamples.State.Loading ? "LOADING" : s == NetSamples.State.Missing ? "MISSING" :
+                      s == NetSamples.State.NoSpace ? "NO SPACE" : s == NetSamples.State.TooBig ? "TOO BIG" : "");
+  }
+
+  void StopWaitingRemote() {
+    NetSamples.Arrived -= OnRemoteArrived;
+    NetSamples.StateChanged -= OnRemoteState;
+    if (curTape != null) curTape.SetStatus("");
+  }
+
+  void OnDestroy() { StopWaitingRemote(); }
+
+  // copies a saved recording into the loop (sample for sample; the loop length comes from
+  // the looper's shared settings, so it matches the player who saved it)
+  bool TakeRecording(string file) {
+    string path = sampleManager.instance.parseFilename(file);
+    if (!System.IO.File.Exists(path)) return false;
+    float[] rec = SampleCache.ReadWav(path, out int ch);
+    if (rec == null || ch != 2) { Debug.LogWarning("[NetLoopers] not a stereo WAV: " + path); return false; }
+    float[] buf = sampleBuffer;
+    int n = Mathf.Min(rec.Length, buf.Length);
+    Array.Copy(rec, buf, n);
+    if (n < buf.Length) Array.Clear(buf, n, buf.Length - n);
+    Debug.Log("[NetLoopers] " + name + ": took another player's saved loop (" + (n / 2) + " frames" +
+              (rec.Length != virtualBufferLength ? ", theirs " + rec.Length / 2 + ", ours " + virtualBufferLength / 2 : "") + ")");
+    resetScrub = true;
+    return true;
   }
 
   void createNewTape() {
@@ -209,7 +270,7 @@ public class waveTranscribeLooper : signalGenerator {
     curTape = (Instantiate(tapePrefab, tapeHolder, false) as GameObject).GetComponent<tape>();
 
     curTape.transform.localPosition = p;
-    curTape.Setup(curfilename, sampleManager.instance.sampleDictionary["Recordings"][curfilename]);
+    curTape.Setup(curfilename, curfile);
   }
 
   public void Back() {
