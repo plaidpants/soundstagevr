@@ -76,13 +76,6 @@ public static class NetCables {
     yield return null; // a pulled cable's plugs are destroyed at the end of the frame
     if (!NetSync.Active) yield break;
     Dictionary<string, NetCableMsg> now = Scan();
-    foreach (KeyValuePair<string, NetCableMsg> kv in now) {
-      if (known.Contains(kv.Key)) continue;
-      known.Add(kv.Key);
-      Rebaseline(kv.Value.outDev); Rebaseline(kv.Value.inDev);
-      NetSync.SendCable(kv.Value);
-      Debug.Log("[NetCables] connected here: " + kv.Key);
-    }
     List<string> gone = new List<string>();
     foreach (string k in known) if (!now.ContainsKey(k)) gone.Add(k);
     foreach (string k in gone) {
@@ -93,6 +86,16 @@ public static class NetCables {
       Rebaseline(a); Rebaseline(b);
       NetSync.SendCable(new NetCableMsg { connect = false, outDev = a, outJack = ja, inDev = b, inJack = jb });
       Debug.Log("[NetCables] disconnected here: " + k);
+    }
+    // new cables after the removed ones (2026-11-18): a plug moved from one jack to another
+    // arrived as "connect" first, found its jack still taken by the old cable on the other
+    // machines ("jack busy") and was dropped there
+    foreach (KeyValuePair<string, NetCableMsg> kv in now) {
+      if (known.Contains(kv.Key)) continue;
+      known.Add(kv.Key);
+      Rebaseline(kv.Value.outDev); Rebaseline(kv.Value.inDev);
+      NetSync.SendCable(kv.Value);
+      Debug.Log("[NetCables] connected here: " + kv.Key);
     }
   }
 
@@ -105,7 +108,14 @@ public static class NetCables {
     if (ja == null || jb == null) { Debug.Log("[NetCables] jacks not found for " + k); return; }
 
     if (m.connect) {
-      if (ja.near != null || jb.near != null) { Debug.Log("[NetCables] jack busy for " + k); return; }
+      // The sender just plugged these two jacks, so on its machine they're free: a cable
+      // still on either here is one that didn't go away here (missed or crossed message) -
+      // take it out rather than drop the new cable
+      if (ja.near != null || jb.near != null) {
+        Debug.Log("[NetCables] jack busy for " + k + ": removing the cable there first");
+        RemoveCablesAt(ja);
+        RemoveCablesAt(jb);
+      }
       Connect(ja, jb, m.color, m.path);
       known.Add(k);
     } else {
@@ -120,6 +130,27 @@ public static class NetCables {
       }
       known.Remove(k);
     }
+  }
+
+  // takes out any cable plugged into this jack (both its plugs)
+  static void RemoveCablesAt(omniJack j) {
+    foreach (omniPlug p in Object.FindObjectsOfType<omniPlug>()) {
+      if (p == null || p.connected != j || p.otherPlug == null) continue;
+      omniPlug other = p.otherPlug;
+      omniPlug outP = p.outputPlug ? p : other, inP = p.outputPlug ? other : p;
+      int a = DevOf(outP.connected), b = DevOf(inP.connected);
+      if (p.connected != null) p.connected.endConnection();
+      if (other.connected != null) other.connected.endConnection();
+      p.connected = null; other.connected = null; // gone at the end of the frame: keep it off the jacks now
+      Object.Destroy(other.gameObject);
+      Object.Destroy(p.gameObject);
+      known.RemoveWhere(k => k.StartsWith(a + ":") && k.Contains(">" + b + ":"));
+    }
+  }
+
+  static int DevOf(omniJack j) {
+    NetDevice d = j != null ? j.GetComponentInParent<NetDevice>() : null;
+    return d != null ? d.netId : -1;
   }
 
   // like SaveLoadInterface.LoadPlugs for one cable

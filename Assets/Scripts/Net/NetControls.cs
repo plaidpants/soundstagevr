@@ -165,6 +165,8 @@ public class NetControls : MonoBehaviour {
     // Then it may have changed the device's structure: share the patch again.
     if (obj is handle || obj is button || obj is key || NetTools.IsTool(obj) || obj is omniPlug || obj is omniJack) return;
     if (obj is tape) return; // NetTapes
+    if (obj is generalGrip && obj.GetComponentInParent<samplerDeviceInterface>() is samplerDeviceInterface sd) { NetSampler.TurntableMoved(sd); return; } // the sampler's turntable moved: just its place, not the whole patch (a reload emptied the other headsets' loopers)
+    if (obj is turntableUI) return; // scratching only moves the playhead: nothing in the patch changes, and a whole-patch reload here dropped whatever the other hand was holding
     if (obj is scalePickItem) return; // the Scale Sequencer's scale button / list: opening the list is local (a patch reload closed it before a scale could be picked); a pick is sent on its own (NetScales)
     if (obj is midiPanel) return; // the MIDI device list: picking from it is local (and shared by NetMidi) - a patch reload here closed the list before anything could be picked
     if (obj.name == "sizeHandle" && (obj.GetComponentInParent<keyboardDeviceInterface>() != null || obj.GetComponentInParent<xylorollDeviceInterface>() != null)) return; // NetControls.Resized

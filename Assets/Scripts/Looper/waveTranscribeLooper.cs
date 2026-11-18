@@ -245,6 +245,39 @@ public class waveTranscribeLooper : signalGenerator {
 
   void OnDestroy() { StopWaitingRemote(); }
 
+  // ---- kept across a multiplayer patch reload (2026-11-18) ----
+  // The loop itself isn't part of the patch, so a reload (another player loading, moving
+  // a turntable, ...) used to leave this headset with an empty looper and no tape, while
+  // the player who caused it still had theirs. NetSync.ReplacePatch takes a snapshot of
+  // each looper first and gives it to the new looper in the same place.
+  public class Snapshot { public float[] buf; public int len, index; public bool playing, hasTape; public string label, file; public double dsp; }
+
+  public Snapshot TakeSnapshot() {
+    if (recording) return null;
+    return new Snapshot {
+      buf = (float[])sampleBuffer.Clone(), len = virtualBufferLength, index = curBufferIndex,
+      playing = playing, hasTape = curTape != null, label = curfilename, file = curfile, dsp = AudioSettings.dspTime
+    };
+  }
+
+  public void RestoreSnapshot(Snapshot s) {
+    if (s == null) return;
+    if (s.len != virtualBufferLength) { Debug.Log("[NetLoopers] " + name + ": loop length changed in the reload, not restored"); return; }
+    int n = Mathf.Min(s.buf.Length, sampleBuffer.Length);
+    Array.Copy(s.buf, sampleBuffer, n);
+    recalcTex();
+    display.Upload();
+    if (s.hasTape && !string.IsNullOrEmpty(s.file)) ShowTape(s.label, s.file);
+    if (s.playing && virtualBufferLength > 1) {
+      // carry on where it would be now (the reload took a few frames)
+      long adv = (long)((AudioSettings.dspTime - s.dsp) * AudioSettings.outputSampleRate) * 2;
+      curBufferIndex = (int)((s.index + adv) % virtualBufferLength) & ~1;
+      playing = true;
+      _deviceInterface.buttons[1].phantomHit(true);
+    }
+    Debug.Log("[NetLoopers] " + name + ": kept its loop through the reload" + (s.playing ? " (still playing)" : ""));
+  }
+
   // copies a saved recording into the loop (sample for sample; the loop length comes from
   // the looper's shared settings, so it matches the player who saved it)
   bool TakeRecording(string file) {
@@ -253,11 +286,28 @@ public class waveTranscribeLooper : signalGenerator {
     float[] rec = SampleCache.ReadWav(path, out int ch);
     if (rec == null || ch != 2) { Debug.LogWarning("[NetLoopers] not a stereo WAV: " + path); return false; }
     float[] buf = sampleBuffer;
-    int n = Mathf.Min(rec.Length, buf.Length);
-    Array.Copy(rec, buf, n);
-    if (n < buf.Length) Array.Clear(buf, n, buf.Length - n);
-    Debug.Log("[NetLoopers] " + name + ": took another player's saved loop (" + (n / 2) + " frames" +
-              (rec.Length != virtualBufferLength ? ", theirs " + rec.Length / 2 + ", ours " + virtualBufferLength / 2 : "") + ")");
+    int ours = Mathf.Min(virtualBufferLength, buf.Length) / 2, theirs = rec.Length / 2;
+    if (theirs > 0 && ours > 0 && Mathf.Abs(theirs - ours) > ours / 100) {
+      // the same loop at another sample rate (2026-11-18: the Quest runs at 48 kHz, the PC
+      // at 44.1 kHz - copied sample for sample it played slower and lower): stretch it over
+      // our loop length, linearly
+      double step = (double)theirs / ours;
+      for (int i = 0; i < ours; i++) {
+        double pos = i * step;
+        int a = (int)pos;
+        int b = Mathf.Min(a + 1, theirs - 1);
+        float t = (float)(pos - a);
+        buf[i * 2] = rec[a * 2] + (rec[b * 2] - rec[a * 2]) * t;
+        buf[i * 2 + 1] = rec[a * 2 + 1] + (rec[b * 2 + 1] - rec[a * 2 + 1]) * t;
+      }
+      if (ours * 2 < buf.Length) Array.Clear(buf, ours * 2, buf.Length - ours * 2);
+    } else {
+      int n = Mathf.Min(rec.Length, buf.Length);
+      Array.Copy(rec, buf, n);
+      if (n < buf.Length) Array.Clear(buf, n, buf.Length - n);
+    }
+    Debug.Log("[NetLoopers] " + name + ": took another player's saved loop (" + ours + " frames" +
+              (theirs != ours ? ", resampled from " + theirs : "") + ")");
     resetScrub = true;
     return true;
   }

@@ -213,6 +213,7 @@ public class manipulator : MonoBehaviour {
       selectedTransform = null;
     }
 
+    if (selectedObject != null && NetSync.InSession) Debug.Log("[manipulator] " + controllerIndex + (on ? ": grab " : ": let go of ") + selectedObject.name + " (" + selectedObject.curState + ")");
     if (selectedObject != null) {
       selectedObject.setGrab(grabbing, transform);
       if (!on) toggleController(true);

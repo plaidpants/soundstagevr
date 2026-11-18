@@ -69,24 +69,34 @@ public class scrubQuad : MonoBehaviour {
   }
 
 
+  // Letting go must clear scrubberActive: left set, Update kept moving the bar to the hand
+  // after release, fighting clipPlayerComplex (which puts it back at the play position);
+  // whichever ran last each frame won, so after a reload the bar could stay stuck to the
+  // hand. Only the hand doing the scrubbing can end it (the other hand's trigger used to).
   void updateScrubbers(manipulator m) {
-    if (manips[m].trigger && manips[m].colliding && m.emptyGrab) {
-      scrubberCandidate = scrubberActive = manips[m];
+    scrubber s = manips[m];
+    if (s.trigger && s.colliding && m.emptyGrab) {
+      scrubberCandidate = scrubberActive = s;
       player.grabScrub(true);
-    } else {
+    } else if (scrubberActive == s || scrubberActive == null) {
+      scrubberActive = null;
       player.grabScrub(false);
     }
   }
 
   void Update() {
-    foreach (manipulator m in manips.Keys) {
-      if (m == null) manips.Remove(m);
-      else {
-        if (manips[m].trigger != m.triggerDown) {
-          manips[m].trigger = m.triggerDown;
-          updateScrubbers(m);
-        }
+    List<manipulator> gone = null;
+    foreach (manipulator m in new List<manipulator>(manips.Keys)) {
+      if (m == null) { (gone ??= new List<manipulator>()).Add(m); continue; }
+      if (manips[m].trigger != m.triggerDown) {
+        manips[m].trigger = m.triggerDown;
+        updateScrubbers(m);
       }
+    }
+    if (gone != null) foreach (manipulator m in gone) {
+      if (scrubberActive == manips[m]) { scrubberActive = null; player.grabScrub(false); }
+      if (scrubberCandidate == manips[m]) scrubberCandidate = null;
+      manips.Remove(m);
     }
 
     if (scrubberCandidate != null) {

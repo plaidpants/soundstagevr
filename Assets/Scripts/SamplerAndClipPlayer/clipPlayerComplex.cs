@@ -172,9 +172,32 @@ public class clipPlayerComplex : clipPlayer {
     looping = true;
   }
 
+  // ---- multiplayer (NetSampler, 2026-11-18) ----
+  // Positions go between headsets in seconds: each one's clip is at its own output rate.
+  public bool netScrub;               // scrubGrabbed because another player is scrubbing
+  float netSeekFrames = -1;           // a jump asked for by NetSampler (taken on the audio thread)
+  public float NetSeconds { get { return _lastBuffer / (float)AudioSettings.outputSampleRate; } }
+  public float NetBoundSeconds(int i) { return sampleBounds[i] / (float)AudioSettings.outputSampleRate; }
+  public void NetSeek(float seconds) { if (loaded) netSeekFrames = Mathf.Max(0, seconds * AudioSettings.outputSampleRate); }
+  public void NetScrubTo(float seconds) {
+    if (!loaded) return;
+    int frames = clipSamples.Length / clipChannels;
+    float t = Mathf.Clamp01(seconds * AudioSettings.outputSampleRate / Mathf.Max(1, frames - 1));
+    Vector3 p = scrubTransform.localPosition;
+    p.x = Mathf.Lerp(scrubRange.x, scrubRange.y, t);
+    scrubTransform.localPosition = p;
+    if (!scrubGrabbed) grabScrub(true);
+    netScrub = true;
+  }
+  public void NetScrubEnd(float seconds) {
+    if (netScrub) { grabScrub(false); netScrub = false; }
+    NetSeek(seconds);
+  }
+
   float lastScrubTarg = 0;
   public void grabScrub(bool on) {
     scrubGrabbed = on;
+    netScrub = false;
     float targ = Mathf.InverseLerp(scrubRange.x, scrubRange.y, scrubTransform.localPosition.x);
     lastScrubTarg = scrubTarg = (int)((clipSamples.Length / clipChannels - 1) * targ);
   }
@@ -216,6 +239,7 @@ public class clipPlayerComplex : clipPlayer {
   public override void processBuffer(float[] buffer, double dspTime, int channels) {
     if (!loaded) return;
     floatingBufferCount = _lastBuffer;
+    if (netSeekFrames >= 0) { floatingBufferCount = _lastBuffer = netSeekFrames; netSeekFrames = -1; }
 
     if (speedBuffer.Length != buffer.Length)
       System.Array.Resize(ref speedBuffer, buffer.Length);
