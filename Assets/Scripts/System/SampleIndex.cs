@@ -124,6 +124,15 @@ public class SampleIndex : MonoBehaviour {
     return pa == pb;
   }
 
+  // Network (2026-11-18): every sample path in a patch going out carries its hash. A
+  // device can still hold the plain path it was loaded with (a drum machine row not built
+  // yet when an example was shared): another machine without that file got no tape at all
+  // - it can only fetch a sample it knows the hash of.
+  static readonly Regex plainSample = new Regex(@">((?:APP[\\/]|DOC[\\/]|[A-Za-z]:[\\/]|/)[^<>|]+?\.(?:wav|ogg|mp3))<", RegexOptions.IgnoreCase);
+  public static string AddHashes(string xml) {
+    return plainSample.Replace(xml, m => ">" + WithHash(m.Groups[1].Value) + "<");
+  }
+
   // For comparing scenes between machines: a sample string compares by its hash alone.
   static readonly Regex tagged = new Regex(@"[^<>""|]*\|sha=([0-9a-f]{64})");
   public static string Normalize(string xml) {

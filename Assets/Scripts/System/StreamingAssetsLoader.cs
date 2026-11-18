@@ -21,6 +21,8 @@ using UnityEngine.Networking;
 
 public static class StreamingAssetsLoader {
   public static byte[] ReadAllBytes(string path) {
+    // a plain file everywhere but Android (the Windows build: unpacking its samples / examples)
+    if (Application.platform != RuntimePlatform.Android) return System.IO.File.ReadAllBytes(path);
     using (UnityWebRequest req = UnityWebRequest.Get(path)) {
       UnityWebRequestAsyncOperation op = req.SendWebRequest();
       while (!op.isDone) System.Threading.Thread.Sleep(1);

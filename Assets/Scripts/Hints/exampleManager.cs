@@ -62,7 +62,7 @@ public class exampleManager : MonoBehaviour {
   }
 
   void Start() {
-#if UNITY_ANDROID
+#if UNITY_ANDROID || (UNITY_STANDALONE_WIN && !UNITY_EDITOR) // (2026-11-18: and the Windows build)
         // Extract the examples if they're missing, or if they came from a different build
         // (2026-11: the examples are updated with the app, e.g. sequencer LOOP settings;
         // they used to be extracted only once, so updates never reached the headset).

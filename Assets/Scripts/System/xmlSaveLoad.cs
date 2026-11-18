@@ -39,14 +39,20 @@ public class xmlSaveLoad {
   }
 
   // Multiplayer: the patch as gzipped XML bytes and back.
+  // (network only: every sample path gets its hash, SampleIndex.AddHashes)
   public byte[] ToBytes() {
     XmlSerializer serializer = new XmlSerializer(typeof(xmlSaveLoad));
+    string xml;
+    using (var sw = new Utf8StringWriter()) { serializer.Serialize(sw, this); xml = sw.ToString(); }
+    xml = SampleIndex.AddHashes(xml);
     using (var ms = new MemoryStream()) {
       using (var gz = new System.IO.Compression.GZipStream(ms, System.IO.Compression.CompressionLevel.Fastest, true))
-      using (var w = new StreamWriter(gz, new UTF8Encoding(false))) serializer.Serialize(w, this);
+      using (var w = new StreamWriter(gz, new UTF8Encoding(false))) w.Write(xml);
       return ms.ToArray();
     }
   }
+
+  public class Utf8StringWriter : StringWriter { public override Encoding Encoding { get { return new UTF8Encoding(false); } } }
 
   public static xmlSaveLoad FromBytes(byte[] data) {
     XmlSerializer serializer = new XmlSerializer(typeof(xmlSaveLoad));

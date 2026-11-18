@@ -537,9 +537,9 @@ public static class NetSync {
     try { data = di.GetData(); }
     catch (System.Exception e) { Debug.LogError("[NetSync] reading " + d.name + " to send it failed: " + e); return null; }
     data.scale = d.transform.lossyScale;
-    using (var ms = new MemoryStream()) {
-      using (var w = new StreamWriter(ms, new UTF8Encoding(false))) deviceSerializer.Serialize(w, data);
-      return ms.ToArray();
+    using (var sw = new xmlSaveLoad.Utf8StringWriter()) { // (declares utf-8, like the bytes it becomes)
+      deviceSerializer.Serialize(sw, data);
+      return new UTF8Encoding(false).GetBytes(SampleIndex.AddHashes(sw.ToString())); // samples with their hash
     }
   }
 

@@ -159,7 +159,8 @@ public class sampleManager : MonoBehaviour {
 
   public void Init() {
 
-#if UNITY_ANDROID
+#if UNITY_ANDROID || (UNITY_STANDALONE_WIN && !UNITY_EDITOR)
+        // (2026-11-18: the Windows build too - a PC that never had SoundStage had no samples)
         //if Samples directory doesn't exist, extract default data...
         if (Directory.Exists(Directory.GetParent(Application.persistentDataPath).FullName + Path.DirectorySeparatorChar + "Samples") == false)
         {

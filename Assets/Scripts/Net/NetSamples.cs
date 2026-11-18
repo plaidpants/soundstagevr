@@ -191,9 +191,13 @@ public class NetSamples : MonoBehaviour {
   static void OnHostChunk(NetworkConnectionToClient conn, NetSampleChunkMsg m) {
     if (!IsHash(m.hash) || !waiting.ContainsKey(m.hash)) return; // never asked for: ignore
     if (incoming.TryGetValue(m.hash, out Incoming inc) && inc.fromConn != conn.connectionId) return; // another player is already sending it
+    // someone answered: the ask can't time out any more (a transfer that stops is the
+    // stall timeout's; 2026-11-18: an 866 KB sample still being checked after the last
+    // chunk was declared "nobody has it" 6 s after the ask)
+    askedAt.Remove(m.hash);
     Receive(m, conn.connectionId, ok => {
       if (ok == null) {
-        HashSet<int> set = waiting[m.hash];
+        if (!waiting.TryGetValue(m.hash, out HashSet<int> set)) set = new HashSet<int> { -1 };
         waiting.Remove(m.hash);
         askedAt.Remove(m.hash);
         wantFrom.TryGetValue(m.hash, out Dictionary<int, long> wf);
