@@ -100,6 +100,28 @@ public class NetSamples : MonoBehaviour {
     if (s == State.Loading) return;
     if (s == State.TooBig && OverRelay) return; // won't get smaller
     if (SampleIndex.LocalSource(hash) != null || SampleCache.Find(hash) != null) { Done(hash); return; }
+    // one of the app's own samples (deleted here, or newer than this library): from the
+    // bundled archive, no network needed (BuiltinSamples)
+    if (BuiltinSamples.Has(hash) && !builtinTried.Contains(hash)) {
+      builtinTried.Add(hash);
+      SetState(hash, State.Loading);
+      RestoreBuiltin(hash);
+      return;
+    }
+    Ask(hash);
+  }
+
+  static readonly HashSet<string> builtinTried = new HashSet<string>(); // once per run: if that fails, ask the players
+
+  static async void RestoreBuiltin(string hash) {
+    bool ok = false;
+    try { ok = await BuiltinSamples.Restore(hash); } catch (Exception e) { Debug.LogWarning("[NetSamples] built-in restore failed: " + e.Message); }
+    if (ok) { Done(hash); return; }
+    states.Remove(hash);
+    Ask(hash);
+  }
+
+  static void Ask(string hash) {
     if (!NetSync.InSession) { SetState(hash, State.Missing); return; }
     SetState(hash, State.Loading);
     Debug.Log("[NetSamples] need " + Short(hash) + ": asking " + (NetworkServer.active ? "the other players" : "the host"));

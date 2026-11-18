@@ -159,21 +159,14 @@ public class sampleManager : MonoBehaviour {
 
   public void Init() {
 
-#if UNITY_ANDROID || (UNITY_STANDALONE_WIN && !UNITY_EDITOR)
-        // (2026-11-18: the Windows build too - a PC that never had SoundStage had no samples)
-        //if Samples directory doesn't exist, extract default data...
-        if (Directory.Exists(Directory.GetParent(Application.persistentDataPath).FullName + Path.DirectorySeparatorChar + "Samples") == false)
-        {
-            Directory.CreateDirectory(Directory.GetParent(Application.persistentDataPath).FullName + Path.DirectorySeparatorChar + "Samples");
-            //copy tgz to directory where we can extract it
-            byte[] tgz = StreamingAssetsLoader.ReadAllBytes(Application.streamingAssetsPath + Path.DirectorySeparatorChar + "Samples.tgz");
-            System.IO.File.WriteAllBytes(Directory.GetParent(Application.persistentDataPath).FullName + Path.DirectorySeparatorChar + "Samples.tgz", tgz);
-            //extract it
-            Utility_SharpZipCommands.ExtractTGZ(Directory.GetParent(Application.persistentDataPath).FullName + Path.DirectorySeparatorChar + "Samples.tgz", Directory.GetParent(Application.persistentDataPath).FullName + Path.DirectorySeparatorChar + "Samples");
-            //delete tgz
-            File.Delete(Directory.GetParent(Application.persistentDataPath).FullName + Path.DirectorySeparatorChar + "Samples.tgz");
-        }
-#endif
+    // The app's own library: unpacked from Samples.tgz the first time (the Quest, and the
+    // Windows build since 2026-11-18 - a PC that never had SoundStage had no samples).
+    // Later builds add only new built-ins, in the background (BuiltinSamples).
+    string lib = BuiltinSamples.LibraryDir;
+    if (lib != null && !Directory.Exists(lib)) {
+      Directory.CreateDirectory(lib);
+      BuiltinSamples.UpdateLibrary(lib, true);
+    }
 
         instance = this;
     sampleDictionary = new Dictionary<string, Dictionary<string, string>>();

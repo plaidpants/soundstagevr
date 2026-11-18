@@ -74,7 +74,8 @@ public class SampleIndex : MonoBehaviour {
     if (hash != "") return f;
     string full = sampleManager.instance != null ? sampleManager.instance.ParsePath(path) : path;
     string h = wait ? Hash(full) : Known(full);
-    if (h == "" && !wait) HashLater(full);
+    if (h == "" && !File.Exists(full)) h = BuiltinSamples.HashForPath(path); // a built-in this library lacks
+    else if (h == "" && !wait) HashLater(full);
     return h == "" ? f : path + Tag + h;
   }
 

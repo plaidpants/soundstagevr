@@ -246,6 +246,11 @@ public class samplerLoad : MonoBehaviour {
 
     // a sample that isn't here still gets its tape when the scene knows its content
     // (hash): it's fetched from the other players, and the tape says so meanwhile
+    // a built-in this library lacks (deleted, or newer): the archive knows its hash
+    if (SampleIndex.HashOf(f) == "" && !File.Exists(sampleManager.instance.parseFilename(f))) {
+      string h = BuiltinSamples.HashForPath(f);
+      if (h != "") f = f + SampleIndex.Tag + h;
+    }
     if (!File.Exists(sampleManager.instance.parseFilename(f)) && SampleIndex.HashOf(f) == "") {
       Debug.LogWarning("[samplerLoad] no tape for " + s + ": " + f + " isn't here, and the scene doesn't say which sample it is (no hash), so it can't be fetched");
       return;
