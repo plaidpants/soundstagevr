@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600" width="600" height="600">
+  <defs>
+    <linearGradient id="ssGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#F7F11B" />
+      <stop offset="50%" stop-color="#F6921E" />
+      <stop offset="100%" stop-color="#ED1C24" />
+    </linearGradient>
+  </defs>
+
+  <!-- Outer Ring -->
+  <circle cx="300" cy="300" r="275" fill="none" stroke="url(#ssGrad)" stroke-width="14" />
+
+  <!-- 6 Concentric Sine Waves -->
+  <g fill="none" stroke="url(#ssGrad)" stroke-width="2.5" stroke-linecap="round">
+    <path d="M 105,300 C 155,540 245,540 300,300 C 355,60 445,60 495,300" />
+    <path d="M 105,300 C 155,522 245,522 300,300 C 355,78 445,78 495,300" />
+    <path d="M 105,300 C 155,504 245,504 300,300 C 355,96 445,96 495,300" />
+    <path d="M 105,300 C 155,486 245,486 300,300 C 355,114 445,114 495,300" />
+    <path d="M 105,300 C 155,468 245,468 300,300 C 355,132 445,132 495,300" />
+    <path d="M 105,300 C 155,450 245,450 300,300 C 355,150 445,150 495,300" />
+  </g>
+</svg>

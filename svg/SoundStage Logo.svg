@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 620" width="1100" height="620">
+  <defs>
+    <linearGradient id="ssGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#F7F11B" />
+      <stop offset="50%" stop-color="#F6921E" />
+      <stop offset="100%" stop-color="#ED1C24" />
+    </linearGradient>
+    <filter id="dropShadow" x="-10%" y="-10%" width="125%" height="135%">
+      <feDropShadow dx="2" dy="6" stdDeviation="4" flood-color="#000000" flood-opacity="0.65" />
+    </filter>
+  </defs>
+
+  <!-- Centered Logo Mark -->
+  <g transform="translate(250, 10)">
+    <circle cx="300" cy="300" r="275" fill="none" stroke="url(#ssGrad)" stroke-width="14" />
+    <g fill="none" stroke="url(#ssGrad)" stroke-width="2.5" stroke-linecap="round">
+      <path d="M 105,300 C 155,540 245,540 300,300 C 355,60 445,60 495,300" />
+      <path d="M 105,300 C 155,522 245,522 300,300 C 355,78 445,78 495,300" />
+      <path d="M 105,300 C 155,504 245,504 300,300 C 355,96 445,96 495,300" />
+      <path d="M 105,300 C 155,486 245,486 300,300 C 355,114 445,114 495,300" />
+      <path d="M 105,300 C 155,468 245,468 300,300 C 355,132 445,132 495,300" />
+      <path d="M 105,300 C 155,450 245,450 300,300 C 355,150 445,150 495,300" />
+    </g>
+  </g>
+
+  <!-- Wordmark Overlay -->
+  <text x="550" y="362" text-anchor="middle" font-family="&#39;Helvetica Neue&#39;, Helvetica, Arial, sans-serif" font-weight="700" font-size="168" letter-spacing="-3" fill="#FFFFFF" filter="url(#dropShadow)">SoundStage</text>
+</svg>

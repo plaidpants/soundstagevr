@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" width="1000" height="1000">
+  <defs>
+    <linearGradient id="iconGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#EF3E36" />
+      <stop offset="35%" stop-color="#F37224" />
+      <stop offset="65%" stop-color="#F9B01C" />
+      <stop offset="100%" stop-color="#FCEB24" />
+    </linearGradient>
+  </defs>
+
+  <!-- Outer Ring -->
+  <circle cx="500" cy="500" r="480" fill="none" stroke="url(#iconGradient)" stroke-width="40" />
+
+  <!-- Inner Variable-Width Wave -->
+  <path fill="url(#iconGradient)" d="M 153 504
+       C 216 703, 270 865, 333 865
+       C 396 865, 450 670, 513 500
+       C 563 365, 613 273, 667 273
+       C 721 273, 771 369, 821 504
+       A 13.6 13.6 0 0 0 847 496
+       C 784 297, 730 135, 667 135
+       C 604 135, 550 330, 487 500
+       C 437 635, 387 727, 333 727
+       C 279 727, 229 631, 179 496
+       A 13.6 13.6 0 0 0 153 504
+       Z" />
+</svg>
