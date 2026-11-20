@@ -30,6 +30,20 @@ public class ArtificialVRMovement : MonoBehaviour
     Vector3 home;
     bool homeSet = false;
 
+    public Vector3 Home
+    {
+        get
+        {
+            if (!homeSet) { home = transform.position; homeSet = true; }
+            return home;
+        }
+    }
+
+    void Start()
+    {
+        if (!homeSet) { home = transform.position; homeSet = true; }
+    }
+
     // Update is called once per frame
     void Update()
     {

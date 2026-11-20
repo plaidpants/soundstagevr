@@ -92,10 +92,10 @@ public class omniJack : manipObject {
 
         GameObject j = Instantiate(plugPrefab, manipulatorObj.position, manipulatorObj.rotation) as GameObject;
         near = j.GetComponent<omniPlug>();
-        near.transform.localScale = transform.localScale;
         near.transform.parent = transform;
         near.transform.localPosition = new Vector3(0, -.0175f, 0);
         near.transform.localRotation = Quaternion.Euler(-90, 0, 0);
+        near.transform.localScale = Vector3.one;
         near.connected = this;
         near.signal = homesignal;
 

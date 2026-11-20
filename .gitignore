@@ -289,3 +289,11 @@ UnityPlayer.dll
 # Rebuilt from root Samples/ and Examples/ by Editor_BuildPreprocess on every build
 /Assets/StreamingAssets/Samples.tgz
 /Assets/StreamingAssets/Examples.tgz
+
+
+# Runtime AudioClip Loader (Unity Asset Store, not redistributable): the whole folder,
+# wherever Unity imports it
+Assets/third_party/RuntimeAudioClipLoader/
+Assets/third_party/RuntimeAudioClipLoader.meta
+Assets/RuntimeAudioClipLoader/
+Assets/RuntimeAudioClipLoader.meta

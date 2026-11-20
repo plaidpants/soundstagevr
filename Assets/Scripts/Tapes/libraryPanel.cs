@@ -142,19 +142,24 @@ public class libraryPanel : UIpanel {
   }
 
 
+  // a preview: decoded off the main thread (SampleCache.DecodeAll, 2026-11-21), played as
+  // a clip that is freed once it has played (ClipRelease)
   IEnumerator streamRoutine(string f) {
-    AudioClip c = RuntimeAudioClipLoader.Manager.Load(f, false, true, false);
-    ClipRelease.WhenDone(c, true); // a preview: freed once it has played (ClipRelease)
-
     loaderObject = Instantiate(loadingPrefab, transform, false) as GameObject;
     loaderObject.transform.localPosition = new Vector3(-.03f, -.037f, .01f);
     loaderObject.transform.localRotation = Quaternion.Euler(-90, 180, 0);
     loaderObject.transform.localScale = Vector3.one * .1f;
 
-    while (RuntimeAudioClipLoader.Manager.GetAudioClipLoadState(c) != AudioDataLoadState.Loaded) {
-      yield return null;
-    }
+    int ch = 0, rate = 0;
+    var task = System.Threading.Tasks.Task.Run(() => SampleCache.DecodeAll(f, out ch, out rate));
+    while (!task.IsCompleted) yield return null;
     if (loaderObject != null) Destroy(loaderObject);
+    float[] d = task.Status == System.Threading.Tasks.TaskStatus.RanToCompletion ? task.Result : null;
+    if (d == null || ch < 1 || _panelRing == null) yield break;
+
+    AudioClip c = AudioClip.Create(Path.GetFileNameWithoutExtension(f), d.Length / ch, ch, rate, false);
+    c.SetData(d, 0);
+    ClipRelease.WhenDone(c, true);
     UISound.Play(_panelRing.GetComponent<AudioSource>(), c, .25f);
   }
 

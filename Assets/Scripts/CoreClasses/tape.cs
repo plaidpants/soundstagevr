@@ -29,6 +29,8 @@ public class tape : manipObject {
   public bool fullpath = false;
   Vector3 origPos = Vector3.zero;
   Quaternion origRot = Quaternion.identity;
+  Vector3 origScale = Vector3.one;
+  Vector3 tapeTransOrigScale = new Vector3(2.15f, 2.15f, 2.15f);
 
   public bool previewWhenGrabbed = false;
 
@@ -48,7 +50,9 @@ public class tape : manipObject {
   public override void Awake() {
     base.Awake();
     gameObject.layer = 13;
+    origScale = transform.localScale;
     tapeTrans = transform.GetChild(0);
+    tapeTransOrigScale = tapeTrans.localScale;
     // Shared materials (MaterialCache, 2026-11): tape colours come from a 12-hue
     // palette instead of a random hue, so tapes of the same colour share a material.
     tapeRend = tapeTrans.GetComponent<Renderer>();
@@ -128,6 +132,7 @@ public class tape : manipObject {
     labelMesh.text = s;
     origPos = transform.localPosition;
     origRot = transform.localRotation;
+    origScale = transform.localScale;
   }
 
   // A line under the label while the sample isn't playable here yet (NetSamples):
@@ -188,10 +193,10 @@ public class tape : manipObject {
 
     deck = coll.transform;
 
-    tapeTrans.position = deck.transform.position;
-    tapeTrans.rotation = deck.transform.rotation;
     tapeTrans.parent = deck;
-    tapeTrans.Rotate(-90, 0, 0);
+    tapeTrans.localPosition = Vector3.zero;
+    tapeTrans.localRotation = Quaternion.Euler(-90, 0, 0);
+    tapeTrans.localScale = tapeTransOrigScale;
 
   }
 
@@ -205,6 +210,7 @@ public class tape : manipObject {
       tapeTrans.parent = transform;
       tapeTrans.localPosition = Vector3.zero;
       tapeTrans.localRotation = Quaternion.identity;
+      tapeTrans.localScale = tapeTransOrigScale;
     }
   }
 
@@ -252,8 +258,13 @@ public class tape : manipObject {
 
   public void Eject() {
     deck = null;
+    tapeTrans.parent = transform;
+    tapeTrans.localPosition = Vector3.zero;
+    tapeTrans.localRotation = Quaternion.identity;
+    tapeTrans.localScale = tapeTransOrigScale;
     if (masterObj) {
       transform.parent = masterObj;
+      transform.localScale = origScale;
       if (gameObject.activeInHierarchy) {
         if (returnRoutineID != null) StopCoroutine(returnRoutineID);
         returnRoutineID = StartCoroutine(returnRoutine());
@@ -273,9 +284,17 @@ public class tape : manipObject {
 
   public void Release() {
     if (deck == null) {
-      if (masterObj == null) Destroy(gameObject);
+      if (masterObj == null) {
+        Destroy(gameObject);
+        return;
+      }
 
       transform.parent = masterObj;
+      transform.localScale = origScale;
+      tapeTrans.parent = transform;
+      tapeTrans.localPosition = Vector3.zero;
+      tapeTrans.localRotation = Quaternion.identity;
+      tapeTrans.localScale = tapeTransOrigScale;
 
       if (gameObject.activeInHierarchy) {
 
@@ -286,16 +305,15 @@ public class tape : manipObject {
         transform.localRotation = origRot;
       }
     } else {
+      transform.parent = deck;
+      transform.localPosition = Vector3.zero;
+      transform.localRotation = Quaternion.Euler(-90, 0, 0);
+      transform.localScale = origScale;
 
-      tapeTrans.position = deck.transform.position;
-      tapeTrans.rotation = deck.transform.rotation;
-      tapeTrans.parent = deck;
-      tapeTrans.Rotate(-90, 0, 0);
-
-      transform.parent = tapeTrans.parent;
-      transform.position = tapeTrans.position;
-      transform.rotation = tapeTrans.rotation;
       tapeTrans.parent = transform;
+      tapeTrans.localPosition = Vector3.zero;
+      tapeTrans.localRotation = Quaternion.identity;
+      tapeTrans.localScale = tapeTransOrigScale;
       deck.parent.GetComponent<samplerLoad>().LoadTape(this);
       NetTapes.Loaded(deck.parent.GetComponent<samplerLoad>(), this); // multiplayer
       if (insertCoroutine != null) StopCoroutine(insertCoroutine);
@@ -305,32 +323,36 @@ public class tape : manipObject {
 
   public void ForceLoad(Transform targetDeck) {
     deck = targetDeck;
-    tapeTrans.position = deck.transform.position;
-    tapeTrans.rotation = deck.transform.rotation;
-    tapeTrans.parent = deck;
-    tapeTrans.Rotate(-90, 0, 0);
-
-    transform.parent = tapeTrans.parent;
-    transform.position = tapeTrans.position;
-    transform.rotation = tapeTrans.rotation;
-    tapeTrans.parent = transform;
+    transform.parent = deck;
     transform.localPosition = new Vector3(0, 0, -.0225f);
+    transform.localRotation = Quaternion.Euler(-90, 0, 0);
+    transform.localScale = origScale;
+
+    tapeTrans.parent = transform;
+    tapeTrans.localPosition = Vector3.zero;
+    tapeTrans.localRotation = Quaternion.identity;
+    tapeTrans.localScale = tapeTransOrigScale;
     deck.parent.GetComponent<samplerLoad>().LoadTape(this);
   }
 
+  // a preview: decoded off the main thread (SampleCache.DecodeAll, 2026-11-21), played as
+  // a clip that is freed once it has played (ClipRelease)
   IEnumerator streamRoutine(string f) {
-    AudioClip c = RuntimeAudioClipLoader.Manager.Load(f, false, true, false);
-    ClipRelease.WhenDone(c, true); // a preview: freed once it has played (ClipRelease)
-
     loaderObject = Instantiate(loadingPrefab, transform, false) as GameObject;
     loaderObject.transform.localPosition = new Vector3(-.03f, -.037f, .01f);
     loaderObject.transform.localRotation = Quaternion.Euler(-90, 180, 0);
     loaderObject.transform.localScale = Vector3.one * .1f;
 
-    while (RuntimeAudioClipLoader.Manager.GetAudioClipLoadState(c) != AudioDataLoadState.Loaded) {
-      yield return null;
-    }
+    int ch = 0, rate = 0;
+    var task = System.Threading.Tasks.Task.Run(() => SampleCache.DecodeAll(f, out ch, out rate));
+    while (!task.IsCompleted) yield return null;
     if (loaderObject != null) Destroy(loaderObject);
+    float[] d = task.Status == System.Threading.Tasks.TaskStatus.RanToCompletion ? task.Result : null;
+    if (d == null || ch < 1 || masterObj == null || masterObj.parent == null) yield break;
+
+    AudioClip c = AudioClip.Create(Path.GetFileNameWithoutExtension(f), d.Length / ch, ch, rate, false);
+    c.SetData(d, 0);
+    ClipRelease.WhenDone(c, true);
     UISound.Play(masterObj.parent.GetComponent<AudioSource>(), c, .25f);
   }
 
@@ -392,7 +414,18 @@ public class tape : manipObject {
       highlightGain = .5f;
       SetHighlight(highlightGain);
       if (insertCoroutine != null) StopCoroutine(insertCoroutine);
+      if (deck != null) {
+        tapeTrans.parent = deck;
+        tapeTrans.localPosition = Vector3.zero;
+        tapeTrans.localRotation = Quaternion.Euler(-90, 0, 0);
+        tapeTrans.localScale = tapeTransOrigScale;
+      }
       transform.parent = manipulatorObj.parent;
+      Vector3 parentScale = manipulatorObj.parent.lossyScale;
+      transform.localScale = new Vector3(
+        parentScale.x != 0 ? origScale.x / parentScale.x : origScale.x,
+        parentScale.y != 0 ? origScale.y / parentScale.y : origScale.y,
+        parentScale.z != 0 ? origScale.z / parentScale.z : origScale.z);
     }
   }
 }

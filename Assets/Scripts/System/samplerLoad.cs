@@ -145,35 +145,40 @@ public class samplerLoad : MonoBehaviour {
     loadingClip = null;
   }
 
-  IEnumerator streamRoutine(string fullpath) {
-    AudioClip c = RuntimeAudioClipLoader.Manager.Load(fullpath, false, true, false);
-    loadingClip = c;
+  // Loading (2026-11-21): decoded off the main thread with managed decoders
+  // (SampleCache.DecodeAll: our WAV reader, NVorbis for OGG, NLayer for MP3) and converted
+  // to the output rate there too. (It used the Runtime AudioClip Loader Asset Store
+  // package, whose background mode could report a clip loaded before all of its data had
+  // been copied in, so a sample came out partly silent; nothing from it is needed now.)
+  class Decoded { public float[] samples; public int channels; }
 
+  IEnumerator streamRoutine(string fullpath) {
     loaderObject = Instantiate(loadingPrefab, transform, false) as GameObject;
     loaderObject.transform.localPosition = new Vector3(-.05f, .013f, 0.061f);
     loaderObject.transform.localRotation = Quaternion.Euler(0, 180, 0);
     loaderObject.transform.localScale = Vector3.one * .1f;
 
-    while (RuntimeAudioClipLoader.Manager.GetAudioClipLoadState(c) != AudioDataLoadState.Loaded) {
-      yield return null;
-    }
+    int outRate = AudioSettings.outputSampleRate;
+    var task = System.Threading.Tasks.Task.Run(() => {
+      float[] d = SampleCache.DecodeAll(fullpath, out int ch, out int rate);
+      if (d == null) return null;
+      return new Decoded { samples = ToOutputRate(d, ch, rate, outRate, fullpath), channels = ch };
+    });
+    while (!task.IsCompleted) yield return null;
     if (loaderObject != null) Destroy(loaderObject);
-
+    Decoded dec = task.Status == System.Threading.Tasks.TaskStatus.RanToCompletion ? task.Result : null;
+    if (dec == null) {
+      Debug.LogWarning("[samplerLoad] can't play " + System.IO.Path.GetFileName(fullpath) + ": not a WAV (PCM / float), OGG or MP3 file we can read");
+      yield break;
+    }
 
     for (int i = 0; i < players.Length; i++) players[i].UnloadClip();
-
-    while (c.loadState != AudioDataLoadState.Loaded) yield return null;
-
-    clipSamples = new float[c.samples * c.channels];
-    c.GetData(clipSamples, 0);
-    clipSamples = ToOutputRate(clipSamples, c.channels, c.frequency, fullpath);
-    loadingClip = null;
-    ClipRelease.Now(c); // the samples are copied: the clip isn't needed any more
+    clipSamples = dec.samples;
 
     //alocate the memory (the last clip's, if one is still pinned, is let go first)
     if (m_ClipHandle.IsAllocated) m_ClipHandle.Free();
     m_ClipHandle = GCHandle.Alloc(clipSamples, GCHandleType.Pinned);
-    for (int i = 0; i < players.Length; i++) players[i].LoadSamples(clipSamples, m_ClipHandle, c.channels);
+    for (int i = 0; i < players.Length; i++) players[i].LoadSamples(clipSamples, m_ClipHandle, dec.channels);
   }
 
   // The players step through a clip one frame per output frame (times the speed), so a
@@ -182,8 +187,7 @@ public class samplerLoad : MonoBehaviour {
   // Quest, a 48 kHz one (a Quest recording) slow and low on the PC - so the same sample
   // was neither the same pitch nor in time on the two. Linear interpolation, like the
   // looper's.
-  static float[] ToOutputRate(float[] src, int ch, int rate, string path) {
-    int outRate = AudioSettings.outputSampleRate;
+  static float[] ToOutputRate(float[] src, int ch, int rate, int outRate, string path) { // (any thread)
     if (rate <= 0 || outRate <= 0 || rate == outRate || ch <= 0) return src;
     int inFrames = src.Length / ch;
     if (inFrames < 2) return src;

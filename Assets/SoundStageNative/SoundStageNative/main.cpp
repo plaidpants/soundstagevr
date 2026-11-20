@@ -301,7 +301,7 @@ extern "C" {
 			updated = true;
 			for (int i = 0; i < length; i += channels)
 			{
-				sample = buffer[i] = buffer[i + 1] = -1 + 2 * ((float)rand()) / RAND_MAX;
+				sample = buffer[i] = buffer[i + 1] = -1 + 2 * ((float)rand()) / static_cast<float>(RAND_MAX);
 			}
 		}
 
@@ -314,7 +314,7 @@ extern "C" {
 				{
 					updated = true;
 					counter = 0;
-					sample = -1 + 2 * ((float)rand()) / RAND_MAX;
+					sample = -1 + 2 * ((float)rand()) / static_cast<float>(RAND_MAX);
 				}
 				buffer[i] = buffer[i + 1] = sample;
 			}

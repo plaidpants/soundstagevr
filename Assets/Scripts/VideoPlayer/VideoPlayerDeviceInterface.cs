@@ -29,9 +29,25 @@ public class VideoPlayerDeviceInterface : componentInterface {
     VideoPlayer vidPlayer;
     VideoPlayerUI vidUI;
 
+    static readonly HashSet<VideoPlayerDeviceInterface> activePlayers = new HashSet<VideoPlayerDeviceInterface>();
+
     bool loading = false;
     bool loaded = false;
     public bool playing = false;
+
+    void BeginAudioDucking() {
+        activePlayers.Add(this);
+        if (masterControl.instance != null) {
+            masterControl.instance.toggleInstrumentVolume(false);
+        }
+    }
+
+    void EndAudioDucking() {
+        activePlayers.RemoveWhere(p => p == null);
+        if (activePlayers.Remove(this) && activePlayers.Count == 0 && masterControl.instance != null) {
+            masterControl.instance.toggleInstrumentVolume(true);
+        }
+    }
 
     void Awake() {
         //source = GetComponent<AudioSource>();
@@ -42,6 +58,7 @@ public class VideoPlayerDeviceInterface : componentInterface {
     RenderTexture vidTexture;
 
     void OnDestroy() {
+        EndAudioDucking();
         if (vidTexture != null) vidTexture.Release();
     }
 
@@ -73,7 +90,7 @@ public class VideoPlayerDeviceInterface : componentInterface {
         vidPlayer.Stop();
         vidQuad.SetActive(false);
         vidUI.Reset();
-        masterControl.instance.toggleInstrumentVolume(true);
+        EndAudioDucking();
         if (_tooltip != null) _tooltip.ToggleVideo(false);
     }
 
@@ -85,12 +102,12 @@ public class VideoPlayerDeviceInterface : componentInterface {
                 //movieTexture.Play();
                 //source.Play();
                 vidPlayer.Play();
-                masterControl.instance.toggleInstrumentVolume(false);
+                BeginAudioDucking();
             } else if (!loading) StartCoroutine(movieRoutine());
         } else if (loaded) {
             //movieTexture.Pause();
             vidPlayer.Pause();
-            masterControl.instance.toggleInstrumentVolume(true);
+            EndAudioDucking();
         }
     }
 
@@ -103,7 +120,6 @@ public class VideoPlayerDeviceInterface : componentInterface {
         loading = false;
         loaded = false;
         playing = false;
-        masterControl.instance.toggleInstrumentVolume(true);
     }
     
     IEnumerator movieRoutine() {
@@ -144,7 +160,7 @@ public class VideoPlayerDeviceInterface : componentInterface {
             //movieTexture.Play();
             //source.Play();
             vidPlayer.Play();
-            masterControl.instance.toggleInstrumentVolume(false);
+            BeginAudioDucking();
         } else {
             vidQuad.SetActive(false);
         }

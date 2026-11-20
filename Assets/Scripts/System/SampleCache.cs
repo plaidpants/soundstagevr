@@ -320,6 +320,52 @@ public static class SampleCache {
     return null;
   }
 
+  // A whole audio file decoded to interleaved floats - what the sampler and the other
+  // tape players play (samplerLoad, 2026-11-21). WAV (PCM / float), OGG or MP3, told
+  // apart by the first bytes; mono or stereo. Null if it isn't one of those. Any thread.
+  public static float[] DecodeAll(string path, out int channels, out int rate) {
+    channels = 0; rate = 0;
+    try {
+      byte[] head = new byte[12];
+      using (var s = File.OpenRead(path)) if (s.Read(head, 0, head.Length) < 4) return null;
+      string kind =
+        head[0] == 'R' && head[1] == 'I' && head[2] == 'F' && head[3] == 'F' && head[8] == 'W' && head[9] == 'A' && head[10] == 'V' && head[11] == 'E' ? "wav" :
+        head[0] == 'O' && head[1] == 'g' && head[2] == 'g' && head[3] == 'S' ? "ogg" :
+        (head[0] == 'I' && head[1] == 'D' && head[2] == '3') || (head[0] == 0xFF && (head[1] & 0xE0) == 0xE0) ? "mp3" : null;
+      if (kind == null) return null;
+      using (var input = File.OpenRead(path)) {
+        ISource src = kind == "wav" ? WavSource.Open(input) :
+                      kind == "ogg" ? (ISource)new OggSource(input) : new Mp3Source(input);
+        if (src == null) return null; // a WAV kind we don't read (compressed: ADPCM etc.)
+        using (src) {
+          if (src.Channels < 1 || src.Channels > 2 || src.SampleRate < 8000 || src.SampleRate > 192000) return null;
+          channels = src.Channels;
+          rate = src.SampleRate;
+          long guess = kind == "wav" ? input.Length / 2 : input.Length * 12; // samples, roughly
+          float[] all = new float[(int)Math.Max(65536, Math.Min(guess, 32L << 20))];
+          int n = 0;
+          while (true) {
+            if (all.Length - n < 16384) {
+              if (all.Length >= (1 << 29)) break; // ~45 minutes of stereo at 96 kHz: enough
+              Array.Resize(ref all, Math.Min(all.Length * 2, 1 << 29));
+            }
+            int got = src.Read(all, n, Math.Min(65536, all.Length - n)); // in pieces: the WAV reader allocates a byte buffer of the size asked for
+            if (got <= 0) break;
+            n += got;
+          }
+          n -= n % channels;
+          if (n == 0) return null;
+          if (n != all.Length) Array.Resize(ref all, n);
+          for (int i = 0; i < n; i++) if (float.IsNaN(all[i])) all[i] = 0;
+          return all;
+        }
+      }
+    } catch (Exception e) {
+      Debug.LogWarning("[SampleCache] can't decode " + Path.GetFileName(path) + " (" + e.GetType().Name + ")");
+      return null;
+    }
+  }
+
   // All the samples of a plain PCM / float WAV (ours, or a looper recording), interleaved;
   // null if it isn't one. (The looper copies another player's saved recording into its
   // loop with this.)
@@ -422,12 +468,14 @@ public static class SampleCache {
     public void Dispose() { }
   }
 
+  // NVorbis and NLayer: MIT-licensed sources in Assets/Plugins (2026-11-21; they used to
+  // come with the Runtime AudioClip Loader Asset Store package, which isn't used any more)
   class OggSource : ISource {
-    readonly NVorbis.NAudioSupport.VorbisWaveReader r;
-    public OggSource(Stream s) { r = new NVorbis.NAudioSupport.VorbisWaveReader(s); }
-    public int Channels { get { return r.WaveFormat.Channels; } }
-    public int SampleRate { get { return r.WaveFormat.SampleRate; } }
-    public int Read(float[] buf, int offset, int count) { return r.Read(buf, offset, count); }
+    readonly NVorbis.VorbisReader r;
+    public OggSource(Stream s) { r = new NVorbis.VorbisReader(s, false); }
+    public int Channels { get { return r.Channels; } }
+    public int SampleRate { get { return r.SampleRate; } }
+    public int Read(float[] buf, int offset, int count) { return r.ReadSamples(buf, offset, count); }
     public void Dispose() { r.Dispose(); }
   }
 

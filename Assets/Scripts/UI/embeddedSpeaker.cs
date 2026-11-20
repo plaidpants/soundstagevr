@@ -29,7 +29,7 @@ public class embeddedSpeaker : MonoBehaviour {
   public bool activated = false;
   Material rimMat;
   void Awake() {
-    signal = transform.parent.GetComponent<signalGenerator>();
+    signal = GetComponentInParent<signalGenerator>();
 
     if (speakerRim != null) {
       rimMat = speakerRim.GetComponent<Renderer>().material;

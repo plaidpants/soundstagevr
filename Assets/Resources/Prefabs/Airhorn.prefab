@@ -740,6 +740,8 @@ GameObject:
   - component: {fileID: 4951266653219260}
   - component: {fileID: 33899592518318724}
   - component: {fileID: 23634883551575640}
+  - component: {fileID: 82433099589820422}
+  - component: {fileID: 114764198833096564}
   m_Layer: 0
   m_Name: horn
   m_TagString: Untagged
@@ -818,8 +820,6 @@ GameObject:
   - component: {fileID: 4636732864391274}
   - component: {fileID: 33084179199655354}
   - component: {fileID: 23159996869686462}
-  - component: {fileID: 82433099589820422}
-  - component: {fileID: 114764198833096564}
   m_Layer: 9
   m_Name: speakerRim
   m_TagString: Untagged
@@ -893,7 +893,7 @@ AudioSource:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1353960090082300}
+  m_GameObject: {fileID: 1332540370340326}
   m_Enabled: 1
   serializedVersion: 4
   OutputAudioMixerGroup: {fileID: 243908066445770446, guid: 69a3764621178d84a968b8979649e7df,
@@ -990,7 +990,7 @@ MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1353960090082300}
+  m_GameObject: {fileID: 1332540370340326}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 1c7784f2c5c78ac4d8ed0395f6d19393, type: 3}

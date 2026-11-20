@@ -131,8 +131,15 @@ public class platformSetup : MonoBehaviour {
   }
 
     // Tracks the last applied state so we only switch input modes when the mode
-    // actually changes, instead of every frame.
+    // actually changes and stays stable for a moment, instead of flapping every frame.
     int lastHandsActive = -1;
+    float handsModeSwitchTimer = 0f;
+
+    // Hands or controllers, as switched (after the 0.25 s settle): the manipulators go by
+    // this too, so they never run hand input with controller calibration or the other way
+    // round while the switch settles. Before the first switch: the raw state.
+    static int stableHands = -1;
+    public static bool HandsModeStable { get { return stableHands < 0 ? HandInput.HandsActive() : stableHands == 1; } }
 
     void Update()
     {
@@ -141,11 +148,24 @@ public class platformSetup : MonoBehaviour {
         bool handsActive = HandInput.HandsActive();
         int h = handsActive ? 1 : 0;
         if (h != lastHandsActive) {
-            lastHandsActive = h;
-            SetHandsMode(handsActive);
+            if (lastHandsActive < 0) {
+                lastHandsActive = h;
+                stableHands = h;
+                SetHandsMode(handsActive);
+            } else {
+                handsModeSwitchTimer += Time.unscaledDeltaTime;
+                if (handsModeSwitchTimer >= 0.25f) {
+                    handsModeSwitchTimer = 0f;
+                    lastHandsActive = h;
+                    stableHands = h;
+                    SetHandsMode(handsActive);
+                }
+            }
+        } else {
+            handsModeSwitchTimer = 0f;
         }
 
-        if (handsActive) { UpdateHandPoses(); UpdateToolCalibration(); }
+        if (lastHandsActive == 1) { UpdateHandPoses(); UpdateToolCalibration(); }
         else UpdateControllerCalibration();
     }
 

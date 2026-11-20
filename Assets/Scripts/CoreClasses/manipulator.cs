@@ -368,7 +368,10 @@ public class manipulator : MonoBehaviour {
     if (grabbing) return;
     // Hands: once the pinch starts closing, keep the control that was highlighted, so
     // the fingers moving together can't hop the selection onto a neighbour.
-    if (handsMode && selectedObject != null && HandInput.Get(controllerIndex).pinchIndex > 0.3f) return;
+    if (handsMode && selectedObject != null) {
+      HandInput.Hand h = HandInput.Get(controllerIndex);
+      if (h.pinchIndex > 0.3f || h.pinchMiddle > 0.3f) return;
+    }
     Transform candidate = null;
 
     if (pointerMode) {
@@ -402,8 +405,10 @@ public class manipulator : MonoBehaviour {
 
       if (candidate != null) {
         candidate.GetComponent<manipObject>().setSelect(true, transform);
-        if (candidate.GetComponent<handle>() != null) toggleCopy(true);
-        else if (candidate.GetComponent<manipObject>().canBeDeleted) toggleDelete(true);
+        bool isHandle = candidate.GetComponent<handle>() != null;
+        bool canDelete = !isHandle && candidate.GetComponent<manipObject>().canBeDeleted;
+        toggleCopy(isHandle);
+        toggleDelete(canDelete);
         hapticPulse();
         selectedTransform = candidate;
         selectedObject = candidate.GetComponent<manipObject>();
@@ -502,6 +507,7 @@ public class manipulator : MonoBehaviour {
   bool copying = false;
   public void SetCopy(bool on) {
     if (menuManager.instance.simple) return;
+    if (!on && !copying) return;
 
     copying = on;
 
@@ -738,37 +744,57 @@ public class manipulator : MonoBehaviour {
     }
   }
 
-  void secondaryOculusButtonUpdate() {
+  public bool pinchMiddleDown = false;
+  float pinchMiddleHold = 0f;
+  public static float middlePinchHoldTime = .15f; // a clean middle pinch must last this long to count (s)
+  void secondaryOculusButtonUpdate(bool currentControlHands, float pinchMiddleStrength, bool handLost, bool currentControlChanged) {
     bool secondaryDown = false;
     bool secondaryUp = false;
 
     if (masterControl.instance.currentPlatform == masterControl.platform.Vive) {
 //      secondaryDown = SteamVR_Controller.Input(controllerIndex).GetPressDown(SteamVR_Controller.ButtonMask.ApplicationMenu);
 //      secondaryUp = SteamVR_Controller.Input(controllerIndex).GetPressUp(SteamVR_Controller.ButtonMask.ApplicationMenu);
-                if (controllerIndex == 0)
+                if (currentControlHands)
                 {
-                    secondaryDown = QuestInput.GetButtonDown("secondaryButtonR");
+                    if (!pinchMiddleDown)
+                    {
+                        // Only a clean middle pinch: the index (grab), ring and pinky well
+                        // below it - a fist or a whole-hand grab reads high on every finger
+                        // and used to copy the device under the hand - held for a moment.
+                        HandInput.Hand hm = HandInput.Get(controllerIndex);
+                        bool clean = pinchMiddleStrength > 0.85f && hm.pinchIndex < 0.5f &&
+                                     pinchMiddleStrength > hm.pinchRing + 0.25f && pinchMiddleStrength > hm.pinchPinky + 0.25f;
+                        pinchMiddleHold = clean ? pinchMiddleHold + Time.unscaledDeltaTime : 0f;
+                        if (pinchMiddleHold >= middlePinchHoldTime)
+                        {
+                            pinchMiddleHold = 0f;
+                            secondaryDown = true;
+                            pinchMiddleDown = true;
+                        }
+                    }
+                    else if (pinchMiddleStrength < 0.50f || handLost || currentControlChanged)
+                    {
+                        secondaryUp = true;
+                        pinchMiddleDown = false;
+                    }
                 }
-                else if (controllerIndex == 1)
+                else if (pinchMiddleDown)
                 {
-                    secondaryDown = QuestInput.GetButtonDown("secondaryButtonL");
+                    secondaryUp = true;
+                    pinchMiddleDown = false;
                 }
                 else
                 {
-                    secondaryDown = false;
-                }
-
-                if (controllerIndex == 0)
-                {
-                    secondaryUp = QuestInput.GetButtonUp("secondaryButtonR");
-                }
-                else if (controllerIndex == 1)
-                {
-                    secondaryUp = QuestInput.GetButtonUp("secondaryButtonL");
-                }
-                else
-                {
-                    secondaryUp = false;
+                    if (controllerIndex == 0)
+                    {
+                        secondaryDown = QuestInput.GetButtonDown("secondaryButtonR");
+                        secondaryUp = QuestInput.GetButtonUp("secondaryButtonR");
+                    }
+                    else if (controllerIndex == 1)
+                    {
+                        secondaryDown = QuestInput.GetButtonDown("secondaryButtonL");
+                        secondaryUp = QuestInput.GetButtonUp("secondaryButtonL");
+                    }
                 }
     }
     if (controllerVisible) {
@@ -801,18 +827,21 @@ public class manipulator : MonoBehaviour {
     bool triggerButtonDown, triggerButtonUp, menuButtonDown;
 
         OVRPlugin.Controller currentControl = OVRSafe.Available ? OVRPlugin.GetActiveController() : OVRPlugin.Controller.None; //get current controller scheme
-        bool currentControlHands = HandInput.HandsActive();
+        bool currentControlHands = platformSetup.HandsModeStable; // the same debounced switch platformSetup makes
         bool currentControlChanged = false;
         float pinchIndexStrength = 0;
+        float pinchMiddleStrength = 0;
         float pinchPinkyStrength = 0;
         bool handLost = false;
         if (currentControlHands)
         {
             HandInput.Hand hand = HandInput.Get(controllerIndex);
             handLost = !hand.inputValid;
+            bool ringDominant = hand.pinchRing > 0.7f && hand.pinchRing > hand.pinchMiddle + 0.05f && hand.pinchRing > hand.pinchPinky + 0.05f;
             pinchIndexStrength = suppressHandTrigger ? 0f : hand.pinchIndex;
+            pinchMiddleStrength = (suppressHandTrigger || (ringDominant && !pinchMiddleDown)) ? 0f : hand.pinchMiddle;
             // Pinky pinch, or the system menu gesture on the left hand, opens the menu.
-            pinchPinkyStrength = hand.menuPressed ? 1f : hand.pinchPinky;
+            pinchPinkyStrength = hand.menuPressed ? 1f : ((ringDominant && !pinchPinkyDown) ? 0f : hand.pinchPinky);
         }
         if (currentControl != lastControl)
         {
@@ -882,6 +911,7 @@ public class manipulator : MonoBehaviour {
         }
 
             viveTouchpadUpdate();
+            secondaryOculusButtonUpdate(currentControlHands, pinchMiddleStrength, handLost, currentControlChanged);
             if (!usingOculus) {
                 //        menuButtonDown = SteamVR_Controller.Input(controllerIndex).GetPressDown(SteamVR_Controller.ButtonMask.ApplicationMenu);
                 if (currentControlHands)
@@ -940,7 +970,6 @@ public class manipulator : MonoBehaviour {
 
                 if (grabbing && selectedObject != null) selectedObject.updateTouchPos(pos);
 
-        secondaryOculusButtonUpdate();
                 //        menuButtonDown = SteamVR_Controller.Input(controllerIndex).GetPressDown(EVRButtonId.k_EButton_A);
                 if (currentControlHands)
                 {

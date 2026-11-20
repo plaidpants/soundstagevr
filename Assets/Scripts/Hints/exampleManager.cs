@@ -193,11 +193,11 @@ public class exampleManager : MonoBehaviour {
     List<GameObject> gameObjects = new List<GameObject>(GameObject.FindGameObjectsWithTag("instrument"));
     NetSync.MarkAllSilent(); // multiplayer: the new patch is shared whole when it lands
     for (int i = 0; i < gameObjects.Count; i++) {
-      Destroy(gameObjects[i]);
+      if (gameObjects[i] != null) DestroyImmediate(gameObjects[i]);
     }
 
     GameObject prevParent = GameObject.Find("exampleParent");
-    if (prevParent != null) Destroy(prevParent);
+    if (prevParent != null) DestroyImmediate(prevParent);
 
     NetDevice.silentCreate = true;
     try { SaveLoadInterface.instance.Load(System.IO.Directory.GetParent(Application.persistentDataPath).FullName + System.IO.Path.DirectorySeparatorChar + "examples" + System.IO.Path.DirectorySeparatorChar + s + ".xml", true); }

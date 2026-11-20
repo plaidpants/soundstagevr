@@ -114,16 +114,14 @@ public class omniPlug : manipObject {
     connected.beginConnection(this);
     signal = connected.homesignal;
 
-    plugTrans.position = connected.transform.position;
-    plugTrans.rotation = connected.transform.rotation;
-    plugTrans.parent = connected.transform;
-    plugTrans.Rotate(-90, 0, 0);
-    plugTrans.Translate(0, 0, -.02f);
-
-    transform.parent = plugTrans.parent;
-    transform.position = plugTrans.position;
-    transform.rotation = plugTrans.rotation;
+    transform.parent = connected.transform;
+    transform.localPosition = new Vector3(0, -.02f, 0);
+    transform.localRotation = Quaternion.Euler(-90, 0, 0);
+    transform.localScale = Vector3.one;
     plugTrans.parent = transform;
+    plugTrans.localPosition = Vector3.zero;
+    plugTrans.localRotation = Quaternion.identity;
+    plugTrans.localScale = Vector3.one;
 
     lastOtherPlugPos = otherPlug.plugTrans.transform.position;
     lastPos = transform.position;
@@ -346,18 +344,14 @@ public class omniPlug : manipObject {
       otherPlug.Destruct();
       Destroy(gameObject);
     } else {
-      if (plugTrans.parent != connected.transform) {
-        plugTrans.position = connected.transform.position;
-        plugTrans.rotation = connected.transform.rotation;
-        plugTrans.parent = connected.transform;
-        plugTrans.Rotate(-90, 0, 0);
-        plugTrans.Translate(0, 0, -.02f);
-      }
-
-      transform.parent = plugTrans.parent;
-      transform.position = plugTrans.position;
-      transform.rotation = plugTrans.rotation;
+      transform.parent = connected.transform;
+      transform.localPosition = new Vector3(0, -.02f, 0);
+      transform.localRotation = Quaternion.Euler(-90, 0, 0);
+      transform.localScale = Vector3.one;
       plugTrans.parent = transform;
+      plugTrans.localPosition = Vector3.zero;
+      plugTrans.localRotation = Quaternion.identity;
+      plugTrans.localScale = Vector3.one;
       calmTime = 0;
     }
 
@@ -386,11 +380,10 @@ public class omniPlug : manipObject {
     connected.beginConnection(this);
     signal = connected.homesignal;
 
-    plugTrans.position = connected.transform.position;
-    plugTrans.rotation = connected.transform.rotation;
     plugTrans.parent = connected.transform;
-    plugTrans.Rotate(-90, 0, 0);
-    plugTrans.Translate(0, 0, -.02f);
+    plugTrans.localPosition = new Vector3(0, -.02f, 0);
+    plugTrans.localRotation = Quaternion.Euler(-90, 0, 0);
+    plugTrans.localScale = Vector3.one;
   }
 
   void OnCollisionExit(Collision coll) {
@@ -406,6 +399,7 @@ public class omniPlug : manipObject {
     plugTrans.parent = transform;
     plugTrans.localPosition = Vector3.zero;
     plugTrans.localRotation = Quaternion.identity;
+    plugTrans.localScale = Vector3.one;
   }
 
   public void updateForceWireShow(bool on) {
@@ -450,8 +444,15 @@ public class omniPlug : manipObject {
     if (curState == manipState.grabbed) {
       updateForceWireShow(true);
       collCandidates.Clear();
-      if (connected != null) collCandidates.Add(connected.transform);
+      if (connected != null) {
+        collCandidates.Add(connected.transform);
+        plugTrans.parent = connected.transform;
+        plugTrans.localPosition = new Vector3(0, -.02f, 0);
+        plugTrans.localRotation = Quaternion.Euler(-90, 0, 0);
+        plugTrans.localScale = Vector3.one;
+      }
       transform.parent = manipulatorObj;
+      transform.localScale = Vector3.one;
       updateJackList();
       foreach (omniJack j in targetJackList) j.flash(cordColor);
     }
