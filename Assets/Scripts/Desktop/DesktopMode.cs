@@ -16,7 +16,8 @@
 //    by hand works by mouse:
 //      - point at something: it's highlighted (the controller tip is there)
 //      - left button: the trigger - grab, press, plug cables; on keys it plays them
-//        (hold and slide across keys for a run; Alt + click locks a xylophone key)
+//        (hold and slide across keys for a run; Alt + click locks a xylophone key);
+//        on a drum pad it hits it (Shift: soft, Ctrl: hard)
 //      - while holding: move the mouse to drag it; mouse wheel = nearer / further
 //      - holding a dial or knob: move the mouse left / right to turn it
 //      - Tab: the menu (the A button), opened in front of the camera
@@ -42,8 +43,14 @@ public class DesktopMode : MonoBehaviour {
   // (things are picked by touching, and a trigger pulled before that grabs nothing).
   static float pressedAt = -1;
   public static bool Trigger {
-    get { return pressedAt >= 0 && !keyPlaying && Time.unscaledTime - pressedAt > .06f; }
+    get { return pressedAt >= 0 && !keyPlaying && !drumClick && Time.unscaledTime - pressedAt > .06f; }
   }
+
+  // Drum pads (2026-11-22): a click on a pad hits it - the sticks need a downward swing a
+  // mouse can't give. Plain click: medium; Shift: soft; Ctrl: hard. Shared with the other
+  // players like any drum hit. The click doesn't also grab what's under the pad.
+  static bool drumClick;
+  public static float drumClickVelocity = .75f, drumSoftVelocity = .4f, drumHardVelocity = 1f;
 
   // Keys (piano, xylophone) play by touch, not by the trigger: a click on a key
   // touches it for as long as the button is held, and sliding across keys with the
@@ -236,8 +243,18 @@ public class DesktopMode : MonoBehaviour {
     if (Input.GetMouseButtonDown(0) && !overUI) {
       pressedAt = Time.unscaledTime;
       keyPlaying = !alt && hand.getSelection() == null && PickTarget(ray, out _, out _) is Transform t0 && t0.GetComponent<key>() != null;
+      drumClick = false;
+      if (!alt && !keyPlaying && hand.getSelection() == null && RaycastScene(ray, out RaycastHit dh)) {
+        drumpad pad = dh.collider.GetComponentInParent<drumpad>();
+        if (pad != null) {
+          drumClick = true;
+          bool soft = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+          bool hard = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
+          pad.keyHit(true, soft ? drumSoftVelocity : hard ? drumHardVelocity : drumClickVelocity);
+        }
+      }
     }
-    if (!Input.GetMouseButton(0)) { pressedAt = -1; keyPlaying = false; }
+    if (!Input.GetMouseButton(0)) { pressedAt = -1; keyPlaying = false; drumClick = false; }
     bool pressing = pressedAt >= 0;
     bool holding = hand.getSelection() != null;
     Holding = holding;

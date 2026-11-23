@@ -31,9 +31,7 @@ public class drumpad : MonoBehaviour {
   }
 
   void Update() {
-    if (Input.GetKeyDown(KeyCode.Space)) {
-      keyHit(true);
-    }
+    // (2026-11-22: a leftover test key - Space hit every drum pad in the scene at once - is gone)
     HandHitUpdate();
   }
 
