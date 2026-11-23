@@ -17,7 +17,7 @@
 //      - point at something: it's highlighted (the controller tip is there)
 //      - left button: the trigger - grab, press, plug cables; on keys it plays them
 //        (hold and slide across keys for a run; Alt + click locks a xylophone key);
-//        on a drum pad it hits it (Shift: soft, Ctrl: hard)
+//        on a drum pad's centre it hits it (Shift: soft, Ctrl: hard; the rim moves the drum)
 //      - while holding: move the mouse to drag it; mouse wheel = nearer / further
 //      - holding a dial or knob: move the mouse left / right to turn it
 //      - Tab: the menu (the A button), opened in front of the camera
@@ -245,7 +245,7 @@ public class DesktopMode : MonoBehaviour {
       keyPlaying = !alt && hand.getSelection() == null && PickTarget(ray, out _, out _) is Transform t0 && t0.GetComponent<key>() != null;
       drumClick = false;
       if (!alt && !keyPlaying && hand.getSelection() == null && RaycastScene(ray, out RaycastHit dh)) {
-        drumpad pad = dh.collider.GetComponentInParent<drumpad>();
+        drumpad pad = DrumPadAt(dh);
         if (pad != null) {
           drumClick = true;
           bool soft = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
@@ -398,6 +398,24 @@ public class DesktopMode : MonoBehaviour {
     }
     if (handleT != null) { point = handleP; dist = handleD; }
     return handleT;
+  }
+
+  // The drum's pad has no collider of its own (sticks are tested by position): the drum's
+  // body (its move handles) is what the mouse ray hits. A click on the top, inside the
+  // pad's centre, is a hit; the outer ring and the sides still grab the drum to move it
+  // (Alt + click grabs it anywhere).
+  public static float drumClickRadius = .14f; // the pad itself is .175 (drumpad)
+  static drumpad DrumPadAt(RaycastHit h) {
+    drumpad direct = h.collider.GetComponentInParent<drumpad>();
+    if (direct != null) return direct;
+    drumDeviceInterface drum = h.collider.GetComponentInParent<drumDeviceInterface>();
+    if (drum == null) return null;
+    drumpad pad = drum.GetComponentInChildren<drumpad>();
+    if (pad == null || pad.transform.parent == null) return null;
+    Vector3 local = pad.transform.parent.InverseTransformPoint(h.point);
+    if (new Vector2(local.x, local.z).magnitude > drumClickRadius) return null;
+    if (local.y < -.015f) return null; // the side or underneath
+    return pad;
   }
 
   // nearest hit that isn't one of our own hands
