@@ -29,10 +29,9 @@ public class microphoneDeviceInterface : deviceInterface {
     signal = GetComponent<MicrophoneSignalGenerator>();
     output = GetComponentInChildren<omniJack>();
     ampDial = GetComponentInChildren<dial>();
-    microphoneDeviceInterface[] otherMics = FindObjectsOfType<microphoneDeviceInterface>();
-    for (int i = 0; i < otherMics.Length; i++) {
-      if (otherMics[i] != this) Destroy(otherMics[i].gameObject);
-    }
+    // (2026-11-22) a new microphone no longer deletes the one already in the scene: they
+    // share the headset's microphone (MicrophoneSignalGenerator / MicCapture), and in
+    // multiplayer each player can hold their own
   }
 
   void Update() {

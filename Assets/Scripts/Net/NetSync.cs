@@ -124,6 +124,7 @@ public static class NetSync {
   static readonly long myToken = System.DateTime.Now.Ticks ^ (long)Random.Range(int.MinValue, int.MaxValue);
   static readonly Dictionary<int, NetDevice> pendingByTemp = new Dictionary<int, NetDevice>();
   static bool applyingPatch;
+  public static bool ApplyingPatch { get { return applyingPatch; } } // a patch from the network is being loaded
 
   [RuntimeInitializeOnLoadMethod]
   static void Init() { Application.quitting += () => quitting = true; }
@@ -148,6 +149,7 @@ public static class NetSync {
     NetLimits.RegisterServer();
     NetSamples.RegisterServer();
     NetLoopers.RegisterServer();
+    NetRecorders.RegisterServer();
     NetScales.RegisterServer();
     NetSampler.RegisterServer();
     NetRoom.ServerStarted();
@@ -191,6 +193,7 @@ public static class NetSync {
     NetLimits.RegisterClient();
     NetSamples.RegisterClient();
     NetLoopers.RegisterClient();
+    NetRecorders.RegisterClient();
     NetScales.RegisterClient();
     NetSampler.RegisterClient();
     NetworkClient.RegisterHandler<NetSuccessionMsg>(m => { if (NetSession.instance != null) NetSession.instance.successionRank = m.rank; });

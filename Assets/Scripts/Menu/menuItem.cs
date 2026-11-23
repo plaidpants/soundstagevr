@@ -59,6 +59,7 @@ public class menuItem : manipObject {
     Glide, // from ludzeller's fork (2026-11)
     CVSequencer, // from ludzeller's fork (2026-11)
     ScaleSequencer, // the UNTZtrument step sequencer (2026-11)
+    Scope, // oscilloscope (2026-11-22); MIDIOUT has to stay last before Max (menuManager)
     MIDIIN,
     MIDIOUT,
     Max,

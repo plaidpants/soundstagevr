@@ -837,9 +837,9 @@ public class manipulator : MonoBehaviour {
         {
             HandInput.Hand hand = HandInput.Get(controllerIndex);
             handLost = !hand.inputValid;
-            bool ringDominant = hand.pinchRing > 0.7f && hand.pinchRing > hand.pinchMiddle + 0.05f && hand.pinchRing > hand.pinchPinky + 0.05f;
+            bool ringDominant = HandInput.extraPinches && hand.pinchRing > 0.7f && hand.pinchRing > hand.pinchMiddle + 0.05f && hand.pinchRing > hand.pinchPinky + 0.05f;
             pinchIndexStrength = suppressHandTrigger ? 0f : hand.pinchIndex;
-            pinchMiddleStrength = (suppressHandTrigger || (ringDominant && !pinchMiddleDown)) ? 0f : hand.pinchMiddle;
+            pinchMiddleStrength = (!HandInput.extraPinches || suppressHandTrigger || (ringDominant && !pinchMiddleDown)) ? 0f : hand.pinchMiddle;
             // Pinky pinch, or the system menu gesture on the left hand, opens the menu.
             pinchPinkyStrength = hand.menuPressed ? 1f : ((ringDominant && !pinchPinkyDown) ? 0f : hand.pinchPinky);
         }

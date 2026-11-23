@@ -31,6 +31,7 @@ Properties {
 	_Head ("Write head (0-1)", Float) = 0
 	_Columns ("Columns", Float) = 512
 	_Rows ("Rows", Float) = 64
+	_NoWrap ("First column has no previous one (a sweep, not a ring)", Float) = 0
 }
 
 SubShader {
@@ -55,6 +56,7 @@ SubShader {
 		float _Head;
 		float _Columns;
 		float _Rows;
+		float _NoWrap;
 
 		struct appdata_t {
 			float4 vertex : POSITION;
@@ -92,7 +94,7 @@ SubShader {
 			float u = frac(i.uv.x + _Head);                // same scroll the old texture offset did
 			float column = floor(u * _Columns);
 			float h1 = heightAt(column);
-			float h0 = heightAt(column - 1.0);
+			float h0 = (_NoWrap > 0.5 && column < 0.5) ? h1 : heightAt(column - 1.0); // the Scope (scopeViz): no segment back from the last column
 			float row = floor(i.uv.y * _Rows);
 			bool lit = row >= min(h0, h1) && row <= max(h0, h1);
 			half4 tex = lit ? _LineColor : _BGColor;

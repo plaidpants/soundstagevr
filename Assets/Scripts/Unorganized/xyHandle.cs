@@ -81,6 +81,15 @@ public class xyHandle : manipObject {
     percent.y = Mathf.InverseLerp(yBounds.x, yBounds.y, transform.localPosition.y);
   }
 
+  // multiplayer: another player dragged this handle (NetControls)
+  public void NetSetPos(Vector2 p) {
+    Vector3 pos = transform.localPosition;
+    pos.x = Mathf.Clamp(p.x, xBounds.x, xBounds.y);
+    pos.y = Mathf.Clamp(p.y, yBounds.x, yBounds.y);
+    transform.localPosition = pos;
+    updatePercent();
+  }
+
   public void forceChange(float value, bool Xaxis) {
     setPercent(new Vector2(value, value), Xaxis, !Xaxis);
     if (curState == manipState.grabbed) {

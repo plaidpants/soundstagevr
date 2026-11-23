@@ -21,14 +21,18 @@ public class touchpadDeviceInterface : deviceInterface {
   omniJack output;
   button padButton;
 
-  // Latch (2026-11): hold the button for latchHoldTime to latch the output on (it stays
-  // on and lit after release); press again to release it. Short presses still act as a
-  // momentary trigger. Lets one button start several sequencers together and hold a gate.
-  public static float latchHoldTime = 0.6f;
+  // Latch (2026-11; double tap since 2026-11-22): the button is momentary - on while
+  // held, however long, off when let go. Tap it twice quickly to latch the output on (it
+  // stays on and lit after release); press again to release it. (Holding it for 0.6 s used
+  // to latch it, so a long press driving an ADSR never let go.) Lets one button start
+  // several sequencers together and hold a gate.
+  public static float doubleTapTime = 0.35f; // a tap shorter than this, then a press within this
   bool latched = false;
   bool unlatchPress = false;
+  bool latchPress = false;
   bool pressed = false; // a real press is in progress (Start() also sends a release)
   float pressTime;
+  float lastTapAt = -10; // when the last short tap was let go
 
   public override void Awake() {
     base.Awake();
@@ -49,17 +53,20 @@ public class touchpadDeviceInterface : deviceInterface {
       pressTime = Time.time;
       pressed = true;
       pad.signalOn = true;
+      if (Time.time - lastTapAt < doubleTapTime) { latched = true; latchPress = true; } // second tap: latch
     } else {
       if (unlatchPress) { unlatchPress = false; return; }
       bool wasPressed = pressed;
       pressed = false;
-      if (latched) return; // e.g. the button's own Start() release after a load
-      if (wasPressed && Time.time - pressTime >= latchHoldTime) {
-        latched = true; // keep the output on
+      if (latchPress) {
+        latchPress = false;
+        lastTapAt = -10;
         if (padButton != null) padButton.phantomHit(true); // keep it lit
         return;
       }
+      if (latched) return; // e.g. the button's own Start() release after a load
       pad.signalOn = false;
+      if (wasPressed) lastTapAt = Time.time - pressTime < doubleTapTime ? Time.time : -10;
     }
   }
 

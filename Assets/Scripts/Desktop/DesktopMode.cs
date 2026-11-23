@@ -20,7 +20,10 @@
 //      - while holding: move the mouse to drag it; mouse wheel = nearer / further
 //      - holding a dial or knob: move the mouse left / right to turn it
 //      - Tab: the menu (the A button), opened in front of the camera
-//      - Delete: the B button
+//      - C: the B button (on a device's handle: copy it; on a note, event...: delete it)
+//      - Delete: delete what the mouse points at or holds - a whole device, by its handle
+//        (in VR that's dropping it in the menu's trash can)
+//      - holding a cable end: point near a jack it fits and it plugs in (SnapJack)
 //    The left controller is hidden. Other players see the mouse hand as a controller.
 
 using UnityEngine;
@@ -60,7 +63,7 @@ public class DesktopMode : MonoBehaviour {
     if (NetCodeDialog.Typing && name == "secondaryButtonL") { k = KeyCode.None; return true; } // typing a room code
     switch (name) {
       case "menuButtonL": k = KeyCode.Tab; return true;        // A: menu
-      case "secondaryButtonL": k = KeyCode.Delete; return true; // B
+      case "secondaryButtonL": k = KeyCode.C; return true; // B: copy (Delete deletes: DeleteUnderMouse)
     }
     k = KeyCode.None;
     return false;
@@ -188,6 +191,8 @@ public class DesktopMode : MonoBehaviour {
 
     // Tab (the menu button): open the menu in front of the camera, not wherever the
     // mouse hand happens to be - the hand is moved there before the manipulator reads Tab
+    if (MouseHand && hand != null && Input.GetKeyDown(KeyCode.Delete) && !NetCodeDialog.Typing && !NetCodeDialog.IsOpen) DeleteUnderMouse();
+
     if (MouseHand && hand != null && Input.GetKeyDown(KeyCode.Tab) && Camera.main != null) {
       Transform c = Camera.main.transform;
       Vector3 flatFwd = Vector3.ProjectOnPlane(c.forward, Vector3.up).normalized;
@@ -249,8 +254,20 @@ public class DesktopMode : MonoBehaviour {
         wasHolding = true;
         return;
       }
+      if (held is omniPlug plug) {
+        // a cable end: near a jack it can go into (on screen), it jumps into it
+        omniJack j = SnapJack(plug, cam);
+        if (j != null) {
+          Vector3 offset = plug.transform.position - hand.transform.position; // where the plug sits on the hand
+          MoveTipTo(j.transform.position - offset, heldRotation);
+          depth = Vector3.Distance(ray.origin, j.transform.position);
+          wasHolding = true;
+          return;
+        }
+      } else snapped = null;
       MoveTipTo(ray.GetPoint(depth), heldRotation);
     } else {
+      snapped = null;
       // pointing: the control under the mouse is picked by the ray (small buttons win
       // over the case or handle they sit on); the hand just shows where
       Vector3 target;
@@ -267,6 +284,63 @@ public class DesktopMode : MonoBehaviour {
   }
 
   public static bool Holding { get; private set; }
+
+  // Delete (2026-11-22): it used to be the B button, which on a device's handle copies it.
+  // Now it deletes: a device (pointed at or held by its handle) goes, as if dropped in the
+  // trash can; anything else that B deletes (a timeline event, a note...) is deleted.
+  void DeleteUnderMouse() {
+    manipObject target = hand.getSelection();
+    if (target == null && hand.pointerTarget != null) target = hand.pointerTarget.GetComponent<manipObject>();
+    if (target == null) return;
+    if (target is handle h && (h.masterObj != null || h.transform.parent != null)) {
+      GameObject device = (h.masterObj != null ? h.masterObj : h.transform.parent).gameObject;
+      if (hand.getSelection() != null) hand.ForceRelease();
+      hand.pointerTarget = null;
+      Debug.Log("[DesktopMode] Delete: " + device.name);
+      Destroy(device);
+    } else if (target.canBeDeleted) {
+      target.selfdelete();
+    }
+  }
+
+  // ---- plugging cables with the mouse (2026-11-22) ----
+  // A plug connects by touching a jack, which with the mouse meant getting the hand to
+  // exactly the jack's depth. Now, while a cable end is held, the jack it can go into
+  // nearest the mouse pointer on screen (within snapPixels) pulls the plug into it; move
+  // the mouse away to pull it out again, let go to leave it plugged in.
+  public static float snapPixels = 40f;  // at 1080 lines; scaled with the window
+  omniJack snapped;
+  omniJack[] jacks = new omniJack[0];
+  float jacksAge = 99;
+
+  omniJack SnapJack(omniPlug plug, Camera cam) {
+    jacksAge += Time.unscaledDeltaTime;
+    if (jacksAge > .5f) { jacksAge = 0; jacks = FindObjectsOfType<omniJack>(); }
+    float scale = Screen.height / 1080f;
+    Vector2 mouse = Input.mousePosition;
+    omniJack best = null;
+    float bestD = snapPixels * scale;
+    foreach (omniJack j in jacks) {
+      if (!CanTake(plug, j)) continue;
+      Vector3 sp = cam.WorldToScreenPoint(j.transform.position);
+      if (sp.z <= .05f) continue; // behind the camera
+      float d = Vector2.Distance(mouse, sp);
+      if (j == snapped) d *= .67f; // stay with the jack it's in until the mouse is clearly elsewhere
+      if (d < bestD) { bestD = d; best = j; }
+    }
+    snapped = best;
+    return best;
+  }
+
+  // the same rule as omniPlug.updateJackList, plus free (or this plug's) and showing
+  static bool CanTake(omniPlug plug, omniJack j) {
+    if (j == null || !j.isActiveAndEnabled) return false;
+    if (j.outgoing == plug.outputPlug) return false;
+    if (j.near != null && j.near != plug) return false;
+    if (plug.otherPlug != null && plug.otherPlug.connected != null && plug.otherPlug.connected.transform.parent == j.transform.parent) return false;
+    Collider c = j.GetComponent<Collider>();
+    return c == null || c.enabled;
+  }
 
   // the key the mouse is playing (null: none); touches go through TouchTracker like a
   // fingertip's, so a key held by a headset player at the same time isn't cut off

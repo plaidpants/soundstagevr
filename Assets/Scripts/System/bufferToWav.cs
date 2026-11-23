@@ -42,7 +42,9 @@ public class bufferToWav : MonoBehaviour {
 
     void WavHeader(BinaryWriter b, int length)
     {
-        int _samplerate = 44100;
+        // the rate the audio was recorded at (2026-11-22): this said 44.1 kHz always, so a
+        // recording made on the Quest (48 kHz) played back slow and low
+        int _samplerate = AudioSettings.outputSampleRate;
         int _channels = 2;
         int _samplelength = 2; //2 bytes
        

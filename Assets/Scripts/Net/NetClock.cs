@@ -102,6 +102,21 @@ public class NetClock : MonoBehaviour {
     } else if (NetworkServer.active) sendNow = true;
   }
 
+  // A file or example loaded here set the tempo saved with it (SaveLoadInterface.systemLoad).
+  // A joined headset used to keep it only until the host's next clock message put the
+  // session's tempo back, so the patch it then shared played at the old tempo (the drum
+  // machine example, made at 60 BPM, ran at the host's 110). Now the host takes it on.
+  // (Patches arriving from the network don't count: they come with the session's tempo.)
+  public static void LocalTempoLoaded(float bpm) {
+    if (!NetSync.Active || NetSync.ApplyingPatch || bpm <= 0) return;
+    if (NetSync.IsJoinedClient) {
+      lastBpm = bpm;
+      ignoreHostBpmUntil = Time.unscaledTime + 1.5f; // until the host has it
+      NetworkClient.Send(new NetTempoMsg { bpm = bpm, run = -1 });
+      Debug.Log("[NetClock] loaded a patch at " + bpm.ToString("F0") + " BPM: asking the host to take it on");
+    } else if (NetworkServer.active) sendNow = true;
+  }
+
   // host: a joined headset changed the tempo, started / stopped or reset
   public static void OnServerTempo(NetworkConnectionToClient conn, NetTempoMsg m) {
     masterControl mc = masterControl.instance;

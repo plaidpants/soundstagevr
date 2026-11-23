@@ -152,7 +152,11 @@ public class libraryDeviceInterface : deviceInterface {
     curPrimary = s;
     curSecondary = "";
     if (curTape != null) Destroy(curTape.gameObject);
-    _panelRingSecondary.updatePanels(sampleManager.instance.sampleDictionary[s].Keys.ToList());
+    List<string> keys = sampleManager.instance.sampleDictionary[s].Keys.ToList();
+    // Recordings: newest first (2026-11-22) - a new recording used to land at the far end
+    // of a long list of dates, hard to find
+    if (s == "Recordings") keys = keys.OrderByDescending(k => FileTime(sampleManager.instance.sampleDictionary[s][k])).ToList();
+    _panelRingSecondary.updatePanels(keys);
     if (sampleManager.instance.sampleDictionary[s].Keys.ToList().Count == 0) {
       note.gameObject.SetActive(true);
 
@@ -160,6 +164,13 @@ public class libraryDeviceInterface : deviceInterface {
     } else {
       note.gameObject.SetActive(false);
     }
+  }
+
+  static System.DateTime FileTime(string sample) {
+    try {
+      string p = sampleManager.instance.parseFilename(sample);
+      return System.IO.File.Exists(p) ? System.IO.File.GetLastWriteTime(p) : System.DateTime.MinValue;
+    } catch { return System.DateTime.MinValue; }
   }
 
   void updateTape(string s, Transform t) {

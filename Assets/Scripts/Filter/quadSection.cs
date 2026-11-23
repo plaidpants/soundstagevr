@@ -198,10 +198,13 @@ public class quadSection : manipObject {
     }
   }
 
+  // (2026-11-22) The percentages are measured a gap outside the middle band's edges
+  // (getPercentages), so the edges go a gap inside them. Without that, every load of a
+  // scene - and in multiplayer every patch reload - made the middle band 2 cm wider.
   public void setupPercents(float p0, float p1) //just for center quad
   {
-    updateEdge(-1, getX(p0));
-    updateEdge(1, getX(p1));
+    updateEdge(-1, getX(p0) + gap);
+    updateEdge(1, getX(p1) - gap);
     updatePosition(getX((p1 - p0) / 2 + p0));
   }
 
@@ -222,6 +225,19 @@ public class quadSection : manipObject {
       _deviceInterface.quads[1].updateEdge(1, pos.x - width / 2 - gap);
 
     }
+  }
+
+  // multiplayer (NetControls): the bands as the two percentages the filter uses
+  public bool NetGetPercents(out float a, out float b) {
+    a = b = 0;
+    if (_deviceInterface == null || _deviceInterface.quads == null || _deviceInterface.quads.Length < 3) return false;
+    _deviceInterface.quads[1].getPercentages(out a, out b);
+    return true;
+  }
+
+  public void NetSetPercents(float a, float b) {
+    if (_deviceInterface == null || _deviceInterface.quads == null || _deviceInterface.quads.Length < 3) return;
+    _deviceInterface.quads[1].setupPercents(a, b);
   }
 
   public void updatePosition(float x) {

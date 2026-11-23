@@ -38,7 +38,10 @@ public class recorderDeviceInterface : deviceInterface {
 
   public override void hit(bool on, int ID = -1) {
     if (ID == 2 && on) transcriber.Back();
-    if (ID == 3 && on) transcriber.Save();
+    // SAVE: only where a player pressed it (2026-11-22, like the looper). Another player's
+    // press arrives as a shared button (NetControls.applying); their recording then comes
+    // over as a file and fills this recorder (NetRecorders), so everyone has the same one.
+    if (ID == 3 && on && !NetControls.applying) transcriber.Save();
     if (ID == 4 && on) transcriber.Flush();
 
     if (ID == 0) {

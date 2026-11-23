@@ -12,12 +12,18 @@
 using UnityEngine;
 
 public static class HandInput {
+  // Middle-finger pinch (copy / delete) and ring-finger pinch (teleport, stage drag and
+  // turn: SnapTurn) - off (2026-11-21). Quest hand tracking reads those two fingers much
+  // less reliably than the index and pinky, so they fired the menu and grabs by accident.
+  // Kept for a later try (maybe with Meta's microgestures after the SDK upgrade).
+  public static bool extraPinches = false;
+
   public struct Hand {
     public bool tracked;        // hand pose is usable
     public bool inputValid;     // pointer pose + pinch data are usable
     public bool systemGesture;  // palm-up system gesture in progress: ignore pinches
     public bool menuPressed;    // system "menu" gesture (left palm-up pinch)
-    public float pinchIndex, pinchMiddle, pinchPinky;
+    public float pinchIndex, pinchMiddle, pinchRing, pinchPinky;
     public Vector3 pointerPosition;    // tracking-space aim pose
     public Quaternion pointerRotation;
   }
@@ -59,10 +65,14 @@ public static class HandInput {
       h.inputValid = (state.Status & OVRPlugin.HandStatus.InputStateValid) != 0;
       h.systemGesture = (state.Status & OVRPlugin.HandStatus.SystemGestureInProgress) != 0;
       h.menuPressed = (state.Status & OVRPlugin.HandStatus.MenuPressed) != 0;
-      if (state.PinchStrength != null && !h.systemGesture) {
-        h.pinchIndex = state.PinchStrength[(int)OVRPlugin.HandFinger.Index];
-        h.pinchMiddle = state.PinchStrength[(int)OVRPlugin.HandFinger.Middle];
-        h.pinchPinky = state.PinchStrength[(int)OVRPlugin.HandFinger.Pinky];
+      if (state.PinchStrength != null) {
+        if (!h.systemGesture) {
+          h.pinchIndex = state.PinchStrength[(int)OVRPlugin.HandFinger.Index];
+          h.pinchMiddle = state.PinchStrength[(int)OVRPlugin.HandFinger.Middle];
+          h.pinchPinky = state.PinchStrength[(int)OVRPlugin.HandFinger.Pinky];
+        }
+        // Keep ring pinch available even when palm-up (Quest flags palm-up as systemGesture for index menu pinch)
+        h.pinchRing = state.PinchStrength[(int)OVRPlugin.HandFinger.Ring];
       }
       h.pointerPosition = state.PointerPose.Position.FromFlippedZVector3f();
       h.pointerRotation = state.PointerPose.Orientation.FromFlippedZQuatf();

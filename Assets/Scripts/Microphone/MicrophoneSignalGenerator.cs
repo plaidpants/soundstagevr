@@ -26,16 +26,23 @@ public class MicrophoneSignalGenerator : signalGenerator {
   [DllImport("SoundStageNative")]
   public static extern void MicFunction(float[] a, float[] b, int length, float val);
 
-  AudioClip micClip;
+  // Which headset's microphone feeds this device (2026-11-22). In multiplayer every
+  // headset has its own copy of each Microphone device, and each copy used to open that
+  // headset's microphone - every player's mic was live, all playing into the patch (and,
+  // in one room, into each other's speakers: feedback). Now, in a session, a copy listens
+  // only while a player on this headset is holding the mic; everyone else's copy is
+  // silent. Alone, it's live as before. Several mics can be in the scene: they share the
+  // headset's one microphone (MicCapture).
   AudioSource source;
   float[] sharedBuffer;
-  bool activated = false;
+  volatile bool activated = false; // mic audio is flowing into this device
+  bool capturing;                  // holding a MicCapture reference
+  microphoneGrip grip;
 
   public Dictionary<float, float[]> freqBuffers = new Dictionary<float, float[]>();
 
   public float amp = 1;
   public bool active = true;
-  int curMicID = 0;
 
   public override void Awake() {
     base.Awake();
@@ -44,39 +51,54 @@ public class MicrophoneSignalGenerator : signalGenerator {
 
   void Start() {
     source = GetComponent<AudioSource>();
-    SelectMic(0);
+    grip = GetComponentInChildren<microphoneGrip>(true);
+  }
+
+  bool WantLive() {
+    if (!NetSync.Active) return true;
+    return grip != null && grip.curState == manipObject.manipState.grabbed;
+  }
+
+  void Update() {
+    if (source == null) return;
+    bool want = WantLive();
+    if (want && !capturing) StartCapture();
+    else if (!want && capturing) StopCapture();
   }
 
   Coroutine _MicActivateRoutine;
-  void SelectMic(int num) {
-    if (num >= Microphone.devices.Length) {
-      return;
-    }
-
+  void StartCapture() {
+    AudioClip clip = MicCapture.Acquire();
+    if (clip == null) return; // no microphone (or no permission): stay silent, try again later
+    capturing = true;
     if (_MicActivateRoutine != null) StopCoroutine(_MicActivateRoutine);
-    _MicActivateRoutine = StartCoroutine(MicActivateRoutine(num));
+    _MicActivateRoutine = StartCoroutine(MicActivateRoutine(clip));
   }
 
-  IEnumerator MicActivateRoutine(int num) {
+  void StopCapture() {
+    if (_MicActivateRoutine != null) { StopCoroutine(_MicActivateRoutine); _MicActivateRoutine = null; }
+    activated = false;
+    if (source != null) { source.Stop(); source.clip = null; }
+    if (capturing) { capturing = false; MicCapture.Release(); }
+  }
+
+  IEnumerator MicActivateRoutine(AudioClip clip) {
     source.Stop();
-    Microphone.End(Microphone.devices[curMicID]);
-    curMicID = num;
-
-    micClip = Microphone.Start(Microphone.devices[num], true, 1, 44100);
-
-    yield return null;
-    if (micClip != null) {
-      source.clip = micClip;
-      source.loop = true;
-      while (!(Microphone.GetPosition(null) > 0)) { }
-      source.Play();
-    }
-
-    yield return null;
-
+    source.clip = clip;
+    source.loop = true;
+    // wait (at most 2 s) for the first audio from the microphone - this used to wait
+    // without end, which froze the app when no audio came (no microphone permission)
+    float waited = 0;
+    while (MicCapture.Position() <= 0 && waited < 2f) { waited += Time.unscaledDeltaTime; yield return null; }
+    if (MicCapture.Position() <= 0) { Debug.LogWarning("[Microphone] no audio from the microphone"); yield break; }
+    source.Play();
+    _MicActivateRoutine = null;
   }
+
+  void OnDisable() { StopCapture(); }
 
   private void OnAudioFilterRead(float[] buffer, int channels) {
+    if (!capturing) return;
     activated = true;
     if (sharedBuffer.Length != buffer.Length)
       System.Array.Resize(ref sharedBuffer, buffer.Length);
@@ -86,10 +108,41 @@ public class MicrophoneSignalGenerator : signalGenerator {
   }
 
   public override void processBuffer(float[] buffer, double dspTime, int channels) {
-    if (!active || !activated) {
+    if (!active || !activated || !capturing) {
       return;
     }
 
     MicFunction(buffer, sharedBuffer, buffer.Length, amp);
   }
+}
+
+// The headset's microphone, shared by every Microphone device that is listening: opened
+// when the first one starts, closed when the last one stops.
+public static class MicCapture {
+  static AudioClip clip;
+  static string device;
+  static int users;
+
+  public static AudioClip Acquire() {
+    if (users == 0 || clip == null) {
+      if (Microphone.devices.Length == 0) return null;
+      device = Microphone.devices[0];
+      clip = Microphone.Start(device, true, 1, 44100);
+      if (clip == null) return null;
+      Debug.Log("[Microphone] " + device + " on");
+      users = 0;
+    }
+    users++;
+    return clip;
+  }
+
+  public static void Release() {
+    if (users <= 0) return;
+    if (--users > 0) return;
+    if (device != null) Microphone.End(device);
+    Debug.Log("[Microphone] " + device + " off");
+    clip = null;
+  }
+
+  public static int Position() { return device != null ? Microphone.GetPosition(device) : 0; }
 }

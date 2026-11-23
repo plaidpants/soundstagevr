@@ -481,7 +481,7 @@ public class scaleSequencerDeviceInterface : deviceInterface, INetBeatSync, INet
 
   // ---- multiplayer (Net/NetBeatSync.cs): keep the step lined up with the host's ----
   public bool NetSyncable {
-    get { return _beatManager != null && (externalPulse == null ? _beatManager.MC : masterControl.instance.BeatRunning) && _beatManager.Active && _beatManager.TicksPerMeasure > 0 && dimensions[0] > 0; }
+    get { return !stepSelect.HeldAnywhere && _beatManager != null && (externalPulse == null ? _beatManager.MC : masterControl.instance.BeatRunning) && _beatManager.Active && _beatManager.TicksPerMeasure > 0 && dimensions[0] > 0; }
   }
   public int NetConfig { get { return dimensions[0] * 1000 + _beatManager.TicksPerMeasure + (externalPulse != null ? 500000 : 0); } }
   public double NetAnchor() {
@@ -496,13 +496,13 @@ public class scaleSequencerDeviceInterface : deviceInterface, INetBeatSync, INet
   public double NetPeriod { get { return dimensions[0]; } }
   public double NetTolerance { get { return .5; } }
   public void NetShift(double d) {
-    if (stepSelect.curState == manipObject.manipState.grabbed) return;
+    if (stepSelect.HeldAnywhere) return;
     int len = dimensions[0];
     SelectStep(((targetStep + (int)System.Math.Round(d)) % len + len) % len);
   }
 
   public void executeNextStep() {
-    if (stepSelect.curState == manipObject.manipState.grabbed) return;
+    if (stepSelect.HeldAnywhere) return;
 
     int s = 1;
     bool minicheck = runningUpdated;
@@ -677,6 +677,33 @@ public class scaleSequencerDeviceInterface : deviceInterface, INetBeatSync, INet
     PlaceTopHandle();
     dimensionDisplays[0].text = curDimensions[0] + " X " + curDimensions[1];
     highlightDirty = true;
+    NetOrder();
+  }
+
+  // Multiplayer (2026-11-22): size changes are no longer shared as a whole new patch - the
+  // corner handle's position and the top row are sent live and every headset changes the
+  // grid itself. Cells are named across headsets by their order in the device, so keep
+  // them in one fixed order, however the grid got here.
+  void NetOrder() {
+    for (int c = 0; c < max; c++)
+      for (int s = 0; s < max; s++)
+        if (cubes[c][s] != null) cubes[c][s].SetAsLastSibling();
+    NetControls.Regridded();
+  }
+
+  public int NetTopSlot { get { return topSlot; } }
+
+  // another player dragged the top-row handle: add or remove rows to match. The device's
+  // own move comes with their pose updates, so it stays where it is here.
+  public void NetSetTop(int slot) {
+    if (slot == topSlot) return;
+    Vector3 keep = transform.position;
+    int guard = 0;
+    while (topSlot < slot && guard++ < max && ChangeTop(1)) { }
+    while (topSlot > slot && guard++ < max && ChangeTop(-1)) { }
+    transform.position = keep;
+    NetDevice nd = GetComponent<NetDevice>();
+    if (nd != null) nd.NoteSynced();
   }
 
   // Top handle: +1 adds a higher note row above the grid, -1 removes the top row. The
@@ -711,6 +738,7 @@ public class scaleSequencerDeviceInterface : deviceInterface, INetBeatSync, INet
 
     dimensionDisplays[0].text = curDimensions[0] + " X " + curDimensions[1];
     highlightDirty = true;
+    NetOrder();
     return true;
   }
 

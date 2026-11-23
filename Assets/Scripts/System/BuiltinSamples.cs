@@ -51,7 +51,7 @@ public class BuiltinSamples : MonoBehaviour {
   // Windows build; the editor uses the project's)
   public static string LibraryDir {
     get {
-#if UNITY_ANDROID || (UNITY_STANDALONE_WIN && !UNITY_EDITOR)
+#if (UNITY_ANDROID || UNITY_STANDALONE_WIN) && !UNITY_EDITOR // (the editor set to Android has UNITY_ANDROID too: it used to unpack into AppData)
       return Path.Combine(Directory.GetParent(Application.persistentDataPath).FullName, "Samples");
 #else
       return null;
@@ -76,7 +76,7 @@ public class BuiltinSamples : MonoBehaviour {
     float t0 = Time.realtimeSinceStartup;
     Task<int> work = Task.Run(() => {
       int n = indexOk ? -1 : BuildIndex(tgz, indexFile, stamp);
-      if (libStale) UpdateLibrary(lib, false, tgz);
+      if (libStale) UpdateLibrary(lib, false, tgz, stamp);
       return n;
     });
     while (!work.IsCompleted) yield return null;
@@ -260,7 +260,10 @@ public class BuiltinSamples : MonoBehaviour {
   // build changes (Samples/.build, from Start in the background), only entries new in this
   // build (Samples/.installed lists what was ever installed), never over a file that's
   // there or one the user deleted. New ones show in the library from the next start.
-  public static void UpdateLibrary(string samplesDir, bool fresh, byte[] tgz = null) {
+  // (stamp: BuildStamp, worked out on the main thread - Application.version can't be read
+  // from the background, which left the stamp unwritten and the library "stale" forever)
+  public static void UpdateLibrary(string samplesDir, bool fresh, byte[] tgz = null, string stamp = null) {
+    if (stamp == null) stamp = BuildStamp;
     string stampFile = Path.Combine(samplesDir, ".build");
     string listFile = Path.Combine(samplesDir, ".installed");
     if (tgz == null) tgz = StreamingAssetsLoader.ReadAllBytes(ArchivePath);
@@ -290,7 +293,7 @@ public class BuiltinSamples : MonoBehaviour {
         }
       }
       File.WriteAllLines(listFile, new List<string>(installed));
-      File.WriteAllText(stampFile, BuildStamp);
+      File.WriteAllText(stampFile, stamp);
       Debug.Log("[BuiltinSamples] library " + (fresh ? "unpacked: " : "updated: ") + added + " built-in sample file(s) added");
     } catch (Exception e) {
       Debug.LogWarning("[BuiltinSamples] couldn't update the library: " + e.Message);

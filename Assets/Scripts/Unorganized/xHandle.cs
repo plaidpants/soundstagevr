@@ -40,6 +40,11 @@ public class xHandle : manipObject {
     if (invisibleMesh) rend.enabled = false;
   }
 
+  // multiplayer (NetControls): another player is holding this handle. A sequencer's step
+  // handle stops the sequence while held - on every headset, not just the holder's.
+  public bool netHeld;
+  public bool HeldAnywhere { get { return curState == manipState.grabbed || (netHeld && NetSync.Active); } }
+
   public void pulse() {
     if (manipulatorObjScript != null) manipulatorObjScript.hapticPulse(750);
   }

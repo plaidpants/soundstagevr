@@ -36,6 +36,14 @@ public class cubeZone : manipObject {
     manipulatorObjScript.hapticPulse((ushort)(750f * (_deviceInterface.percent.x + _deviceInterface.percent.y + _deviceInterface.percent.z) / 3));
   }
 
+  // multiplayer (NetControls, 2026-11-21): where the crosshairs are, and setting them
+  public Vector3 Percent { get { return _deviceInterface != null ? _deviceInterface.percent : Vector3.zero; } }
+  public void NetSet(Vector3 p) {
+    if (_deviceInterface == null) return;
+    _deviceInterface.updatePercent(p);
+    updateLines(p);
+  }
+
   Vector3 percent = Vector3.one;
   void updatePercent(Vector3 p) {
     p.x = Mathf.Clamp01(-p.x + .5f);

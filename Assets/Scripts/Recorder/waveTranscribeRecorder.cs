@@ -148,19 +148,128 @@ public class waveTranscribeRecorder : signalGenerator {
 
   public void Flush() {
     display.Clear();
+    recordedEnd = 0;
 
     sampleBuffer = new float[(int)(maxDuration * _sampleRateOverride) * 2];
     display.Upload();
   }
 
+  // how far into the buffer has been recorded (audio thread); SAVE writes only that much
+  // (2026-11-22: it wrote the whole length set on the slider - a 5 s take saved as 60 s)
+  volatile int recordedEnd = 0;
+
   public void Save() {
     if (bufferToWav.instance.savingInProgress) return;
+    // "rec_" (2026-11-22): tells the recorder's takes from the looper's in the tape library
     string audioFilename = masterControl.instance.SaveDir + System.IO.Path.DirectorySeparatorChar + "Samples" + System.IO.Path.DirectorySeparatorChar +
         "Recordings" + System.IO.Path.DirectorySeparatorChar +
-      string.Format("{0:MM-dd_hh-mm-ss-tt}.wav",
+      string.Format("rec_{0:MM-dd_hh-mm-ss-tt}.wav",
        DateTime.Now);
 
-    bufferToWav.instance.Save(audioFilename, sampleBuffer, 2, virtualBufferLength, saveText, this);
+    int len = recordedEnd > 0 ? Mathf.Min(recordedEnd, virtualBufferLength) : virtualBufferLength;
+    bufferToWav.instance.Save(audioFilename, sampleBuffer, 2, len, saveText, this);
+  }
+
+  // ---- multiplayer (Net/NetRecorders.cs, 2026-11-22) ----
+  // Our SAVE finished: say where it went, and send the recording to the other players.
+  // (A recorder fed by a microphone only hears it on the headset holding the mic, so
+  // the others' copies recorded silence.)
+  public override void updateTape(string s) {
+    string label = System.IO.Path.GetFileNameWithoutExtension(s);
+    ShowSaved("SAVED: " + label + "\n(tape library: RECORDINGS)");
+    string file;
+    if (!sampleManager.instance.sampleDictionary["Recordings"].TryGetValue(label, out file)) return;
+    if (NetSync.Active) NetRecorders.Saved(this, label, SampleIndex.WithHash(file));
+  }
+
+  Coroutine _savedRoutine;
+  void ShowSaved(string text) {
+    if (saveText == null) return;
+    if (_savedRoutine != null) StopCoroutine(_savedRoutine);
+    _savedRoutine = StartCoroutine(SavedRoutine(text));
+  }
+
+  IEnumerator SavedRoutine(string text) {
+    saveText.gameObject.SetActive(true);
+    saveText.text = text;
+    yield return new WaitForSeconds(4f);
+    saveText.gameObject.SetActive(false);
+    _savedRoutine = null;
+  }
+
+  // Another player saved this recorder's take: once their file is here (NetSamples), it
+  // replaces what this copy recorded.
+  string remoteHash = "", remoteFile = "", remoteLabel = "";
+  public void ApplyRemoteSave(string label, string file) {
+    StopWaitingRemote();
+    remoteLabel = label;
+    remoteFile = file;
+    remoteHash = SampleIndex.HashOf(file);
+    if (TakeRecording(file)) { remoteHash = ""; return; }
+    if (remoteHash == "") return;
+    ShowSaved("GETTING " + label + "...");
+    NetSamples.Arrived += OnRemoteArrived;
+    NetSamples.StateChanged += OnRemoteState;
+    NetSamples.Need(remoteHash);
+    OnRemoteState(remoteHash, NetSamples.StateOf(remoteHash));
+  }
+
+  void OnRemoteArrived(string hash) {
+    if (hash != remoteHash) return;
+    StopWaitingRemote();
+    TakeRecording(remoteFile);
+  }
+
+  void OnRemoteState(string hash, NetSamples.State s) {
+    if (hash != remoteHash) return;
+    if (s == NetSamples.State.Missing || s == NetSamples.State.NoSpace || s == NetSamples.State.TooBig)
+      ShowSaved(remoteLabel + ": " + (s == NetSamples.State.Missing ? "MISSING" : s == NetSamples.State.NoSpace ? "NO SPACE" : "TOO BIG"));
+  }
+
+  void StopWaitingRemote() {
+    NetSamples.Arrived -= OnRemoteArrived;
+    NetSamples.StateChanged -= OnRemoteState;
+  }
+
+  void OnDestroy() { StopWaitingRemote(); }
+
+  bool TakeRecording(string file) {
+    string path = sampleManager.instance.parseFilename(file);
+    if (!System.IO.File.Exists(path)) return false;
+    float[] rec;
+    int ch, rate;
+    try { rec = SampleCache.DecodeAll(path, out ch, out rate); }
+    catch (Exception e) { Debug.LogWarning("[NetRecorders] couldn't read " + path + ": " + e.Message); return false; }
+    if (rec == null || ch != 2) { Debug.LogWarning("[NetRecorders] not a stereo WAV: " + path); return false; }
+    int outRate = AudioSettings.outputSampleRate;
+    int theirs = rec.Length / 2;
+    int ours = rate == outRate || rate <= 0 ? theirs : (int)((long)theirs * outRate / rate);
+    ours = Mathf.Min(ours, sampleBuffer.Length / 2);
+    playing = false; recording = false;
+    if (ours == theirs) Array.Copy(rec, sampleBuffer, ours * 2);
+    else {
+      // another sample rate (the Quest runs at 48 kHz, the PC at 44.1): resample, linearly
+      double step = (double)rate / outRate;
+      for (int i = 0; i < ours; i++) {
+        double pos = i * step;
+        int a = Mathf.Min((int)pos, theirs - 1);
+        int b = Mathf.Min(a + 1, theirs - 1);
+        float t = (float)(pos - a);
+        sampleBuffer[i * 2] = rec[a * 2] + (rec[b * 2] - rec[a * 2]) * t;
+        sampleBuffer[i * 2 + 1] = rec[a * 2 + 1] + (rec[b * 2 + 1] - rec[a * 2 + 1]) * t;
+      }
+    }
+    if (ours * 2 < sampleBuffer.Length) Array.Clear(sampleBuffer, ours * 2, sampleBuffer.Length - ours * 2);
+    recordedEnd = ours * 2;
+    curBufferIndex = 0;
+    resetScrub = true;
+    _deviceInterface.buttons[0].phantomHit(false);
+    _deviceInterface.buttons[1].phantomHit(false);
+    recalcTex();
+    display.Upload();
+    ShowSaved("FROM ANOTHER PLAYER: " + remoteLabel);
+    Debug.Log("[NetRecorders] " + name + ": took another player's recording " + remoteLabel + " (" + ours + " frames" + (rate != outRate ? ", resampled from " + rate + " Hz" : "") + ")");
+    return true;
   }
 
 
@@ -252,6 +361,7 @@ public class waveTranscribeRecorder : signalGenerator {
       if (recording) {
         sampleBuffer[curBufferIndex] = buffer[i];
         sampleBuffer[curBufferIndex + 1] = buffer[i + 1];
+        if (curBufferIndex + 2 > recordedEnd) recordedEnd = curBufferIndex + 2;
       }
       if (playing) {
         curWaveW = curBufferIndex / columnMult;

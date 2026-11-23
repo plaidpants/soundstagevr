@@ -131,7 +131,6 @@ public class adsrSignalGenerator : signalGenerator {
     return 0;
   }
 
-  float lastBuffer = -1;
   int curFrame = 0;
   int frameCount = 0;
   public override void processBuffer(float[] buffer, double dspTime, int channels) {
@@ -142,7 +141,17 @@ public class adsrSignalGenerator : signalGenerator {
         System.Array.Resize(ref pulseBuffer, buffer.Length);
 
       incoming.Pull(pulseBuffer, dspTime, channels);
-      bool on = GetBinaryState(pulseBuffer, pulseBuffer.Length, channels, ref lastBuffer);
+      // The gate (2026-11-22): on while the input goes above zero anywhere in the buffer.
+      // It used to be "on unless the input sits still at a negative value"
+      // (GetBinaryState), so anything that keeps moving - a sine or saw from an
+      // oscillator, audio - held the envelope on for good; and only the buffer's last
+      // sample counted. Now a gate (-1 / +1) works as before, an oscillator opens it on
+      // its positive half and closes it on its negative half, audio holds it while it
+      // plays, and silence (0) lets it go.
+      bool on = false;
+      for (int i = 0; i < pulseBuffer.Length; i += channels) {
+        if (pulseBuffer[i] > .001f) { on = true; break; }
+      }
       _devinterface.pulseUpdate(on);
     }
   }

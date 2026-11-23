@@ -63,6 +63,7 @@ public class mixerDeviceInterface : deviceInterface {
         Destroy(s.gameObject);
       }
     }
+    NetControls.Regridded(); // channels (and their jacks) came or went: renumber the known cables
   }
 
   void Update() {

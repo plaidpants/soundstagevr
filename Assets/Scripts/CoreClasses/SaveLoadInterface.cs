@@ -129,6 +129,7 @@ public class SaveLoadInterface : MonoBehaviour {
 
     masterControl.instance.setBPM(s.BPM);
     nome.SetBPM(s.BPM);
+    NetClock.LocalTempoLoaded(s.BPM); // multiplayer: an example / file loaded here brings its tempo to the session
     synthSet.SystemList.Add(s);
     return s.version;
   }
@@ -243,6 +244,7 @@ public class SaveLoadInterface : MonoBehaviour {
 [XmlInclude(typeof(GlideData))]
 [XmlInclude(typeof(cvSequencerData))]
 [XmlInclude(typeof(ScaleSequencerData))]
+[XmlInclude(typeof(ScopeData))]
 public class InstrumentData {
   public int ID;
   public menuItem.deviceType deviceType;

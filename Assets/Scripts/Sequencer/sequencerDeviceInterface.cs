@@ -141,7 +141,7 @@ public class sequencerDeviceInterface : deviceInterface, INetBeatSync, INetPulse
 
   // ---- multiplayer (Net/NetBeatSync.cs): keep the step lined up with the host's ----
   public bool NetSyncable {
-    get { return _beatManager != null && (externalPulse == null ? _beatManager.MC : masterControl.instance.BeatRunning) && _beatManager.Active && _beatManager.TicksPerMeasure > 0 && dimensions[0] > 0; }
+    get { return !stepSelect.HeldAnywhere && _beatManager != null && (externalPulse == null ? _beatManager.MC : masterControl.instance.BeatRunning) && _beatManager.Active && _beatManager.TicksPerMeasure > 0 && dimensions[0] > 0; }
   }
   public int NetConfig { get { return dimensions[0] * 1000 + _beatManager.TicksPerMeasure + (externalPulse != null ? 500000 : 0); } }
   public double NetAnchor() {
@@ -156,13 +156,13 @@ public class sequencerDeviceInterface : deviceInterface, INetBeatSync, INetPulse
   public double NetPeriod { get { return dimensions[0]; } }
   public double NetTolerance { get { return .5; } }
   public void NetShift(double d) {
-    if (stepSelect.curState == manipObject.manipState.grabbed) return;
+    if (stepSelect.HeldAnywhere) return;
     int len = dimensions[0];
     SelectStep(((targetStep + (int)System.Math.Round(d)) % len + len) % len);
   }
 
   public void executeNextStep() {
-    if (stepSelect.curState == manipObject.manipState.grabbed) return;
+    if (stepSelect.HeldAnywhere) return;
 
     int s = 1;
 
@@ -282,6 +282,18 @@ public class sequencerDeviceInterface : deviceInterface, INetBeatSync, INetPulse
     }
 
     dimensionDisplays[0].text = curDimensions[0] + " X " + curDimensions[1];
+    NetOrder();
+  }
+
+  // Multiplayer (2026-11-22): a size change is no longer shared as a whole new patch -
+  // the corner handle's position is sent live and every headset grows or shrinks the grid
+  // itself. Controls and jacks are named across headsets by their order in the device, so
+  // put the cells, row jacks and row samplers in one fixed order, however the grid got here.
+  void NetOrder() {
+    foreach (List<Transform> row in cubeList) foreach (Transform t in row) if (t != null) t.SetAsLastSibling();
+    foreach (Transform t in jackList) if (t != null) t.SetAsLastSibling();
+    foreach (clipPlayerSimple s in samplerList) if (s != null) s.transform.SetAsLastSibling();
+    NetControls.Regridded();
   }
 
   void addColumns(int c) {

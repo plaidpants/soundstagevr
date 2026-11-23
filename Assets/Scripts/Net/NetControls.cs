@@ -6,9 +6,13 @@
 //  * Events - buttons (incl. sequencer cells), keys (keyboard, xylophone), drum pad
 //    hits with their velocity: sent the moment they happen, through hooks in button,
 //    key and drumpad.
-//  * Anything else on a device that a player grabs and lets go of (size handles, grid
-//    edges, the scale list, tapes...) can change the device's structure, so the whole
-//    patch is shared again afterwards (NetSync.LocalPatchReplaced).
+//  * Drag handles - the mixer's and splitter's width, the sequencers' corner size handle,
+//    the Scale Sequencer's top-row handle, the ADSR points, the timeline's height: sent
+//    live like values; every headset resizes the device itself (2026-11-22).
+//  * Anything else on a device that a player grabs and lets go of (the camera's screen...)
+//    may change the device's structure, so the whole patch is shared again afterwards
+//    (NetSync.LocalPatchReplaced). Held instruments (maracas, drumsticks, airhorn,
+//    microphone), tapes, the help button, the scale list etc. are skipped: nothing to share.
 // Changes that arrive are applied through each control's own setter, so the device
 // reacts as if it had been touched here. Only changes made by a player are sent - a
 // device switching its own buttons (radio groups, looper record/play) does the same
@@ -21,10 +25,10 @@ using System.Collections.Generic;
 using Mirror;
 using UnityEngine;
 
-public struct NetControlMsg : NetworkMessage { public int netId; public byte kind; public int index; public float a, b; }
+public struct NetControlMsg : NetworkMessage { public int netId; public byte kind; public int index; public float a, b, c; } // c: the Control Cube's third axis
 
 public class NetControls : MonoBehaviour {
-  public enum Kind : byte { Dial, Slider, SliderUneven, SliderNotched, Slider2D, Switch, Button, Key, DrumHit, Octaves }
+  public enum Kind : byte { Dial, Slider, SliderUneven, SliderNotched, Slider2D, Switch, Button, Key, DrumHit, Octaves, Cube, XHandle, FilterBand, XYHandle, YHandle, GridTop }
 
   static NetControls instance;
   public static bool applying; // a received change is being applied: hooks don't send
@@ -49,6 +53,20 @@ public class NetControls : MonoBehaviour {
     else if (c is button) k = Kind.Button;
     else if (c is key) k = Kind.Key;
     else if (c is drumpad) k = Kind.DrumHit;
+    else if (c is cubeZone) k = Kind.Cube;
+    // (2026-11-22) a drag handle (the mixer's width and fader length...) and the filter's
+    // bands: their values go out live while held, as with a slider. They used to share the
+    // whole patch on release - nothing moved on the other headsets while dragging, the
+    // mixer's handle jumped when the reload came, and each reload made the filter's
+    // middle band 2 cm wider (quadSection.setupPercents)
+    else if (c is xHandle) k = Kind.XHandle;
+    else if (c is quadSection) k = Kind.FilterBand;
+    // (2026-11-22) the sequencers' corner size handle, the ADSR points, the timeline's
+    // height handle and the Scale Sequencer's top-row handle: each used to share the whole
+    // patch on release
+    else if (c is xyHandle) k = Kind.XYHandle;
+    else if (c is yHandle) k = Kind.YHandle;
+    else if (c is gridEdgeHandle) k = Kind.GridTop; // the Control Cube's crosshairs (2026-11-21: they used to share the whole patch on release, and nothing while moving)
     else return false;
     return true;
   }
@@ -63,6 +81,12 @@ public class NetControls : MonoBehaviour {
       case Kind.Switch: return typeof(basicSwitch);
       case Kind.Button: return typeof(button);
       case Kind.Key: return typeof(key);
+      case Kind.Cube: return typeof(cubeZone);
+      case Kind.XHandle: return typeof(xHandle);
+      case Kind.FilterBand: return typeof(quadSection);
+      case Kind.XYHandle: return typeof(xyHandle);
+      case Kind.YHandle: return typeof(yHandle);
+      case Kind.GridTop: return typeof(gridEdgeHandle);
       default: return typeof(drumpad);
     }
   }
@@ -81,11 +105,11 @@ public class NetControls : MonoBehaviour {
     return m.index >= 0 && m.index < list.Length ? list[m.index] : null;
   }
 
-  static void Send(Component c, Kind k, float a, float b, bool reliable) {
+  static void Send(Component c, Kind k, float a, float b, bool reliable, float c3 = 0) {
     if (!NetSync.Active || applying) return;
     if (!Locate(c, k, out NetDevice dev, out int index)) return;
     dev.Rebaseline();
-    NetSync.SendControl(new NetControlMsg { netId = dev.netId, kind = (byte)k, index = index, a = a, b = b }, reliable);
+    NetSync.SendControl(new NetControlMsg { netId = dev.netId, kind = (byte)k, index = index, a = a, b = b, c = c3 }, reliable);
   }
 
   // ---------- event hooks (button / key / drumpad) ----------
@@ -114,7 +138,7 @@ public class NetControls : MonoBehaviour {
 
   // the test harness changed a value control (TestHarness): send it as a held one would be
   public static void HarnessValue(manipObject o, bool reliable) {
-    if (o != null && ValueOf(o, out Kind k, out float a, out float b)) Send(o, k, a, b, reliable);
+    if (o != null && ValueOf(o, out Kind k, out float a, out float b, out float c3)) Send(o, k, a, b, reliable, c3);
   }
 
   public static void DrumHit(drumpad p, float velocity) {
@@ -124,7 +148,7 @@ public class NetControls : MonoBehaviour {
 
   // ---------- value controls: poll what the local hands hold ----------
 
-  class Held { public manipObject obj; public float a, b; public float timer; }
+  class Held { public manipObject obj; public float a, b, c; public float timer; }
   readonly Held[] held = { new Held(), new Held() };
   manipulator[] manips;
 
@@ -145,20 +169,48 @@ public class NetControls : MonoBehaviour {
       if (h.obj != null) Released(h.obj, h);
       h.obj = now;
       h.timer = 0;
-      if (now != null && ValueOf(now, out _, out float a0, out float b0)) { h.a = a0; h.b = b0; }
+      if (now != null && ValueOf(now, out Kind k0, out float a0, out float b0, out float c0)) {
+        h.a = a0; h.b = b0; h.c = c0;
+        if (k0 == Kind.XHandle) h.c = 0; // already grabbed when picked up here: send the hold
+      }
     }
-    if (h.obj == null || !ValueOf(h.obj, out Kind k, out float a, out float b)) return;
+    if (h.obj == null || !ValueOf(h.obj, out Kind k, out float a, out float b, out float c)) return;
     h.timer += Time.unscaledDeltaTime;
-    if ((a != h.a || b != h.b) && h.timer >= 1f / NetSync.poseRate) {
-      h.a = a; h.b = b; h.timer = 0;
-      Send(h.obj, k, a, b, false);
+    bool holdChanged = k == Kind.XHandle && c != h.c; // grabbed / let go: at once, reliably
+    if ((a != h.a || b != h.b || c != h.c) && (h.timer >= 1f / NetSync.poseRate || holdChanged)) {
+      h.a = a; h.b = b; h.c = c; h.timer = 0;
+      Send(h.obj, k, a, b, holdChanged, c);
+      SendLinked(h.obj, false);
     }
+  }
+
+  // An ADSR point pushes its neighbours along (adsrInterface): those move without being
+  // held, so send them with it - otherwise the other headsets' envelopes came out different.
+  static void SendLinked(manipObject o, bool reliable) {
+    if (!(o is xyHandle)) return;
+    adsrInterface ai = o.GetComponentInParent<adsrInterface>();
+    if (ai == null || ai.xyHandles == null) return;
+    foreach (xyHandle x in ai.xyHandles)
+      if (x != null && x != o && ValueOf(x, out Kind k, out float a, out float b, out float c)) Send(x, k, a, b, reliable, c);
+  }
+
+  // A sequencer's grid changed size (on every headset, in its own Update): its cells and
+  // jacks were renumbered, so the cables known by jack number are taken from the scene again.
+  public static void Regridded() {
+    if (!NetSync.Active || instance == null) return;
+    instance.StartCoroutine(RescanCables());
+  }
+
+  static System.Collections.IEnumerator RescanCables() {
+    yield return null; // removed cells and jacks go at the end of the frame
+    if (NetSync.Active) NetCables.ForgetKnown();
   }
 
   void Released(manipObject obj, Held h) {
     if (obj == null) return;
-    if (ValueOf(obj, out Kind k, out float a, out float b)) {
-      Send(obj, k, a, b, true); // final value, reliable
+    if (ValueOf(obj, out Kind k, out float a, out float b, out float c)) {
+      Send(obj, k, a, b, true, c); // final value, reliable
+      SendLinked(obj, true);
       return;
     }
     // Not a value control. On a device and not one of the things handled elsewhere?
@@ -166,7 +218,9 @@ public class NetControls : MonoBehaviour {
     if (obj is handle || obj is button || obj is key || NetTools.IsTool(obj) || obj is omniPlug || obj is omniJack) return;
     if (obj is tape) return; // NetTapes
     if (obj is generalGrip && obj.GetComponentInParent<samplerDeviceInterface>() is samplerDeviceInterface sd) { NetSampler.TurntableMoved(sd); return; } // the sampler's turntable moved: just its place, not the whole patch (a reload emptied the other headsets' loopers)
-    if (obj is turntableUI) return; // scratching only moves the playhead: nothing in the patch changes, and a whole-patch reload here dropped whatever the other hand was holding
+    if (obj is turntableUI) return;
+    if (obj is maracaUI || obj is drumstick || obj is airhornUI || obj is microphoneGrip) return; // held instruments: they go back to their place when let go, nothing in the patch changed
+    if (obj is tooltips) return; // the help (?) button: showing help or its video is local - a patch reload here restarted every device // scratching only moves the playhead: nothing in the patch changes, and a whole-patch reload here dropped whatever the other hand was holding
     if (obj is scalePickItem) return; // the Scale Sequencer's scale button / list: opening the list is local (a patch reload closed it before a scale could be picked); a pick is sent on its own (NetScales)
     if (obj is midiPanel) return; // the MIDI device list: picking from it is local (and shared by NetMidi) - a patch reload here closed the list before anything could be picked
     if (obj.name == "sizeHandle" && (obj.GetComponentInParent<keyboardDeviceInterface>() != null || obj.GetComponentInParent<xylorollDeviceInterface>() != null)) return; // NetControls.Resized
@@ -177,8 +231,8 @@ public class NetControls : MonoBehaviour {
     NetSync.LocalPatchReplaced();
   }
 
-  static bool ValueOf(manipObject o, out Kind k, out float a, out float b) {
-    a = b = 0;
+  static bool ValueOf(manipObject o, out Kind k, out float a, out float b, out float c) {
+    a = b = c = 0;
     if (!KindOf(o, out k)) return false;
     switch (k) {
       case Kind.Dial: a = ((dial)o).percent; return true;
@@ -187,6 +241,12 @@ public class NetControls : MonoBehaviour {
       case Kind.SliderNotched: a = ((sliderNotched)o).switchVal; return true;
       case Kind.Slider2D: a = ((slider2D)o).percent.x; b = ((slider2D)o).percent.y; return true;
       case Kind.Switch: a = ((basicSwitch)o).switchVal ? 1 : 0; return true;
+      case Kind.Cube: { Vector3 p = ((cubeZone)o).Percent; a = p.x; b = p.y; c = p.z; return true; }
+      case Kind.XHandle: a = o.transform.localPosition.x; c = o.curState == manipObject.manipState.grabbed ? 1 : 0; return true; // c: held
+      case Kind.FilterBand: return ((quadSection)o).NetGetPercents(out a, out b);
+      case Kind.XYHandle: a = o.transform.localPosition.x; b = o.transform.localPosition.y; return true;
+      case Kind.YHandle: { yHandle y = (yHandle)o; a = y.targetTransform != null ? y.targetTransform.localPosition.y : o.transform.localPosition.y; return true; }
+      case Kind.GridTop: { gridEdgeHandle g = (gridEdgeHandle)o; if (g.owner == null) return false; a = g.owner.NetTopSlot; return true; }
     }
     return false; // buttons and keys are events
   }
@@ -231,6 +291,12 @@ public class NetControls : MonoBehaviour {
         case Kind.Button: ((button)c).keyHit(m.a > .5f); break;
         case Kind.Key: ((key)c).NetSetHit(m.a > .5f); break;
         case Kind.DrumHit: ((drumpad)c).keyHit(true, m.a); break;
+        case Kind.Cube: ((cubeZone)c).NetSet(new Vector3(m.a, m.b, m.c)); break;
+        case Kind.XHandle: ((xHandle)c).netHeld = m.c > .5f; ((xHandle)c).updatePos(m.a); break;
+        case Kind.FilterBand: ((quadSection)c).NetSetPercents(m.a, m.b); break;
+        case Kind.XYHandle: ((xyHandle)c).NetSetPos(new Vector2(m.a, m.b)); break;
+        case Kind.YHandle: ((yHandle)c).updatePos(m.a); break;
+        case Kind.GridTop: { gridEdgeHandle g = (gridEdgeHandle)c; if (g.owner != null) g.owner.NetSetTop(Mathf.RoundToInt(m.a)); break; }
       }
     } finally { applying = false; }
   }

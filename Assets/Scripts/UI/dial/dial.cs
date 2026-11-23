@@ -110,26 +110,29 @@ public class dial : manipObject {
     return new Vector2(flat.x, flat.z);
   }
 
-  float deltaRot = 0;
   float curRot = 0;
   float realRot = 0f;
   float prevShakeRot = 0f;
-  public override void grabUpdate(Transform t) {
+  // Turning (2026-11-22): the hand's turn since the last frame moves the dial (twice as
+  // far, as before), and the value stops at 0% and 100%. It used to map the hand's angle
+  // straight onto the dial, so turning on past either end jumped to the other end and
+  // carried on round.
+  float lastHandAngle = 0f;
+  float HandAngle(Transform t) {
     Vector2 temp = dialCoordinates(t.right);
-    curRot = Vector2.Angle(temp, Vector2.up) * Mathf.Sign(temp.x) - deltaRot;
+    return Vector2.Angle(temp, Vector2.up) * Mathf.Sign(temp.x);
+  }
 
-    curRot = Mathf.Repeat(curRot, 360f);
-    realRot = Mathf.Repeat(curRot * 2, 360f);
+  public override void grabUpdate(Transform t) {
+    float hand = HandAngle(t);
+    float d = Mathf.DeltaAngle(lastHandAngle, hand);
+    lastHandAngle = hand;
+    float p = Mathf.Clamp01(percent + d * 2f / 300f); // 300 degrees of dial = 0..100%
+    if (p != percent) setPercent(p);
 
-    if (realRot > 150 && realRot < 210) {
-      if (realRot < 180) realRot = 150;
-      else realRot = 210;
-    }
-    transform.localRotation = Quaternion.Euler(0, realRot, 0);
-
-    if (Mathf.Abs(realRot - prevShakeRot) > 10f) {
+    if (Mathf.Abs(percent * 300f - prevShakeRot) > 10f) {
       if (manipulatorObjScript != null) manipulatorObjScript.hapticPulse(500);
-      prevShakeRot = realRot;
+      prevShakeRot = percent * 300f;
       turnCount++;
     }
   }
@@ -262,8 +265,8 @@ public class dial : manipObject {
         if (_dialCheckRoutine != null) StopCoroutine(_dialCheckRoutine);
         _dialCheckRoutine = StartCoroutine(dialCheckRoutine());
       }
-      Vector2 temp = dialCoordinates(manipulatorObj.right);
-      deltaRot = Vector2.Angle(temp, Vector2.up) * Mathf.Sign(temp.x) - curRot;
+      lastHandAngle = HandAngle(manipulatorObj);
+      prevShakeRot = percent * 300f;
     }
   }
 }

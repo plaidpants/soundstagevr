@@ -69,6 +69,7 @@ public class splitterDeviceInterface : deviceInterface {
 
     handleA.localScale = new Vector3(.04f * (signal.nodes.Count + 1), 0.04f, 0.04f);
     handleB.localScale = new Vector3(.04f * (signal.nodes.Count + 1), 0.04f, 0.04f);
+    NetControls.Regridded(); // outputs (and their jacks) came or went: renumber the known cables
   }
 
   void setFlow(bool on) {
