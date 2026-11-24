@@ -79,7 +79,8 @@ public class timelinePlayer : MonoBehaviour, INetBeatSync {
 
   bool playheadScrubbing = false;
 
-  void Update() {
+  void Update() { long _pp = PerfProbe.Start(); try { UpdateProbed(); } finally { PerfProbe.Add("timelinePlayer.Update", _pp); } } // (PerfProbe: temporary)
+  void UpdateProbed() {
     playheadScrubbing = playheadHandle.curState == manipObject.manipState.grabbed;
 
     if (!playheadScrubbing) updatePlayhead();
@@ -137,8 +138,45 @@ public class timelinePlayer : MonoBehaviour, INetBeatSync {
     }
   }
 
+  // Runs on the audio thread. Notes can be removed meanwhile on the main thread (another
+  // player's change, NetTimelines, takes eventsLock; deleting or overlapping notes here
+  // doesn't), and an index running past the end threw out of the whole audio callback -
+  // a click. Now a note that went away is skipped.
   void timelineEventUpdate() {
+    long _pp = PerfProbe.Start();
+    lock (_deviceInterface.eventsLock) {
+      try { timelineEventUpdateLocked(); }
+      catch (System.ArgumentOutOfRangeException) { } // a note was removed under us: next callback
+      catch (System.NullReferenceException) { }
+    }
+    PerfProbe.AddAudio(_pp);
+  }
+
+  // Overwrite recording (overdub off) erases notes by trimming their start up to the
+  // playhead. The notes are checked every 64 samples now, so the playhead jumps a little
+  // between checks: a note's last bit, or a short note, could fall between two checks and
+  // stay as a sliver. Anything the playhead will pass before the next check now goes.
+  float lastEvalPos = -1;
+
+  void EraseNote(int i) {
+    timelineEvent e = _deviceInterface._tlEvents[i];
+    if (e.playing) _deviceInterface.tlEventTrigger(i, false);
+    e.pleaseDestroy = true;
+    _deviceInterface._tlEvents.RemoveAt(i);
+  }
+
+  void timelineEventUpdateLocked() {
+    float prev = lastEvalPos;
+    lastEvalPos = curGridPosition;
+    bool overwriting = _deviceInterface.recording && !_deviceInterface.overdub;
+    float jump = curGridPosition - prev;
+    bool stepped = prev >= 0 && jump > 0 && jump < 1f; // moved forward a little since the last check (not a loop or a scrub)
     for (int i = _deviceInterface._tlEvents.Count - 1; i >= 0; i--) {
+      if (overwriting && stepped && i < _deviceInterface._tlEvents.Count) {
+        timelineEvent n = _deviceInterface._tlEvents[i];
+        if ((object)n != null && !n.recording && !n.grabbed && !n.playing && !n.pleaseDestroy &&
+            n.in_out.x >= prev - 1e-4f && n.in_out.y <= curGridPosition + jump * 1.5f) { EraseNote(i); continue; }
+      }
       if (i < _deviceInterface._tlEvents.Count) {
         if (_deviceInterface._tlEvents[i] != null) {
           if (_deviceInterface._tlEvents[i].recording) {
@@ -242,6 +280,7 @@ public class timelinePlayer : MonoBehaviour, INetBeatSync {
         float dif = curGridPosition - _deviceInterface._gridParams.head_tail.y;
         curGridPosition = _deviceInterface._gridParams.head_tail.x + dif;
         loopActiveEvents();
+        evalCountdown = 0; // check the notes right at the loop point
       } else {
         curGridPosition = _deviceInterface._gridParams.head_tail.x;
         _deviceInterface.setPlay(false);
@@ -250,7 +289,18 @@ public class timelinePlayer : MonoBehaviour, INetBeatSync {
     }
 
     if (curGridPosition < _deviceInterface._gridParams.head_tail.x) curGridPosition = _deviceInterface._gridParams.head_tail.x;
-    if (shouldUpdate) timelineEventUpdate();
+    // masterControl calls this for every audio SAMPLE (48,000 times a second), and checking
+    // every note each time cost ~40 us per sample with 85 notes - more than real time, so the
+    // audio fell behind: the beat dragged and crackled more as notes were added (2026-11-24;
+    // dragging the playhead, checked once a frame, didn't). The playhead still moves every
+    // sample; the notes are checked every 64 samples (1.3 ms - far below what can be heard).
+    if (shouldUpdate && --evalCountdown <= 0) {
+      evalCountdown = evalEvery;
+      timelineEventUpdate();
+    }
     lastBeatTime = curBeatTime;
   }
+
+  const int evalEvery = 64;
+  int evalCountdown;
 }

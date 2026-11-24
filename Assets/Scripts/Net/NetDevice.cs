@@ -163,7 +163,8 @@ public class NetDevice : MonoBehaviour {
     NetSync.LocalPatchReplaced();
   }
 
-  void LateUpdate() {
+  void LateUpdate() { long _pp = PerfProbe.Start(); try { LateUpdateProbed(); } finally { PerfProbe.Add("NetDevice.LateUpdate", _pp); } } // (PerfProbe: temporary)
+  void LateUpdateProbed() {
     if (remotelyHeld && (!NetSync.Active || Time.unscaledTime - remoteHeldTime > 2f)) SetRemotelyHeld(false);
     if (!NetSync.Active || netId == 0) return;
     CheckContent();

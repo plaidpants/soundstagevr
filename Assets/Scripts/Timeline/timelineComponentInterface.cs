@@ -40,6 +40,8 @@ public class timelineComponentInterface : componentInterface {
   public basicSwitch overdubSwitch, snapSwitch, loopSwitch, notelockSwitch;
 
   public List<timelineEvent> _tlEvents = new List<timelineEvent>();
+  // the audio thread walks _tlEvents (timelinePlayer.timelineEventUpdate): take this to remove notes from another thread
+  public readonly object eventsLock = new object();
   public gridParams _gridParams;
 
   public button playButton, recButton;
@@ -211,7 +213,32 @@ public class timelineComponentInterface : componentInterface {
     return a.x >= b.x && a.y <= b.y;
   }
 
-  public void overlapCheck(timelineEvent e) {
+  // merge (2026-11-24): a note moved or resized by hand onto others of the same key joins
+  // them into one, instead of cutting them around it - dropping a thin note on a long one
+  // left the long one in two halves with the sliver between (more notes, more clicks).
+  // Recording (merge false) still cuts, as before. Takes eventsLock: the audio thread walks
+  // the list, and this can run on either thread (the lock is re-entrant).
+  public void overlapCheck(timelineEvent e, bool merge = false) {
+    lock (eventsLock) {
+      if (merge) MergeOverlaps(e); else CutOverlaps(e);
+    }
+  }
+
+  void MergeOverlaps(timelineEvent e) {
+    bool merged = false;
+    for (int i = _tlEvents.Count - 1; i >= 0; i--) {
+      timelineEvent o = _tlEvents[i];
+      if (o == e || o == null || o.recording || o.pleaseDestroy || !isOverlap(o, e)) continue;
+      e.in_out = new Vector2(Mathf.Min(e.in_out.x, o.in_out.x), Mathf.Max(e.in_out.y, o.in_out.y));
+      if (o.playing) tlEventTrigger(i, false);
+      o.pleaseDestroy = true;
+      _tlEvents.RemoveAt(i);
+      merged = true;
+    }
+    if (merged) e.gridUpdate();
+  }
+
+  void CutOverlaps(timelineEvent e) {
     for (int i = _tlEvents.Count - 1; i >= 0; i--) {
       if (e != _tlEvents[i]) {
         if (isOverlap(_tlEvents[i], e)) {
@@ -371,8 +398,26 @@ public class timelineComponentInterface : componentInterface {
 
   Dictionary<int, Vector2> toSpawn = new Dictionary<int, Vector2>();
   private object _spawnLock = new object();
-  void Update() {
+  // diagnosis (2026-11-24): playing live into the roll with hands on overdub got slower
+  // and crackly; the note count is logged every 10 s while recording to see if it explodes
+  float diagTimer;
+  int diagLastCount = -1;
+
+  void Update() { long _pp = PerfProbe.Start(); try { UpdateProbed(); } finally { PerfProbe.Add("timelineComponent.Update", _pp); } } // (PerfProbe: temporary)
+  void UpdateProbed() {
     bool updated = false;
+    if (recording) {
+      diagTimer += Time.unscaledDeltaTime;
+      if (diagTimer > 10f) {
+        diagTimer = 0;
+        int playingNow = 0;
+        for (int i = 0; i < _tlEvents.Count; i++) if (_tlEvents[i] != null && _tlEvents[i].playing) playingNow++;
+        Debug.Log("[Timeline] " + (_targetDeviceInterface != null ? _targetDeviceInterface.name : name) + " recording" + (overdub ? " (overdub)" : "") +
+                  ": " + _tlEvents.Count + " notes" + (diagLastCount >= 0 ? " (" + (_tlEvents.Count - diagLastCount).ToString("+0;-0;0") + " in 10 s)" : "") +
+                  ", " + playingNow + " sounding, " + transform.childCount + " objects, frame " + (Time.smoothDeltaTime * 1000).ToString("F1") + " ms");
+        diagLastCount = _tlEvents.Count;
+      }
+    } else { diagTimer = 0; diagLastCount = -1; }
 
     lock (_spawnLock) {
       if (toSpawn.Keys.Count > 0) {
@@ -463,7 +508,10 @@ public class timelineComponentInterface : componentInterface {
 
   //timeline functions
   public override void onTimelineEvent(int track, bool on) {
-    if (recording) _timelinePlayer.RecordEvent(track, on);
+    // multiplayer: a key another player pressed (or their MIDI) plays here but isn't
+    // recorded here - they record it on their headset and send the finished note
+    // (Net/NetTimelines.cs); recording it on both made two copies that never agreed
+    if (recording && !NetTimelines.RemoteInput) _timelinePlayer.RecordEvent(track, on);
   }
 
   public void tlEventTrigger(int index, bool play) {
@@ -493,10 +541,14 @@ public class timelineComponentInterface : componentInterface {
     data.playTrigID = playInput.transform.GetInstanceID();
     data.recTrigID = recInput.transform.GetInstanceID();
 
+    // read from the switches themselves (2026-11-24): overdub / snap / notelock are copied
+    // from them only while the roll is running, so a keyboard whose sequencer hadn't been
+    // switched on yet saved OVERDUB off while its switch showed on - and a player joining
+    // got it off: their headset then erased, as the playhead passed, the notes everyone recorded
     data.loop = loopSwitch.switchVal;
-    data.snap = snapping;
-    data.overdub = overdub;
-    data.notelock = notelock;
+    data.snap = snapSwitch.switchVal;
+    data.overdub = overdubSwitch.switchVal;
+    data.notelock = notelockSwitch.switchVal;
 
     data.unitResolution = _gridParams.snapResolution;
 

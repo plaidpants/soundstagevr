@@ -150,6 +150,7 @@ public static class NetSync {
     NetSamples.RegisterServer();
     NetLoopers.RegisterServer();
     NetRecorders.RegisterServer();
+    NetTimelines.RegisterServer();
     NetScales.RegisterServer();
     NetSampler.RegisterServer();
     NetRoom.ServerStarted();
@@ -194,6 +195,7 @@ public static class NetSync {
     NetSamples.RegisterClient();
     NetLoopers.RegisterClient();
     NetRecorders.RegisterClient();
+    NetTimelines.RegisterClient();
     NetScales.RegisterClient();
     NetSampler.RegisterClient();
     NetworkClient.RegisterHandler<NetSuccessionMsg>(m => { if (NetSession.instance != null) NetSession.instance.successionRank = m.rank; });
@@ -533,10 +535,17 @@ public static class NetSync {
 
   // A device's saved data without its place or instance IDs, hashed (NetDevice content
   // check).
-  public static int ContentHash(deviceInterface di, out menuItem.deviceType type) {
+  public static int ContentHash(deviceInterface di, out menuItem.deviceType type, bool includeNotes = false) {
     InstrumentData data = di.GetData();
     type = data.deviceType;
     data.position = Vector3.zero; data.rotation = Quaternion.identity; data.scale = Vector3.one; data.ID = 0;
+    // notes in a piano roll / timeline are shared one by one (NetTimelines): they're no
+    // reason to share the whole patch (the test harness's sync check still compares them)
+    if (!includeNotes) {
+      if (data is KeyboardData kd) kd.timelineEvents = null;
+      else if (data is XyloRollData xd) xd.timelineEvents = null;
+      else if (data is TimelineData td) td.timelineEvents = null;
+    }
     // The xylophone roll's held keys (in the order pressed, for the arpeggiator) change
     // with every note and differ in order between machines; key presses are shared as
     // key messages, so they're no reason to share the whole patch (2026-11: every mallet

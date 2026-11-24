@@ -321,7 +321,8 @@ public class keyboardDeviceInterface : deviceInterface {
     }
   }
 
-  void Update() {
+  void Update() { long _pp = PerfProbe.Start(); try { UpdateProbed(); } finally { PerfProbe.Add("keyboard.Update", _pp); } } // (PerfProbe: temporary)
+  void UpdateProbed() {
     UpdateSizeHandle();
     freqSignal.octave = OctaveShift;
 

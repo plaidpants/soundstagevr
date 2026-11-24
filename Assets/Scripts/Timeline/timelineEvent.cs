@@ -72,9 +72,11 @@ public class timelineEvent : MonoBehaviour {
 
   }
 
-  public void overlapCheck() {
-    _componentInterface.overlapCheck(this);
+  public void overlapCheck(bool merge = false) {
+    _componentInterface.overlapCheck(this, merge);
   }
+
+  bool edgesWereGrabbed; // an end was being dragged: merge with what it now covers once let go
 
   bool recordingUpdate = false;
   public void setRecord(bool on) {
@@ -120,7 +122,8 @@ public class timelineEvent : MonoBehaviour {
     gridUpdate();
   }
 
-  void Update() {
+  void Update() { long _pp = PerfProbe.Start(); try { UpdateProbed(); } finally { PerfProbe.Add("timelineEvent.Update", _pp); } } // (PerfProbe: temporary)
+  void UpdateProbed() {
     if (pleaseDestroy) Destroy(gameObject);
 
     if (recordingUpdate) {
@@ -137,11 +140,15 @@ public class timelineEvent : MonoBehaviour {
 
       gridUpdateDesired = true;
       recalcTrackPosition();
-      overlapCheck();
+      edgesWereGrabbed = true; // (used to cut the notes it passed over, live, while dragging)
     } else if (gridUpdateDesired) {
       gridUpdateDesired = false;
       gridUpdate();
       rangeCheck();
+    }
+    if (edgesWereGrabbed && edgeInHandle.curState != manipObject.manipState.grabbed && edgeOutHandle.curState != manipObject.manipState.grabbed) {
+      edgesWereGrabbed = false;
+      if (!pleaseDestroy) overlapCheck(true);
     }
 
     bool edgeCheck = in_out.y - in_out.x >= .2f || edgeInHandle.curState == manipObject.manipState.grabbed || edgeOutHandle.curState == manipObject.manipState.grabbed;
@@ -150,9 +157,10 @@ public class timelineEvent : MonoBehaviour {
   }
 
   public bool pleaseDestroy = false;
+  public const float minLength = .02f; // grid units: shorter than this is a leftover sliver, not a note
   void rangeCheck() {
     bool a = in_out.y <= in_out.x || in_out.x >= in_out.y;
-    bool b = Mathf.Abs(in_out.x - in_out.y) < .002f;
+    bool b = Mathf.Abs(in_out.x - in_out.y) < minLength; // (was .002: cut-off slivers stayed, and each one clicked when played)
     bool c = (a || b) && !recording;
     if (c) {
       _componentInterface._tlEvents.Remove(this);

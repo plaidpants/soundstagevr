@@ -87,7 +87,8 @@ public class key : manipObject {
   }
 
   bool prevToggle = false;
-  void Update() {
+  void Update() { long _pp = PerfProbe.Start(); try { UpdateProbed(); } finally { PerfProbe.Add("key.Update", _pp); } } // (PerfProbe: temporary)
+  void UpdateProbed() {
     if (phantomHitUpdate) {
       curSelect = 0;
       phantomHitUpdate = false;

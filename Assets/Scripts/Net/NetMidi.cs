@@ -178,7 +178,7 @@ public class NetMidi : MonoBehaviour {
     c.NetShowRemote(m.name + " (" + m.owner + ")" + (m.kind == 2 ? " - FAILED" : ""), m.kind == 1, m.name + "|" + m.owner);
   }
 
-  static bool applying;
+  public static bool applying; // (NetTimelines: MIDI from another player isn't recorded here)
   public static void Apply(NetMidiMsg m) {
     if (!NetDevice.byId.TryGetValue(m.netId, out NetDevice d) || d == null) {
       if (Time.unscaledTime - lastApplyLog > 2f) { lastApplyLog = Time.unscaledTime; Debug.Log("[NetMidi] MIDI for unknown device ID " + m.netId); }

@@ -45,10 +45,18 @@ public class basicSwitch : manipObject {
       labelMats[1].SetFloat("_EmissionGain", .3f);
     }
 
-    setSwitch(true, true);
+    awake = true;
+    setSwitch(setBeforeAwake ? switchVal : true, true);
   }
 
+  // A switch on a part that starts hidden (the keyboard's and the xylophone's sequencer)
+  // has its saved value set before it ever wakes up; waking up then turned it back on, so
+  // e.g. the roll's OVERDUB was on for one player and off for another (2026-11-24: on the
+  // one where it was off, recording erased the other player's notes every time round).
+  bool awake, setBeforeAwake;
+
   public void setSwitch(bool on, bool forced = false) {
+    if (!awake) { switchVal = on; setBeforeAwake = true; return; } // shown once Awake runs
     if (switchVal == on && !forced) return;
     if (manipulatorObjScript != null) manipulatorObjScript.hapticPulse(1000);
     switchVal = on;

@@ -64,7 +64,7 @@ public class wirePanelComponentInterface : componentInterface {
     roommovepanel = CloneButton("roomMovePanel", 16, 6);
     binauralpanel = CloneButton("binauralPanel", 17, 7);
     UpdateBinauralLabel();
-    harnesspanel = CloneButton("harnessPanel", 18, 8);
+    if (Debug.isDebugBuild) harnesspanel = CloneButton("harnessPanel", 18, 8); // development builds only (TestHarness)
     UpdateHarnessLabel();
     netonpanel = CloneButton("multiplayerOnPanel", 19, 4);
     if (netonpanel != null) netonpanel.transform.localPosition = AboveTop(4, midipanel.transform.localPosition.x);

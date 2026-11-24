@@ -14,12 +14,12 @@
 
 using UnityEngine;
 using System.Collections;
+using System.Collections.Generic;
 
 public class timelineHandle : manipObject {
   public Transform timelineTransform;
   timelineEvent _timelineEvent;
   GameObject highlight;
-  Material highlightMat;
 
   Color glowColor = Color.HSVToRGB(0.1f, 0.7f, 0.1f);
 
@@ -38,10 +38,51 @@ public class timelineHandle : manipObject {
     Destroy(_timelineEvent.gameObject);
   }
 
+  // Materials are shared between notes (2026-11-24): every note used to make its own copy
+  // of its body's and its highlight's material (and of the highlight's mesh), so a roll
+  // with 40 notes added 80 materials and the frame rate sank as you recorded. There are
+  // only six note colours (by track) and three highlight brightnesses.
+  static readonly Dictionary<long, Material> bodyMats = new Dictionary<long, Material>();
+  static readonly Dictionary<long, Material> highlightMats = new Dictionary<long, Material>();
+  static Material highlightBase;
+  Material bodyBase;
+  int hueIndex = -1;          // -1: not set yet (the highlight uses glowColor)
+  float highlightGain = .75f;
+  MeshRenderer highlightRenderer;
+
+  static Material BodyMat(Material baseMat, int hue) {
+    if (baseMat == null) return null;
+    long k = ((long)baseMat.GetInstanceID() << 4) | (long)hue;
+    if (!bodyMats.TryGetValue(k, out Material m) || m == null) {
+      m = new Material(baseMat);
+      m.SetColor("_EmissionColor", Color.HSVToRGB(hue / 6f, .95f, 1));
+      bodyMats[k] = m;
+    }
+    return m;
+  }
+
+  void ApplyHighlight() {
+    if (highlightRenderer == null || highlightBase == null) return;
+    long k = ((long)(hueIndex + 1) << 16) | (long)Mathf.RoundToInt(highlightGain * 100);
+    if (!highlightMats.TryGetValue(k, out Material m) || m == null) {
+      m = new Material(highlightBase);
+      m.SetColor("_TintColor", hueIndex < 0 ? glowColor : Color.HSVToRGB(hueIndex / 6f, 0.7f, 0.1f));
+      m.SetFloat("_EmissionGain", highlightGain);
+      highlightMats[k] = m;
+    }
+    highlightRenderer.sharedMaterial = m;
+  }
+
+  void SetHighlightGain(float g) { highlightGain = g; ApplyHighlight(); }
+
   public void setHue(float h) {
-    h = Mathf.Repeat(h, 6) / 6f;
-    GetComponent<Renderer>().material.SetColor("_EmissionColor", Color.HSVToRGB(h, .95f, 1));
-    highlightMat.SetColor("_TintColor", Color.HSVToRGB(h, 0.7f, 0.1f));
+    int idx = ((int)Mathf.Repeat(Mathf.Round(h), 6)) % 6;
+    Renderer r = GetComponent<Renderer>();
+    if (bodyBase == null) bodyBase = r.sharedMaterial;
+    Material m = BodyMat(bodyBase, idx);
+    if (m != null) r.sharedMaterial = m;
+    hueIndex = idx;
+    ApplyHighlight();
   }
 
   void createHandleFeedback() {
@@ -49,22 +90,23 @@ public class timelineHandle : manipObject {
 
     MeshFilter m = highlight.AddComponent<MeshFilter>();
 
-    m.mesh = GetComponent<MeshFilter>().mesh;
+    m.sharedMesh = GetComponent<MeshFilter>().sharedMesh;
     MeshRenderer r = highlight.AddComponent<MeshRenderer>();
-    r.material = Resources.Load("Materials/Highlight") as Material;
-    highlightMat = r.material;
+    if (highlightBase == null) highlightBase = Resources.Load("Materials/Highlight") as Material;
+    highlightRenderer = r;
 
     highlight.transform.SetParent(transform, false);
 
     highlight.transform.localScale = new Vector3(1.15f, 1.05f, 1.1f);
     highlight.transform.localPosition = new Vector3(0, -.0025f, 0);
-    highlightMat.SetColor("_TintColor", glowColor);
-    highlightMat.SetFloat("_EmissionGain", .75f);
+    highlightGain = .75f;
+    ApplyHighlight();
 
     highlight.SetActive(false);
   }
 
-  void Update() {
+  void Update() { long _pp = PerfProbe.Start(); try { UpdateProbed(); } finally { PerfProbe.Add("timelineHandle.Update", _pp); } } // (PerfProbe: temporary)
+  void UpdateProbed() {
     if (recordDesired) {
       highlight.SetActive(recording);
       GetComponent<Renderer>().enabled = !recording;
@@ -144,7 +186,7 @@ public class timelineHandle : manipObject {
 
       _timelineEvent.toggleEdges(true);
 
-      _timelineEvent.overlapCheck();/// = false;
+      _timelineEvent.overlapCheck(true); // merge with notes it was dropped on (2026-11-24)
     }
 
     curState = state;
@@ -153,13 +195,13 @@ public class timelineHandle : manipObject {
 
       if (multiselected) {
         highlight.SetActive(true);
-        if (true) highlightMat.SetFloat("_EmissionGain", .9f);
+        SetHighlightGain(.9f);
       } else highlight.SetActive(false);
 
     }
     if (curState == manipState.selected) {
       highlight.SetActive(true);
-      highlightMat.SetFloat("_EmissionGain", .55f);
+      SetHighlightGain(.55f);
     }
     if (curState == manipState.grabbed) {
       _timelineEvent._componentInterface.killMultiselect();
@@ -174,7 +216,7 @@ public class timelineHandle : manipObject {
         startIn = _timelineEvent._componentInterface._gridParams.UnittoX(_timelineEvent.in_out.x);
         unitLength = _timelineEvent.in_out.y - _timelineEvent.in_out.x;
       }
-      highlightMat.SetFloat("_EmissionGain", .75f);
+      SetHighlightGain(.75f);
     }
   }
 
@@ -182,7 +224,7 @@ public class timelineHandle : manipObject {
   public void OnMultiselect(bool on) {
     multiselected = on;
     highlight.SetActive(on);
-    if (on) highlightMat.SetFloat("_EmissionGain", .9f);
+    if (on) SetHighlightGain(.9f);
   }
 }
 

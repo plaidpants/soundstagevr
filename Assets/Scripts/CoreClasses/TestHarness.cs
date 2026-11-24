@@ -53,6 +53,7 @@ public class TestHarness : MonoBehaviour {
 
   [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
   static void Boot() {
+    if (!Debug.isDebugBuild) return; // development builds and the Editor only (2026-11-24): not in store builds
     GameObject g = new GameObject("TestHarness");
     DontDestroyOnLoad(g);
     instance = g.AddComponent<TestHarness>();
@@ -566,7 +567,7 @@ public class TestHarness : MonoBehaviour {
       if (d == null || !d.IsDevice) continue;
       deviceInterface di = d.GetComponent<deviceInterface>();
       try {
-        int h = NetSync.ContentHash(di, out menuItem.deviceType type);
+        int h = NetSync.ContentHash(di, out menuItem.deviceType type, true);
         parts.Add(d.netId + ":" + type + ":" + h.ToString("x8"));
       } catch (System.Exception e) { parts.Add(d.netId + ":?" + e.GetType().Name); }
     }

@@ -44,6 +44,7 @@ public class NetControls : MonoBehaviour {
 
   static bool KindOf(Component c, out Kind k) {
     k = Kind.Dial;
+    if (OnNote(c)) return false; // a note's own handles: NetTimelines shares the note
     if (c is dial) k = Kind.Dial;
     else if (c is sliderUneven) k = Kind.SliderUneven;
     else if (c is sliderNotched) k = Kind.SliderNotched;
@@ -95,13 +96,26 @@ public class NetControls : MonoBehaviour {
     dev = c.GetComponentInParent<NetDevice>();
     index = -1;
     if (dev == null || dev.netId == 0) return false;
-    index = System.Array.IndexOf(dev.GetComponentsInChildren(TypeOf(k), true), c);
+    index = System.Array.IndexOf(ControlList(dev, k), c);
     return index >= 0;
+  }
+
+  // Notes in a piano roll come and go, and each has two xHandles (its ends): counted in,
+  // they shifted the numbering of the device's other xHandles differently on each headset.
+  // They're left out; the notes themselves are shared by NetTimelines (2026-11-24).
+  static bool OnNote(Component c) { return c != null && c.GetComponentInParent<timelineEvent>(true) != null; }
+
+  static Component[] ControlList(NetDevice dev, Kind k) {
+    Component[] all = dev.GetComponentsInChildren(TypeOf(k), true);
+    if (k != Kind.XHandle) return all;
+    var keep = new List<Component>(all.Length);
+    foreach (Component c in all) if (!OnNote(c)) keep.Add(c);
+    return keep.ToArray();
   }
 
   static Component Find(NetControlMsg m) {
     if (!NetDevice.byId.TryGetValue(m.netId, out NetDevice dev) || dev == null) return null;
-    Component[] list = dev.GetComponentsInChildren(TypeOf((Kind)m.kind), true);
+    Component[] list = ControlList(dev, (Kind)m.kind);
     return m.index >= 0 && m.index < list.Length ? list[m.index] : null;
   }
 
@@ -220,6 +234,7 @@ public class NetControls : MonoBehaviour {
     if (obj is generalGrip && obj.GetComponentInParent<samplerDeviceInterface>() is samplerDeviceInterface sd) { NetSampler.TurntableMoved(sd); return; } // the sampler's turntable moved: just its place, not the whole patch (a reload emptied the other headsets' loopers)
     if (obj is turntableUI) return;
     if (obj is maracaUI || obj is drumstick || obj is airhornUI || obj is microphoneGrip) return; // held instruments: they go back to their place when let go, nothing in the patch changed
+    if (OnNote(obj)) return; // a note moved, resized or recorded: NetTimelines sends just that note (this used to reload the whole patch on every headset - a big hitch each time a note was let go)
     if (obj is tooltips) return; // the help (?) button: showing help or its video is local - a patch reload here restarted every device // scratching only moves the playhead: nothing in the patch changes, and a whole-patch reload here dropped whatever the other hand was holding
     if (obj is scalePickItem) return; // the Scale Sequencer's scale button / list: opening the list is local (a patch reload closed it before a scale could be picked); a pick is sent on its own (NetScales)
     if (obj is midiPanel) return; // the MIDI device list: picking from it is local (and shared by NetMidi) - a patch reload here closed the list before anything could be picked

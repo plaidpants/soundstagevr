@@ -66,14 +66,17 @@ public class FingertipPoker : MonoBehaviour {
     return o;
   }
 
-  void OnTriggerEnter(Collider other) {
+  void OnTriggerEnter(Collider other) { long _pp = PerfProbe.Start(); try { Enter(other); } finally { PerfProbe.Add("fingertip.Trigger", _pp); } }
+  void OnTriggerExit(Collider other) { long _pp = PerfProbe.Start(); try { Exit(other); } finally { PerfProbe.Add("fingertip.Trigger", _pp); } }
+
+  void Enter(Collider other) {
     manipObject o = Find(other);
     if (o != null && touching.Add(o)) { TouchTracker.Touch(o, true, owner); UpdateDebugColor(); }
   }
 
-  void OnTriggerExit(Collider other) {
+  void Exit(Collider other) {
     manipObject o = Find(other);
-    if (o != null && touching.Remove(o)) { TouchTracker.Touch(o, false, owner); UpdateDebugColor(); }
+    if (o != null && touching.Remove(o)) { TouchTracker.Touch(o, false, owner, true); UpdateDebugColor(); } // (lets go a moment later: TouchTracker)
   }
 
   // Hands lost or switched to controllers: release anything still held down.

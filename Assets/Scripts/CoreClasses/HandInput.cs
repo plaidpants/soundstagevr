@@ -70,9 +70,8 @@ public static class HandInput {
           h.pinchIndex = state.PinchStrength[(int)OVRPlugin.HandFinger.Index];
           h.pinchMiddle = state.PinchStrength[(int)OVRPlugin.HandFinger.Middle];
           h.pinchPinky = state.PinchStrength[(int)OVRPlugin.HandFinger.Pinky];
+          h.pinchRing = state.PinchStrength[(int)OVRPlugin.HandFinger.Ring];
         }
-        // Keep ring pinch available even when palm-up (Quest flags palm-up as systemGesture for index menu pinch)
-        h.pinchRing = state.PinchStrength[(int)OVRPlugin.HandFinger.Ring];
       }
       h.pointerPosition = state.PointerPose.Position.FromFlippedZVector3f();
       h.pointerRotation = state.PointerPose.Orientation.FromFlippedZQuatf();

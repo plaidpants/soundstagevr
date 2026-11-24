@@ -34,6 +34,7 @@ public class fader : signalGenerator {
 
   public override void Awake() {
     fadeSlider = GetComponentInChildren<slider>();
+    EnlargeGrabBox();
     bufferB = new float[MAX_BUFFER_LENGTH];
     SetArrayToSingleValue(bufferB, bufferB.Length, 0.0f);
   }
@@ -41,6 +42,28 @@ public class fader : signalGenerator {
   void Update() {
     if (incomingA != inputA.signal) incomingA = inputA.signal;
     if (incomingB != inputB.signal) incomingB = inputB.signal;
+  }
+
+  // The fader knob is thin (about 1.2 x 2.5 cm) and hard to pinch with a tracked hand.
+  // Make its grab box larger than the knob - wider across the channel and taller - without
+  // changing how it looks. Channels are 4 cm apart, so the box stays inside its own channel.
+  void EnlargeGrabBox() {
+    if (fadeSlider == null) return;
+    BoxCollider box = fadeSlider.GetComponent<BoxCollider>();
+    if (box == null || fadeSlider.transform.parent == null) return;
+    Transform s = fadeSlider.transform;
+    Vector3 travel = s.parent.right; // the slider moves along its parent's x
+    Vector3 size = box.size;
+    for (int i = 0; i < 3; i++) {
+      Vector3 axis = Vector3.zero; axis[i] = 1;
+      Vector3 w = s.TransformVector(axis);  // this local axis, at size 1, in world units
+      float len = w.magnitude;
+      if (len < 1e-6f) continue;
+      bool along = Mathf.Abs(Vector3.Dot(w / len, travel)) > .7f;
+      float target = along ? .018f : .026f; // metres: a little longer along the travel, much wider across
+      size[i] = Mathf.Max(size[i], target / len);
+    }
+    box.size = size;
   }
 
   public void updateFaderLength(float f) {
@@ -54,7 +77,9 @@ public class fader : signalGenerator {
     inputB.transform.localPosition = jackPos;
 
     //change slider bounds
-    fadeSlider.xBound = .095f * faderLength - .025f;
+    // (stops short of the jacks at each end: at full travel the knob used to sit against
+    // a jack's grab sphere, and a hand pinch there picked up the jack or its cable instead)
+    fadeSlider.xBound = .095f * faderLength - .0325f;
 
     //move slider
     if (fadeSlider.curState != manipObject.manipState.grabbed) fadeSlider.setPercent(fadeSlider.percent);

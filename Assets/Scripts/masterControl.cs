@@ -96,7 +96,12 @@ public class masterControl : MonoBehaviour {
     SaveDir = Application.persistentDataPath + Path.DirectorySeparatorChar + "SoundStage";
     ReadFileLocConfig();
     Directory.CreateDirectory(SaveDir + Path.DirectorySeparatorChar + "Saves");
-    Directory.CreateDirectory(SaveDir + Path.DirectorySeparatorChar + "MySamples");
+    // MySamples (2026-11-22): made empty by the original app and never read - your own
+    // samples go in Samples/Custom. No longer made; an empty one is removed.
+    try {
+      string oldDir = SaveDir + Path.DirectorySeparatorChar + "MySamples";
+      if (Directory.Exists(oldDir) && Directory.GetFileSystemEntries(oldDir).Length == 0) Directory.Delete(oldDir);
+    } catch (System.Exception) { }
 
     beatUpdateEvent += beatUpdateEventLocal;
     beatResetEvent += beatResetEventLocal;
