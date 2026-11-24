@@ -77,6 +77,11 @@ public class HandFingertips : MonoBehaviour {
   public bool HasPinchPoint { get { return built && thumbTip != null && indexTip != null; } }
   public Vector3 PinchPoint { get { return (thumbTip.position + indexTip.position) * 0.5f; } }
 
+  // Middle of the back of the hand (between the wrist and the index/pinky knuckles; the
+  // bones run through the hand, so add the hold pose's up a little to reach the skin).
+  // Used by WristHelp for its "?" button. Only valid when HasHoldPose.
+  public Vector3 BackOfHandCenter { get { return (wrist.position + index1.position + pinky1.position) / 3f; } }
+
   // While the hand isn't tracked (out of view, or controllers in use) its bones fall back
   // to a default pose near the floor; switch the pokers off so their spheres don't sit
   // there and they can't press anything (OnDisable releases what they were touching).
