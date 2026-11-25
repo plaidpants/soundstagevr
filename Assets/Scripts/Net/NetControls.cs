@@ -103,7 +103,9 @@ public class NetControls : MonoBehaviour {
   // Notes in a piano roll come and go, and each has two xHandles (its ends): counted in,
   // they shifted the numbering of the device's other xHandles differently on each headset.
   // They're left out; the notes themselves are shared by NetTimelines (2026-11-24).
-  static bool OnNote(Component c) { return c != null && c.GetComponentInParent<timelineEvent>(true) != null; }
+  // a note's own handles, or the box that moves a multi-selection of notes (2026-11-24: letting
+  // go of that box reloaded the whole patch on every other headset, restarting their timelines)
+  static bool OnNote(Component c) { return c != null && (c.GetComponentInParent<timelineEvent>(true) != null || c.GetComponentInParent<timelineMultiSelect>(true) != null); }
 
   static Component[] ControlList(NetDevice dev, Kind k) {
     Component[] all = dev.GetComponentsInChildren(TypeOf(k), true);
@@ -232,6 +234,7 @@ public class NetControls : MonoBehaviour {
     if (obj is handle || obj is button || obj is key || NetTools.IsTool(obj) || obj is omniPlug || obj is omniJack) return;
     if (obj is tape) return; // NetTapes
     if (obj is generalGrip && obj.GetComponentInParent<samplerDeviceInterface>() is samplerDeviceInterface sd) { NetSampler.TurntableMoved(sd); return; } // the sampler's turntable moved: just its place, not the whole patch (a reload emptied the other headsets' loopers)
+    if (obj is generalGrip) return; // (2026-11-24) the keyboard's / xylophone's MIDI panels and sequencer, dragged about: where they sit isn't in the patch, so resending it shared nothing - it only reloaded every other headset, restarting their sequencers
     if (obj is turntableUI) return;
     if (obj is maracaUI || obj is drumstick || obj is airhornUI || obj is microphoneGrip) return; // held instruments: they go back to their place when let go, nothing in the patch changed
     if (OnNote(obj)) return; // a note moved, resized or recorded: NetTimelines sends just that note (this used to reload the whole patch on every headset - a big hitch each time a note was let go)
@@ -302,7 +305,13 @@ public class NetControls : MonoBehaviour {
         case Kind.SliderUneven: ((sliderUneven)c).setPercent(m.a); break;
         case Kind.SliderNotched: ((sliderNotched)c).setVal(Mathf.RoundToInt(m.a)); break;
         case Kind.Slider2D: ((slider2D)c).setPercent(new Vector2(m.a, m.b)); break;
-        case Kind.Switch: ((basicSwitch)c).setSwitch(m.a > .5f); break;
+        case Kind.Switch: {
+          basicSwitch sw = (basicSwitch)c;
+          timelineComponentInterface tl = sw.GetComponentInParent<timelineComponentInterface>();
+          if (tl != null && tl.snapSwitch == sw) tl.NetSnapSet(m.a > .5f); // the notes' new places come from NetTimelines
+          sw.setSwitch(m.a > .5f);
+          break;
+        }
         case Kind.Button: ((button)c).keyHit(m.a > .5f); break;
         case Kind.Key: ((key)c).NetSetHit(m.a > .5f); break;
         case Kind.DrumHit: ((drumpad)c).keyHit(true, m.a); break;

@@ -405,7 +405,11 @@ extern "C" {
 		}
 	}
 
-	float ClipSignalGenerator(float buffer[], float speedBuffer[], float ampBuffer[], float seqBuffer[], int length, float lastSeqGen[2], int channels, bool speedGen, bool ampGen, bool seqGen, float floatingBufferCount
+	// (2026-11-25) The play position is a double: in a float, each step's fraction was rounded
+	// away more and more the further into the clip (pitch off by a few percent 20 s in, at
+	// speeds other than 1), and past 2^24 frames (5.8 min at 48 kHz) it stopped moving at all.
+	// ClipSignalGenerator (float) is kept for anything still calling it.
+	double ClipSignalGeneratorD(float buffer[], float speedBuffer[], float ampBuffer[], float seqBuffer[], int length, float lastSeqGen[2], int channels, bool speedGen, bool ampGen, bool seqGen, double floatingBufferCount
 		, int sampleBounds[2], float playbackSpeed, void* clip, int clipChannels, float amplitude, bool playdirection, bool looping, double _sampleDuration, int bufferCount, bool& active)
 	{
 
@@ -460,6 +464,13 @@ extern "C" {
 			}
 		}
 		return floatingBufferCount;
+	}
+
+	float ClipSignalGenerator(float buffer[], float speedBuffer[], float ampBuffer[], float seqBuffer[], int length, float lastSeqGen[2], int channels, bool speedGen, bool ampGen, bool seqGen, float floatingBufferCount
+		, int sampleBounds[2], float playbackSpeed, void* clip, int clipChannels, float amplitude, bool playdirection, bool looping, double _sampleDuration, int bufferCount, bool& active)
+	{
+		return (float)ClipSignalGeneratorD(buffer, speedBuffer, ampBuffer, seqBuffer, length, lastSeqGen, channels, speedGen, ampGen, seqGen, floatingBufferCount,
+			sampleBounds, playbackSpeed, clip, clipChannels, amplitude, playdirection, looping, _sampleDuration, bufferCount, active);
 	}
 
 	void XylorollMergeSignalsWithOsc(float buf[], int length, float buf1[], float buf2[])

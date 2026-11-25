@@ -21,7 +21,7 @@ public class clipPlayer : signalGenerator {
   public float[] clipSamples;
   public int clipChannels = 2;
   public int[] sampleBounds = new int[] { 0, 0 };
-  public float floatingBufferCount = 0;
+  public double floatingBufferCount = 0; // (2026-11-25) double: see ClipSignalGeneratorD in SoundStageNative's main.cpp
   public int bufferCount = 0;
   public Vector2 trackBounds = new Vector2(0, 1);
 
@@ -44,6 +44,10 @@ public class clipPlayer : signalGenerator {
     toggleWaveDisplay(true);
     DrawClipTex();
     loaded = true;
+    OnLoaded();
+  }
+
+  protected virtual void OnLoaded() {
   }
 
   public virtual void toggleWaveDisplay(bool on) {

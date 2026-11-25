@@ -65,6 +65,15 @@ public class timelineComponentInterface : componentInterface {
   Vector2 startrange = new Vector2(0, 8);
   Vector2 startio = new Vector2(0, 8);
 
+  // Snap turned on or off by another player (NetControls): just take the setting. Their headset
+  // moves the notes onto the grid and NetTimelines brings those moves here; snapping them here
+  // as well sent a second, slightly different set back - doubled notes that then cut each
+  // other into pieces (2026-11-25).
+  public void NetSnapSet(bool on) {
+    snapping = on;
+    lock (eventsLock) for (int i = 0; i < _tlEvents.Count; i++) if (_tlEvents[i] != null) _tlEvents[i].snapping = on;
+  }
+
   public void killMultiselect() {
     _timelineGridUI.killMultiselect();
   }
@@ -447,7 +456,7 @@ public class timelineComponentInterface : componentInterface {
 
     if (snapSwitch.switchVal != snapping) {
       snapping = snapSwitch.switchVal;
-      for (int i = 0; i < _tlEvents.Count; i++) _tlEvents[i].updateSnap(snapping);
+      lock (eventsLock) foreach (timelineEvent e in _tlEvents.ToArray()) if (e != null && _tlEvents.Contains(e)) e.updateSnap(snapping); // (a copy: joining notes removes some)
     }
 
     _timelinePlayer.looping = loopSwitch.switchVal;

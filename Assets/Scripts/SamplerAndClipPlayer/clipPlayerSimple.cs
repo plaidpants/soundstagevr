@@ -26,11 +26,11 @@ public class clipPlayerSimple : clipPlayer {
   public signalGenerator seqGen;
 
   bool active = false;
-  float _lastBuffer = 0;
+  double _lastBuffer = 0;
   float[] lastSeqGen;
 
   [DllImport("SoundStageNative")]
-  public static extern float ClipSignalGenerator(float[] buffer, float[] speedBuffer, float[] ampBuffer, float[] seqBuffer, int length, float[] lastSeqGen, int channels, bool speedGen, bool ampGen, bool seqGen, float floatingBufferCount
+  public static extern double ClipSignalGeneratorD(float[] buffer, float[] speedBuffer, float[] ampBuffer, float[] seqBuffer, int length, float[] lastSeqGen, int channels, bool speedGen, bool ampGen, bool seqGen, double floatingBufferCount
      , int[] sampleBounds, float playbackSpeed, System.IntPtr clip, int clipChannels, float amplitude, bool playdirection, bool looping, double _sampleDuration, int bufferCount, ref bool active);
 
   float[] speedBuffer = new float[0];
@@ -65,7 +65,7 @@ public class clipPlayerSimple : clipPlayer {
     if (seqGen != null) seqGen.Pull(seqBuffer, dspTime, channels);
 
 
-    floatingBufferCount = ClipSignalGenerator(buffer, speedBuffer, ampBuffer, seqBuffer, buffer.Length, lastSeqGen, channels, false, false, seqGen != null, floatingBufferCount, sampleBounds,
+    floatingBufferCount = ClipSignalGeneratorD(buffer, speedBuffer, ampBuffer, seqBuffer, buffer.Length, lastSeqGen, channels, false, false, seqGen != null, floatingBufferCount, sampleBounds,
    playbackSpeed, m_ClipHandle.AddrOfPinnedObject(), clipChannels, amplitude * TriggerVelocity(), true, false, _sampleDuration, bufferCount, ref active);
 
     _lastBuffer = floatingBufferCount;

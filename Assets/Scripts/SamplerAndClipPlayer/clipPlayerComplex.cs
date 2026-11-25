@@ -36,7 +36,7 @@ public class clipPlayerComplex : clipPlayer {
 
   public bool active = true;
 
-  float _lastBuffer = 0;
+  double _lastBuffer = 0;
   float[] lastSeqGen;
 
   public Renderer waverend;
@@ -52,7 +52,7 @@ public class clipPlayerComplex : clipPlayer {
   float[] tailBuffer;
 
   [DllImport("SoundStageNative")]
-  public static extern float ClipSignalGenerator(float[] buffer, float[] speedBuffer, float[] ampBuffer, float[] seqBuffer, int length, float[] lastSeqGen, int channels, bool speedGen, bool ampGen, bool seqGen, float floatingBufferCount
+  public static extern double ClipSignalGeneratorD(float[] buffer, float[] speedBuffer, float[] ampBuffer, float[] seqBuffer, int length, float[] lastSeqGen, int channels, bool speedGen, bool ampGen, bool seqGen, double floatingBufferCount
 , int[] sampleBounds, float playbackSpeed, System.IntPtr clip, int clipChannels, float amplitude, bool playdirection, bool looping, double _sampleDuration, int bufferCount, ref bool active);
 
   public override void Awake() {
@@ -141,7 +141,8 @@ public class clipPlayerComplex : clipPlayer {
       if (start >= frames) { display.SetColumn(c, 0); continue; }
       int end = Mathf.Min(start + perColumn, frames);
       float peak = 0;
-      for (int f = start; f < end; f++) {
+      int stride = Mathf.Max(1, perColumn / 256); // (2026-11-25) a 7-minute track is ~20M frames: every one of them took ~0.8 s on the Quest
+      for (int f = start; f < end; f += stride) {
         for (int ch = 0; ch < clipChannels; ch++) {
           float v = Mathf.Abs(clipSamples[f * clipChannels + ch]);
           if (v > peak) peak = v;
@@ -157,10 +158,32 @@ public class clipPlayerComplex : clipPlayer {
   public void Play() {
     _lastBuffer = sampleBounds[0];
     active = true;
+    if (!loaded) pendingSec = 0;
   }
 
   public void Back() {
     _lastBuffer = playdirection ? sampleBounds[0] : sampleBounds[1];
+    if (!loaded) pendingSec = 0;
+  }
+
+  // (2026-11-25) PLAY pressed while the tape is still loading (a long MP3 takes the Quest
+  // ~45 s to decode): the other headsets that already have it start at once, so count how
+  // far it has played meanwhile and start there when the load is done - in step with
+  // everyone instead of from the top (and, on the host, instead of pulling the others
+  // back to the start).
+  double pendingSec = -1;
+  protected override void OnLoaded() {
+    double sec = pendingSec;
+    pendingSec = -1;
+    if (!active || sec <= 0 || _sampleRate <= 0) return;
+    double a = sampleBounds[0], b = sampleBounds[1], len = b - a;
+    if (len <= 0) return;
+    double f = (playdirection ? a : b) + (playdirection ? 1 : -1) * sec * _sampleRate;
+    if (f > b || f < a) {
+      if (!looping) { active = false; return; }
+      f = a + (((f - a) % len) + len) % len;
+    }
+    _lastBuffer = f;
   }
 
   public void togglePause(bool on) {
@@ -175,8 +198,8 @@ public class clipPlayerComplex : clipPlayer {
   // ---- multiplayer (NetSampler, 2026-11-18) ----
   // Positions go between headsets in seconds: each one's clip is at its own output rate.
   public bool netScrub;               // scrubGrabbed because another player is scrubbing
-  float netSeekFrames = -1;           // a jump asked for by NetSampler (taken on the audio thread)
-  public float NetSeconds { get { return _lastBuffer / (float)AudioSettings.outputSampleRate; } }
+  double netSeekFrames = -1;           // a jump asked for by NetSampler (taken on the audio thread)
+  public float NetSeconds { get { return (float)(_lastBuffer / AudioSettings.outputSampleRate); } }
   public float NetBoundSeconds(int i) { return sampleBounds[i] / (float)AudioSettings.outputSampleRate; }
   public void NetSeek(float seconds) { if (loaded) netSeekFrames = Mathf.Max(0, seconds * AudioSettings.outputSampleRate); }
   public void NetScrubTo(float seconds) {
@@ -215,6 +238,10 @@ public class clipPlayerComplex : clipPlayer {
 
   float cumScrubAmount = 0;
   void Update() {
+    if (!loaded) {
+      if (active) { if (pendingSec < 0) pendingSec = 0; pendingSec += Time.unscaledDeltaTime * Mathf.Abs(playbackSpeed); }
+      else pendingSec = -1;
+    }
     if (!scrubGrabbed) {
       Vector3 pos = scrubTransform.localPosition;
       pos.x = Mathf.Lerp(scrubRange.x, scrubRange.y, samplePos);
@@ -280,7 +307,7 @@ public class clipPlayerComplex : clipPlayer {
 
     if (!scrubGrabbed && !turntableGrabbed) {
       bool curActive = active;
-      floatingBufferCount = ClipSignalGenerator(buffer, speedBuffer, ampBuffer, seqBuffer, buffer.Length, lastSeqGen, channels, speedGen != null, ampGen != null, seqGen != null, floatingBufferCount, sampleBounds,
+      floatingBufferCount = ClipSignalGeneratorD(buffer, speedBuffer, ampBuffer, seqBuffer, buffer.Length, lastSeqGen, channels, speedGen != null, ampGen != null, seqGen != null, floatingBufferCount, sampleBounds,
           playbackSpeed, m_ClipHandle.AddrOfPinnedObject(), clipChannels, amplitude, playdirection, looping, _sampleDuration, bufferCount, ref active);
       if (curActive != active) _sampleInterface.playEvent(active);
 
@@ -288,11 +315,11 @@ public class clipPlayerComplex : clipPlayer {
       lp_filter[1] = buffer[buffer.Length - 1];
     } else if (scrubGrabbed) // keeping scrub non-native because such an edge-case and maxes out at 2 instances
       {
-      float amount = (scrubTarg - _lastBuffer) / (buffer.Length / channels);
+      float amount = (float)((scrubTarg - _lastBuffer) / (buffer.Length / channels));
 
       for (int i = 0; i < buffer.Length; i += channels) {
-        float scrubPos = floatingBufferCount;
-        bufferCount = Mathf.RoundToInt(floatingBufferCount);
+        float scrubPos = (float)floatingBufferCount;
+        bufferCount = (int)System.Math.Round(floatingBufferCount);
         floatingBufferCount += amount;
 
         float endAmplitude = amplitude;
@@ -304,8 +331,8 @@ public class clipPlayerComplex : clipPlayer {
     } else {
       float amount = turntableDelta * (float)_sampleRate * channels / buffer.Length;
       for (int i = 0; i < buffer.Length; i += channels) {
-        float scrubPos = floatingBufferCount;
-        bufferCount = Mathf.RoundToInt(floatingBufferCount);
+        float scrubPos = (float)floatingBufferCount;
+        bufferCount = (int)System.Math.Round(floatingBufferCount);
         floatingBufferCount += amount;
 
         if (bufferCount > sampleBounds[1]) floatingBufferCount = bufferCount = sampleBounds[0];

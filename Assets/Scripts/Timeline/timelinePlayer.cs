@@ -21,7 +21,12 @@ public class timelinePlayer : MonoBehaviour, INetBeatSync {
   timelineComponentInterface _deviceInterface;
   float lastBeatTime = 0;
 
-  float curGridPosition;
+  // The playhead moves a tiny step every audio sample (~0.0001 of a unit); added to a float those
+  // steps lost their last digits each time, so over minutes the playhead ran slow or fast - and by
+  // a different amount at 44.1 kHz (PC) than at 48 kHz (Quest), so the two drifted apart and
+  // kept being pulled back into line (2026-11-24). It is kept in a double now.
+  double gridPos;
+  float curGridPosition { get { return (float)gridPos; } set { gridPos = value; } }
 
   public bool looping = true;
 
@@ -233,7 +238,7 @@ public class timelinePlayer : MonoBehaviour, INetBeatSync {
   public bool NetSyncable { get { return playing && looping && !playheadScrubbing && LoopLength > 0 && _deviceInterface._gridParams.unitDuration > 0; } }
   public int NetConfig { get { return Mathf.RoundToInt(LoopLength * 16) * 1000 + Mathf.RoundToInt(_deviceInterface._gridParams.unitDuration * 1024); } }
   public double NetAnchor() {
-    double a = (curGridPosition - _deviceInterface._gridParams.head_tail.x) - NetBeat.Measures / _deviceInterface._gridParams.unitDuration;
+    double a = (gridPos - _deviceInterface._gridParams.head_tail.x) - NetBeat.Measures / _deviceInterface._gridParams.unitDuration;
     double len = LoopLength;
     a %= len;
     return a < 0 ? a + len : a;
@@ -255,12 +260,12 @@ public class timelinePlayer : MonoBehaviour, INetBeatSync {
     if (netShiftPending) { // moved on the audio thread, where the playhead runs
       netShiftPending = false;
       if (playing && !playheadScrubbing) {
-        curGridPosition += netShift;
+        gridPos += netShift;
         Vector2 ht = _deviceInterface._gridParams.head_tail;
-        float len = ht.y - ht.x;
+        double len = ht.y - ht.x;
         if (len > 0) {
-          while (curGridPosition > ht.y) curGridPosition -= len;
-          while (curGridPosition < ht.x) curGridPosition += len;
+          while (gridPos > ht.y) gridPos -= len;
+          while (gridPos < ht.x) gridPos += len;
         }
       }
     }
@@ -271,14 +276,14 @@ public class timelinePlayer : MonoBehaviour, INetBeatSync {
     }
 
     if (lastBeatTime > curBeatTime) {
-      curGridPosition = curGridPosition + (1 - lastBeatTime + curBeatTime) / _deviceInterface._gridParams.unitDuration;
-    } else curGridPosition = curGridPosition + (curBeatTime - lastBeatTime) / _deviceInterface._gridParams.unitDuration;
+      gridPos += ((double)1 - lastBeatTime + curBeatTime) / _deviceInterface._gridParams.unitDuration;
+    } else gridPos += ((double)curBeatTime - lastBeatTime) / _deviceInterface._gridParams.unitDuration;
 
     bool shouldUpdate = true;
     if (curGridPosition > _deviceInterface._gridParams.head_tail.y) {
       if (looping) {
-        float dif = curGridPosition - _deviceInterface._gridParams.head_tail.y;
-        curGridPosition = _deviceInterface._gridParams.head_tail.x + dif;
+        double dif = gridPos - _deviceInterface._gridParams.head_tail.y;
+        gridPos = _deviceInterface._gridParams.head_tail.x + dif;
         loopActiveEvents();
         evalCountdown = 0; // check the notes right at the loop point
       } else {

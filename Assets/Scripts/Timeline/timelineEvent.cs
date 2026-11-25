@@ -118,7 +118,7 @@ public class timelineEvent : MonoBehaviour {
       }
     }
 
-    overlapCheck();
+    overlapCheck(true); // notes the snap pushed onto each other join up, as when one is dragged (cutting split one in two)
     gridUpdate();
   }
 
