@@ -44,6 +44,9 @@ public static class PerfProbe {
 
   [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
   static void Boot() {
+    // development builds and the Editor only (2026-11-25): store / release builds skip it
+    enabled = Debug.isDebugBuild;
+    if (!enabled) return;
     GameObject g = new GameObject("PerfProbe");
     Object.DontDestroyOnLoad(g);
     g.AddComponent<PerfProbeFirst>();

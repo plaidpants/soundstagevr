@@ -83,9 +83,24 @@ public class NetPlayer : NetworkBehaviour {
       rightNet = NetHand.Create(rightHand, false);
     }
     Debug.Log("[NetPlayer] " + (isLocalPlayer ? "you" : "player") + " joined (" + all.Count + " in session)");
+    // chime for someone arriving after we're in; the players already there when we
+    // join spawn alongside us and stay quiet (we get one chime of our own instead)
+    if (!isLocalPlayer && NetworkClient.localPlayer != null && Time.unscaledTime > quietUntil) UISound.PlayerJoined();
+  }
+
+  static float quietUntil;
+
+  public override void OnStopClient() {
+    // only when they left a session we're still in: not when we leave, the host goes
+    // away or the session is being torn down
+    if (isLocalPlayer || !NetworkClient.isConnected || NetworkClient.localPlayer == null) return;
+    Debug.Log("[NetPlayer] player left (" + (all.Count - 1) + " in session)");
+    UISound.PlayerLeft();
   }
 
   public override void OnStartLocalPlayer() {
+    quietUntil = Time.unscaledTime + 2f; // the others' objects are still spawning
+    if (!NetworkServer.active) UISound.PlayerJoined(); // we joined someone (a host starting alone stays quiet)
     foreach (Renderer r in parts) if (r != null) r.enabled = false;
   }
 

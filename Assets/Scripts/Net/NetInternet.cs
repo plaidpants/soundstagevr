@@ -256,7 +256,6 @@ public static class NetInternet {
         Filters = new List<QueryFilter> {
           new QueryFilter(QueryFilter.FieldOptions.S1, Version, QueryFilter.OpOptions.EQ),
           new QueryFilter(QueryFilter.FieldOptions.S2, code.tag, QueryFilter.OpOptions.EQ),
-          new QueryFilter(QueryFilter.FieldOptions.N1, MaxPlayers.ToString(), QueryFilter.OpOptions.LT),
         },
         Order = new List<QueryOrder> { new QueryOrder(false, QueryOrder.FieldOptions.Created) },
       };

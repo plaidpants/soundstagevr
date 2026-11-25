@@ -73,6 +73,9 @@ public class NetSession : MonoBehaviour {
   NetworkDiscovery hostProbe; // a lone host listens for other hosts with this (see ProbeOtherHosts)
   readonly Dictionary<long, ServerResponse> found = new Dictionary<long, ServerResponse>();
   bool sessionOverride; // desktop spectator: LOCAL for this run without saving it
+  bool sessionFull;     // the only session around is full: show SESSION FULL and look again later
+  const float FullRetry = 15f;
+  static bool IsFull(int players) { return players >= NetInternet.MaxPlayers; }
   string lastStatus = "";
 
   // What's running: Off, or the kind (Local / Internet) when multiplayer is on.
@@ -201,7 +204,7 @@ public class NetSession : MonoBehaviour {
     manager.playerPrefab = Resources.Load<GameObject>("Net/NetPlayer");
     if (manager.playerPrefab == null) Debug.LogError("[NetSession] Resources/Net/NetPlayer missing: run SoundStage > Multiplayer > Create NetPlayer prefab");
     manager.autoCreatePlayer = true;
-    manager.maxConnections = 4;
+    manager.maxConnections = NetInternet.MaxPlayers;
     manager.sendRate = 30;
     manager.offlineScene = "";
     manager.onlineScene = "";
@@ -245,13 +248,29 @@ public class NetSession : MonoBehaviour {
     if (found.ContainsKey(r.serverId)) return;
     found[r.serverId] = r;
     Debug.Log("[NetSession] found host " + r.EndPoint + " (" + r.uri + ")");
+    if (IsFull(SoundStageDiscovery.Players(r))) return; // Decide shows SESSION FULL if it's the only one
     if (state == State.Searching) Join(r);
   }
 
   void Decide() {
     if (state != State.Searching) return;
-    foreach (ServerResponse r in found.Values) { Join(r); return; }
+    bool anyFull = false;
+    foreach (ServerResponse r in found.Values) {
+      if (IsFull(SoundStageDiscovery.Players(r))) { anyFull = true; continue; }
+      Join(r); return;
+    }
+    if (anyFull) { WaitWhileFull(); return; }
     BecomeHost();
+  }
+
+  // Every session we can see is full. Don't host a separate one next to it (the merge
+  // check would only try to join the full one); say so and look again every so often.
+  void WaitWhileFull() {
+    if (!sessionFull) Debug.Log("[NetSession] session is full (" + NetInternet.MaxPlayers + " players): checking again every " + FullRetry + " s");
+    sessionFull = true;
+    if (discovery != null) discovery.StopDiscovery();
+    RaiseStatus();
+    Invoke(nameof(StartSearch), FullRetry);
   }
 
   void Join(ServerResponse r) {
@@ -300,6 +319,7 @@ public class NetSession : MonoBehaviour {
     if (state != State.Host || r.serverId == discovery.ServerId) return; // ourselves
     if (NetworkServer.connections.Count > 1) return; // someone joined us: stay host
     int theirs = SoundStageDiscovery.Players(r);
+    if (IsFull(theirs)) return; // can't join it anyway
     if (theirs > 1) {
       Debug.Log("[NetSession] another host with " + theirs + " players is running (" + r.uri + "): joining it");
     } else {
@@ -382,6 +402,7 @@ public class NetSession : MonoBehaviour {
 
   void SetState(State s) {
     state = s;
+    if (s != State.Searching) sessionFull = false;
     RaiseStatus();
   }
 
@@ -413,7 +434,9 @@ public class NetSession : MonoBehaviour {
       list = await NetInternet.List();
       if (!Still(run)) return;
     }
+    bool anyFull = false;
     foreach (NetInternet.Found f in list) {
+      if (IsFull(f.players)) { anyFull = true; continue; }
       if (await NetInternet.PrepareJoin(utp, f)) {
         if (!Still(run)) return;
         JoinInternet(f);
@@ -421,6 +444,7 @@ public class NetSession : MonoBehaviour {
       }
       if (!Still(run)) return;
     }
+    if (anyFull) { NetInternet.status = ""; WaitWhileFull(); return; }
     HostInternet(run);
   }
 
@@ -464,6 +488,7 @@ public class NetSession : MonoBehaviour {
     List<NetInternet.Found> list = await NetInternet.List();
     if (run != searchRun || state != State.Host || NetworkServer.connections.Count > 1) return;
     foreach (NetInternet.Found f in list) {
+      if (IsFull(f.players)) continue; // can't join it anyway
       if (f.players > 1) Debug.Log("[NetSession] another session in room " + NetInternet.Code + " has " + f.players + " players: joining it");
       else if (NetInternet.OurIdIsHigher(f.lobbyId)) Debug.Log("[NetSession] another lone host in room " + NetInternet.Code + ": joining it instead");
       else continue;
@@ -529,7 +554,9 @@ public class NetSession : MonoBehaviour {
     if (CurrentMode == Mode.Off) return "OFFLINE";
     bool internet = CurrentMode == Mode.Internet;
     switch (instance.state) {
-      case State.Searching: return internet && NetInternet.status != "" ? NetInternet.status : "SEARCHING...";
+      case State.Searching:
+        if (instance.sessionFull) return "SESSION FULL (" + NetInternet.MaxPlayers + "/" + NetInternet.MaxPlayers + ")";
+        return internet && NetInternet.status != "" ? NetInternet.status : "SEARCHING...";
       case State.Host:
         string h = "HOSTING (" + Mathf.Max(1, PlayerCount) + ")";
         int ping = HostPing();
