@@ -307,7 +307,7 @@ public class NetControls : MonoBehaviour {
         case Kind.Key: ((key)c).NetSetHit(m.a > .5f); break;
         case Kind.DrumHit: ((drumpad)c).keyHit(true, m.a); break;
         case Kind.Cube: ((cubeZone)c).NetSet(new Vector3(m.a, m.b, m.c)); break;
-        case Kind.XHandle: ((xHandle)c).netHeld = m.c > .5f; ((xHandle)c).updatePos(m.a); break;
+        case Kind.XHandle: ((xHandle)c).netHeld = m.c > .5f; ((xHandle)c).updatePos(m.a); ((xHandle)c).netMoved = true; break;
         case Kind.FilterBand: ((quadSection)c).NetSetPercents(m.a, m.b); break;
         case Kind.XYHandle: ((xyHandle)c).NetSetPos(new Vector2(m.a, m.b)); break;
         case Kind.YHandle: ((yHandle)c).updatePos(m.a); break;

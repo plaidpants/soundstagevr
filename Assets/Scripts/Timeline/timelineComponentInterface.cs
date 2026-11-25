@@ -336,7 +336,8 @@ public class timelineComponentInterface : componentInterface {
   }
 
   void updateHeadTail() {
-    if (headMarkerHandle.curState != manipObject.manipState.grabbed) {
+    // (HeldAnywhere: while another player drags a marker it isn't put back from the loop points)
+    if (!headMarkerHandle.HeldAnywhere) {
       Vector3 p1 = headMarkerLine.localPosition;
       p1.x = _gridParams.UnittoX(_gridParams.head_tail.x);
       headMarkerLine.localPosition = p1;
@@ -346,7 +347,7 @@ public class timelineComponentInterface : componentInterface {
       headMarkerHandle.transform.localPosition = p1;
     }
 
-    if (tailMarkerHandle.curState != manipObject.manipState.grabbed) {
+    if (!tailMarkerHandle.HeldAnywhere) {
       Vector3 p1 = tailMarkerLine.localPosition;
       p1.x = _gridParams.UnittoX(_gridParams.head_tail.y);
       tailMarkerLine.localPosition = p1;
@@ -356,7 +357,9 @@ public class timelineComponentInterface : componentInterface {
       tailMarkerHandle.transform.localPosition = p1;
     }
 
-    if (_gridParams.range.y < _gridParams.head_tail.y && tailMarkerHandle.curState != manipObject.manipState.grabbed) {
+    // (+.5: the loop points are whole units and the visible range isn't - an end marker dragged to the
+    // grid's very end rounded just past it and was hidden, though still in use)
+    if (_gridParams.range.y + .5f < _gridParams.head_tail.y && !tailMarkerHandle.HeldAnywhere) {
       tailMarkerLine.gameObject.SetActive(false);
       tailMarkerHandle.gameObject.SetActive(false);
     } else {
@@ -364,7 +367,7 @@ public class timelineComponentInterface : componentInterface {
       tailMarkerHandle.gameObject.SetActive(true);
     }
 
-    if (_gridParams.range.x > _gridParams.head_tail.x && headMarkerHandle.curState != manipObject.manipState.grabbed) {
+    if (_gridParams.range.x - .5f > _gridParams.head_tail.x && !headMarkerHandle.HeldAnywhere) {
       headMarkerLine.gameObject.SetActive(false);
       headMarkerHandle.gameObject.SetActive(false);
     } else {
@@ -452,7 +455,11 @@ public class timelineComponentInterface : componentInterface {
     if (playInput.signal != playSignal) playSignal = playInput.signal;
     if (recInput.signal != recSignal) recSignal = recInput.signal;
 
-    if (tailMarkerHandle.curState == manipObject.manipState.grabbed) {
+    // the loop's start / end markers: held here, held by another player or just moved by
+    // one (2026-11-24: other players' moves were put straight back to the old loop points)
+    bool tailMoving = tailMarkerHandle.TakeNetMove() | tailMarkerHandle.HeldAnywhere;
+    bool headMoving = headMarkerHandle.TakeNetMove() | headMarkerHandle.HeldAnywhere;
+    if (tailMoving) {
       if (tailMarkerHandle.transform.localPosition.x < gridHandle.transform.localPosition.x) {
         Vector3 pos = gridHandle.transform.localPosition;
         pos.x = tailMarkerHandle.transform.localPosition.x;
@@ -474,7 +481,7 @@ public class timelineComponentInterface : componentInterface {
       tailMarkerHandle.transform.localPosition = p1;
     }
 
-    if (headMarkerHandle.curState == manipObject.manipState.grabbed) {
+    if (headMoving) {
       _gridParams.head_tail.x = Mathf.RoundToInt(_gridParams.XtoUnit(headMarkerHandle.transform.localPosition.x));
 
       Vector3 p1 = headMarkerLine.localPosition;
@@ -487,7 +494,8 @@ public class timelineComponentInterface : componentInterface {
       headMarkerHandle.transform.localPosition = p1;
     }
 
-    if (gridHandle.curState == manipObject.manipState.grabbed) updated = true;
+    // the extender (the grid's length): also when another player drags it (2026-11-24)
+    if (gridHandle.TakeNetMove() | gridHandle.HeldAnywhere) updated = true;
 
     if (updated) _scrollInterface.handleUpdate(gridHandle.transform.localPosition.x);
 

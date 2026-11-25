@@ -69,17 +69,35 @@ public class timelineGridUI : MonoBehaviour {
     Vector2 io = Vector2.zero;
     io.x = _interface._gridParams.XtoUnit(gridpos.x + _interface._gridParams.unitSize / (2f * _interface._gridParams.snapFraction));
     io.y = _interface._gridParams.XtoUnit(gridpos.x - _interface._gridParams.unitSize / (2f * _interface._gridParams.snapFraction));
-    timelineHandle tl = _interface.SpawnTimelineEvent(track, io).GetComponentInChildren<timelineHandle>();
+    // (2026-11-24) A note starting outside the part of the roll on view (a pinch at the
+    // grid's very end, by the length extender) is hidden as soon as it's made, so its handle
+    // wasn't found: that threw, the pinch stayed "empty", and a new hidden note was made
+    // every frame - a pile of slivers. Now such a note is dropped, once per pinch.
+    timelineEvent ev = _interface.SpawnTimelineEvent(track, io);
+    timelineHandle tl = ev != null ? ev.GetComponentInChildren<timelineHandle>(true) : null;
+    if (tl == null || !tl.gameObject.activeInHierarchy) {
+      if (ev != null) {
+        lock (_interface.eventsLock) ev.removeSelf();
+        Destroy(ev.gameObject);
+      }
+      noSpawn.Add(m);
+      return;
+    }
     tl.stretchMode = true;
     m.ForceGrab(tl);
   }
 
+  // manipulators whose pinch couldn't make a note: not again until that pinch is let go
+  readonly HashSet<manipulator> noSpawn = new HashSet<manipulator>();
+
   void Update() {
+    if (noSpawn.Count > 0) noSpawn.RemoveWhere(m => m == null || !m.emptyGrab);
     foreach (KeyValuePair<manipulator, GameObject> entry in activePreviews) {
       if (entry.Key.isGrabbing() || multiselectTransform != null) {
         entry.Value.SetActive(false);
         entry.Key.toggleMultiselect(false, this);
       } else if (entry.Key.emptyGrab) {
+        if (noSpawn.Contains(entry.Key)) continue;
         spawnEvent(entry.Key, _interface.worldPosToGridPos(entry.Key.transform.position));
         killMultiselect();
       } else {

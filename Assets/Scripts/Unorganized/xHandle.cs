@@ -43,6 +43,10 @@ public class xHandle : manipObject {
   // multiplayer (NetControls): another player is holding this handle. A sequencer's step
   // handle stops the sequence while held - on every headset, not just the holder's.
   public bool netHeld;
+  // another player moved it (NetControls): users that otherwise only read the handle while
+  // it's held here (the roll's start / end markers) take the new position once (2026-11-24)
+  public bool netMoved;
+  public bool TakeNetMove() { bool m = netMoved; netMoved = false; return m; }
   public bool HeldAnywhere { get { return curState == manipState.grabbed || (netHeld && NetSync.Active); } }
 
   public void pulse() {

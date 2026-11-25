@@ -173,6 +173,7 @@ public class timelineHandle : manipObject {
 
     if (curState == manipState.grabbed && state != manipState.grabbed) {
       _timelineEvent.grabbed = false;
+      bool wasNew = stretchMode; // a note being drawn out of empty grid (timelineGridUI.spawnEvent)
       if (stretchMode) stretchMode = false;
 
       _timelineEvent.transform.position = highlight.transform.position;
@@ -185,6 +186,19 @@ public class timelineHandle : manipObject {
       _timelineEvent.recalcTrackPosition();
 
       _timelineEvent.toggleEdges(true);
+
+      // A pinch that was meant for something nearby (the length extender at the grid's end)
+      // drew a sliver of a note: a new note shorter than a quarter of a grid cell is dropped.
+      if (wasNew) {
+        float snap = _timelineEvent._componentInterface._gridParams.snapFraction;
+        float minNew = snap > 0 ? .25f / snap : .05f;
+        if (_timelineEvent.in_out.y - _timelineEvent.in_out.x < minNew) {
+          lock (_timelineEvent._componentInterface.eventsLock) _timelineEvent.removeSelf();
+          Destroy(_timelineEvent.gameObject);
+          curState = state;
+          return;
+        }
+      }
 
       _timelineEvent.overlapCheck(true); // merge with notes it was dropped on (2026-11-24)
     }
