@@ -3,7 +3,7 @@
 SoundStage VR is a virtual reality music sandbox. Build your own instruments and studio
 out of oscillators, drum machines, sequencers, samplers, loopers, filters and mixers,
 patch them together with cables, and play them with your hands — alone, or together
-with other people on the same network.
+with other people in the same room or over the internet.
 
 SoundStage was created by Logan Olson and released as open source by Google in 2017; the
 original project is archived and no longer maintained. **This fork keeps it alive**:
@@ -41,22 +41,47 @@ hands), snap turn and stick movement, passthrough mixed reality with the glow ov
 real room, and 3D (spatial) audio: *3D AUDIO* in the settings panel switches it between
 off, speakers only and everything.
 
-**Multiplayer on your local network** — no accounts, no servers:
-1. Put every headset (and the PC, if you like) on the **same Wi-Fi network**, running the
-   **same SoundStage version**.
-2. Turn on **MULTIPLAYER** in the settings panel (gear menu). The first one becomes the
-   host, the others find it and join; the button shows *HOSTING (n)* or *JOINED (n)* and
-   the ping.
-3. Everyone sees and hears the same patch: devices, cables, knobs, notes, tapes, tempo
-   and sequencers stay in step. If the host leaves, the next player takes over.
-4. In the same physical room, use **ALIGN ROOM**: everyone touches the same two spots
-   (a metre or more apart) so the virtual room lines up with the real one.
-   **MOVE ROOM** then moves the room for everyone with the stick.
+**Multiplayer** — set up in the settings panel (gear menu):
+* **MULTIPLAYER: LOCAL / INTERNET** picks the kind, **MULTIPLAYER: ON / OFF** starts and
+  stops it, and the line under them shows *OFFLINE*, *SEARCHING...*, *HOSTING (n) 90MS* or
+  *JOINED (n) 89MS* (players and ping).
+* Everyone needs the **same SoundStage version**. Everyone sees and hears the same patch:
+  devices, cables, knobs, notes, tapes, tempo and sequencers stay in step (also
+  sequencers started from a button through a splitter). If the host leaves, the next
+  player takes over and the music keeps playing.
+* Each machine makes its own sound from the shared patch, so only a few KB/s cross the
+  network. The microphone and camera stay local.
 
-Each headset makes its own sound from the shared patch, so only a few KB/s cross the
-network. Built-in samples work everywhere; your own recordings and custom samples are
-still only on the headset that made them (sharing them is planned), as is the
-microphone. Internet play is next on the list.
+*Local* — no accounts, no servers: put every headset (and the PC, if you like) on the
+same Wi-Fi and turn MULTIPLAYER ON. The first one hosts, the others find it and join.
+
+*Internet* — private rooms with a code:
+1. Set MULTIPLAYER: INTERNET and press MULTIPLAYER ON. The first time, read and agree to
+   the terms (what's shared, the limits, what Unity's services receive).
+2. Press **NEW** for a room code (6 letters and digits), or type one a friend gave you
+   (keypad in VR, or the keyboard on the PC); **JOIN**. Your last few codes are kept.
+3. Whoever enters a code first hosts that room; everyone else with the code joins. Only
+   people with the code can find or join it, so share it only with people you trust.
+* Sessions end after 10 minutes with nobody playing, or after 3 hours (press ON again for
+  a new one), up to 4 players. Internet multiplayer is always off when SoundStage starts.
+* It runs through Unity Gaming Services (Relay and Lobby); see the
+  [privacy policy](https://plaidpants.github.io/soundstagevr/SoundStagePrivacyPolicy.html).
+  *FORGET MY INTERNET ID* on the terms page deletes your anonymous ID.
+
+*Same physical room* — use **ALIGN ROOM**: everyone touches the same two spots (a metre or
+more apart) so the virtual room lines up with the real one. **MOVE ROOM** then moves the
+room for everyone with the stick.
+
+**Samples in multiplayer** — samples are matched by their content, so a renamed or moved
+file still counts as the same sample. A sample someone else's patch uses that your machine
+doesn't have is sent to you (the tape shows *LOADING*), checked, and kept in a hidden cache;
+the library's **Sessions** category lists them. A built-in sample a machine
+lacks (deleted, or from an older install) is restored from the app itself, without the
+network. **Saving a scene** copies the received
+samples it uses into `Samples/Sessions`, so it still plays later. Over the internet,
+samples over 5 MB aren't sent (the tape shows *TOO BIG*); on the local network up to 50 MB.
+*SHARED SAMPLES* in the settings panel shows the cache size (press twice to clear it).
+Loopers: the player who presses SAVE shares that recording, and everyone gets the same loop.
 
 **The PC as a player** — in multiplayer the PC joins as a full player (in VR or desktop
 mode). It's also the place for **MIDI hardware**: plug a USB MIDI keyboard or synth into
@@ -74,6 +99,14 @@ streaming or recording software.
 | Alt + click | lock a xylophone key |
 | Tab | menu |
 | Delete | the B button (delete / back) |
+| Esc twice | quit |
+
+Start `SoundStage.exe -novr` to run in desktop mode even when a headset is connected.
+
+**Your own samples** — on the PC use *IMPORT SOUND SAMPLES* in the desktop window's menu.
+On the Quest, copy `.wav`, `.ogg` or `.mp3` files into
+`Android/data/com.HardLightLabsLLC.SoundStage/files/SoundStage/Samples/Custom` (USB cable
+or SideQuest) and restart SoundStage; they appear in the library's *Custom* category.
 
 **Saving** — patches are saved on the device: on the Quest under
 `Android/data/com.HardLightLabsLLC.SoundStage/files/SoundStage`, on the PC under
@@ -94,9 +127,10 @@ For multiplayer problems, logs from every machine in the session help most.
 
 * **Unity 2022.3.62f3** with Android Build Support (for the Quest) and Windows Build
   Support (IL2CPP or Mono) for the PC. Open the project and the `main` scene.
-* **[Runtime AudioClip Loader](http://u3d.as/hEP)** (Unity Asset Store) is required and
-  isn't included: import it into `Assets/third_party/RuntimeAudioClipLoader`. It loads the
-  samples (WAV, OGG, MP3).
+* Samples are decoded by the app's own WAV reader and two MIT-licensed decoders included as
+  source in `Assets/Plugins`: [NVorbis](https://github.com/NVorbis/NVorbis) (OGG) and
+  [NLayer](https://github.com/naudio/NLayer) (MP3). Nothing from the Asset Store is needed
+  (earlier versions used the Runtime AudioClip Loader package).
 * The audio engine's native code is in `Assets/SoundStageNative` (Visual Studio project
   for the Windows DLL, Android libraries prebuilt in `Assets/Plugins/Android`).
 * Quest: Android platform, Oculus XR plug-in on. PC: Windows platform; the Oculus XR
@@ -104,6 +138,9 @@ For multiplayer problems, logs from every machine in the session help most.
   when there's no headset.
 * Multiplayer: every machine in a session needs a build of the same code — builds with
   different network messages don't see each other.
+* Internet multiplayer needs the project linked to a Unity Cloud project (Project Settings
+  > Services) with **Relay** and **Lobby** turned on in the Unity dashboard. A fork has to
+  link its own project; builds from different projects don't see each other.
 * **Test harness**: *TEST HARNESS* in the settings panel (or `-harness` on the PC command
   line) makes the app play with itself — spawning, wiring, playing and deleting devices at
   random, also in a multiplayer session — until it sees real input. It logs every action,
@@ -112,6 +149,7 @@ For multiplayer problems, logs from every machine in the session help most.
 ## Included dependencies
 * [Mirror](https://github.com/MirrorNetworking/Mirror) — networking (multiplayer)
 * [Sonic Ether Natural Bloom & Dirty Lens](https://github.com/sonicether/SE-Natural-Bloom-Dirty-Lens) — the glow and bloom
+* [Unity Gaming Services](https://unity.com/products/gaming-services) (Multiplayer Services: Authentication, Lobby, Relay) and Unity Transport — internet multiplayer
 * [SharpZipLib](https://github.com/icsharpcode/SharpZipLib) — compression (saves, sample packs)
 * [MIDI-dot-NET](https://github.com/jstnryan/midi-dot-net) — MIDI note names (MIDI input and output now use the Windows MIDI API directly)
 * [Meta XR / Oculus Integration](https://developer.oculus.com/downloads/package/unity-integration/) and the Unity Oculus XR plug-in — VR, hand tracking, passthrough, spatial audio
@@ -127,6 +165,13 @@ Unity 2022 / Quest port, multiplayer, desktop version and new devices by **James
 ([plaidpants](https://github.com/plaidpants)). Gain, Glide and the CV sequencer come from
 [ludzeller's fork](https://github.com/ludzeller/soundstagevr); the scale sequencer is a
 port of James's [UNTZtrument step sequencer](https://github.com/plaidpants/Adafruit_UNTZtrument).
+
+## Privacy
+
+SoundStage has no accounts, ads or tracking. Internet multiplayer uses Unity Gaming
+Services, which receive your IP address and an anonymous ID; see the
+[privacy policy](https://plaidpants.github.io/soundstagevr/SoundStagePrivacyPolicy.html).
+Contact: soundstagevr@gmail.com
 
 ## License
 [Apache 2.0](LICENSE)
