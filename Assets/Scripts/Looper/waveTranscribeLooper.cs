@@ -17,7 +17,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System;
 
-public class waveTranscribeLooper : signalGenerator {
+public class waveTranscribeLooper : signalGenerator, INetBeatSync {
   public GameObject tapePrefab;
   public Transform tapeHolder;
   public tape curTape;
@@ -107,7 +107,11 @@ public class waveTranscribeLooper : signalGenerator {
       if (start >= virtualBufferLength) break;
       int end = Mathf.Min(start + columnMult, virtualBufferLength, sampleBuffer.Length - 1);
       float peak = 0;
-      for (int n = start - (start & 1); n < end; n += 2) {
+      // (2026-11-24) ~256 samples spread across each column, not all of them: a 32-beat
+      // loop is 1.5-3 million samples, and this runs on every length change - and on every
+      // tempo change while the tempo is being dragged, for every looper
+      int stride = Mathf.Max(2, ((end - start) / 256) & ~1);
+      for (int n = start - (start & 1); n < end; n += stride) {
         float a = Mathf.Abs(sampleBuffer[n]), b = Mathf.Abs(sampleBuffer[n + 1]);
         if (a > peak) peak = a;
         if (b > peak) peak = b;
@@ -229,6 +233,7 @@ public class waveTranscribeLooper : signalGenerator {
     if (hash != remoteHash) return;
     StopWaitingRemote();
     TakeRecording(curfile);
+    if (joinWaiting) { joinWaiting = false; recalcTex(); display.Upload(); } // (still playing in time from StartJoinPlay)
   }
 
   void OnRemoteState(string hash, NetSamples.State s) {
@@ -358,6 +363,7 @@ public class waveTranscribeLooper : signalGenerator {
       return;
     }
     lastIncomingDspTime = dspTime;
+    ApplyNetShift(); // the beat sync moved this loop into line with the host's
 
     AudioBufferPool.GetCleared(ref oldBuffer, buffer.Length);
     float[] recBuffer = AudioBufferPool.GetCleared(ref _scratch_recBuffer, buffer.Length);
@@ -449,6 +455,77 @@ public class waveTranscribeLooper : signalGenerator {
     }
 
     samplePos = (float)curBufferIndex / virtualBufferLength;
+  }
+
+  // ---- multiplayer: late joiners and the beat sync (Net/NetLoopShare.cs, 2026-11-24) ----
+  // (_sampleRateOverride: set in Awake - AudioSettings can't be asked from the audio thread,
+  // and asking it there threw out of every audio callback once a shift was due)
+  double SR { get { return _sampleRateOverride; } }
+  double MeasureSamples { get { return masterControl.instance.measurePeriod * SR; } }   // frames per bar
+  double LoopMeasures { get { double m = MeasureSamples; return m > 0 ? (virtualBufferLength / 2) / m : 0; } }
+
+  public bool HasContent() {
+    int n = Mathf.Min(virtualBufferLength, sampleBuffer.Length);
+    for (int i = 0; i < n; i += 7) if (sampleBuffer[i] > 1e-4f || sampleBuffer[i] < -1e-4f) return true;
+    return false;
+  }
+
+  public float[] ShareData(out int frames) {
+    frames = HasContent() ? Mathf.Min(virtualBufferLength, sampleBuffer.Length) / 2 : 0;
+    return sampleBuffer;
+  }
+
+  // INetBeatSync: a playing loop's position in bars, minus the bars the master clock has
+  // played, stays the same while it plays - compared across headsets (NetClock)
+  public bool NetSyncable { get { return playing && !recording && LoopMeasures > 0 && _deviceInterface.playTrigger.signal == null && !_deviceInterface.recordCountdown && !_deviceInterface.playCountdown; } }
+  public int NetConfig { get { return Mathf.RoundToInt((float)(LoopMeasures * 64)); } }
+  public double NetPeriod { get { return LoopMeasures; } }
+  public double NetTolerance { get { return 1.0 / 64; } }
+  public double NetAnchor() {
+    double len = LoopMeasures;
+    if (len <= 0) return 0;
+    double a = ((curBufferIndex / 2) / MeasureSamples - NetBeat.Measures) % len;
+    return a < 0 ? a + len : a;
+  }
+  volatile bool netShiftPending;
+  long netShiftMove; // interleaved samples, worked out on the main thread
+  public void NetShift(double d) { netShiftMove = (long)(d * MeasureSamples) * 2; netShiftPending = true; }
+
+  void ApplyNetShift() { // audio thread: no Unity calls
+    if (!netShiftPending) return;
+    netShiftPending = false;
+    if (virtualBufferLength <= 2) return;
+    long move = netShiftMove;
+    long idx = (curBufferIndex + move) % virtualBufferLength;
+    if (idx < 0) idx += virtualBufferLength;
+    curBufferIndex = (int)idx & ~1;
+  }
+
+  // the session's loop for a player who just joined
+  bool joinPlay;
+  double joinAnchor;
+  public void ApplyJoinState(string file, bool play, double anchor) {
+    joinPlay = play; joinAnchor = anchor;
+    StopWaitingRemote();
+    curfile = file;
+    remoteHash = string.IsNullOrEmpty(file) ? "" : SampleIndex.HashOf(file);
+    if (!string.IsNullOrEmpty(file) && TakeRecording(file)) { remoteHash = ""; recalcTex(); display.Upload(); StartJoinPlay(); return; }
+    if (remoteHash == "") { StartJoinPlay(); return; }
+    joinWaiting = true;
+    NetSamples.Arrived += OnRemoteArrived;
+    NetSamples.Need(remoteHash);
+    StartJoinPlay(); // plays (silently) in time until the audio is here
+  }
+  bool joinWaiting;
+
+  void StartJoinPlay() {
+    if (!joinPlay || virtualBufferLength <= 2) return;
+    double len = LoopMeasures;
+    double pos = len > 0 ? (joinAnchor + NetBeat.Measures) % len : 0;
+    if (pos < 0) pos += len;
+    curBufferIndex = ((int)(pos * MeasureSamples) * 2 % virtualBufferLength) & ~1;
+    playing = true;
+    _deviceInterface.buttons[1].phantomHit(true);
   }
 
   bool recordRequested = false;

@@ -150,6 +150,7 @@ public static class NetSync {
     NetSamples.RegisterServer();
     NetLoopers.RegisterServer();
     NetRecorders.RegisterServer();
+    NetLoopShare.RegisterServer();
     NetTimelines.RegisterServer();
     NetScales.RegisterServer();
     NetSampler.RegisterServer();
@@ -195,6 +196,7 @@ public static class NetSync {
     NetSamples.RegisterClient();
     NetLoopers.RegisterClient();
     NetRecorders.RegisterClient();
+    NetLoopShare.RegisterClient();
     NetTimelines.RegisterClient();
     NetScales.RegisterClient();
     NetSampler.RegisterClient();
@@ -439,6 +441,7 @@ public static class NetSync {
     pendingByTemp.Clear();
     awaitingPatch = false;
     NetRoom.OnJoinedSession();
+    NetLoopShare.JoinedSession(); // loopers' / recorders' audio and PLAY aren't in the patch
     Debug.Log("[NetSync] loaded the session's patch (" + (ids != null ? ids.Length : 0) + " devices, " + m.patch.Length / 1024 + " KB)");
   }
 

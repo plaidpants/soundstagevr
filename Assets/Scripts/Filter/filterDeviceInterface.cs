@@ -115,8 +115,30 @@ public class filterDeviceInterface : deviceInterface {
     float a, b;
     quads[1].getPercentages(out a, out b);
 
-    if (percentages[0] != a) percentages[0] = filter.frequency[0] = Mathf.Clamp01(a);
-    if (percentages[1] != b) percentages[1] = filter.frequency[1] = Mathf.Clamp01(b);
+    bool bp = filter.curType == filterSignalGenerator.filterType.BP;
+    if (bp != coefBP) { coefBP = bp; coefSet = false; }
+    if (!coefSet || percentages[0] != a) { percentages[0] = Mathf.Clamp01(a); filter.frequency[0] = Coefficient(percentages[0], bp); }
+    if (!coefSet || percentages[1] != b) { percentages[1] = Mathf.Clamp01(b); filter.frequency[1] = Coefficient(percentages[1], bp); }
+    coefSet = true;
+  }
+
+  bool coefSet, coefBP;
+
+  // The spectrum display draws the band at (.01 + .3p) / .32 of the way to Nyquist,
+  // and the native Moog filter peaks a little below its coefficient (about .94x at
+  // resonance .5, more at the top). Convert the drawn position to the coefficient
+  // whose peak lands there, so the sound sits in the band you see.
+  static readonly float[] coefs = { 0f, .0025f, .01f, .03f, .06f, .1f, .15f, .2f, .25f, .3f, .35f, .4f, .45f, .5f, .55f, .6f, .65f, .7f, .75f, .8f, .85f, .9f, .94f, .97f, .99f, 1f };
+  static readonly float[] peaks = { 0f, .0023f, .0093f, .0280f, .0563f, .0944f, .1423f, .1902f, .2378f, .2849f, .3314f, .3777f, .4236f, .4692f, .5148f, .5602f, .6057f, .6514f, .6973f, .7437f, .7911f, .8407f, .8840f, .9224f, .9574f, 1f };
+
+  public static float Coefficient(float percent, bool bandPass) {
+    float d = (.01f + .3f * Mathf.Clamp01(percent)) / .32f;
+    // In band-pass the high end still sat low (the skirts get lopsided near Nyquist); nudge it up.
+    if (bandPass && d > .4f) d += .3f * (d - .4f) * (d - .4f);
+    for (int i = 1; i < peaks.Length; i++) {
+      if (d <= peaks[i]) return Mathf.Min(.995f, Mathf.Lerp(coefs[i - 1], coefs[i], (d - peaks[i - 1]) / (peaks[i] - peaks[i - 1])));
+    }
+    return .995f;
   }
 
   void updateSelection() {

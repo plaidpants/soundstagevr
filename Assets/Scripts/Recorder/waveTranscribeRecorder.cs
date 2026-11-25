@@ -76,13 +76,20 @@ public class waveTranscribeRecorder : signalGenerator {
 
   // Each column shows the peak of all the samples it covers (2026-11). It used to show
   // one sample per column, so a steady tone aliased into a beating "envelope".
+  // (2026-11-24) Changing the length redraws the whole wave, and this read every sample of
+  // it - up to 300 s, 29 million samples: half a second's freeze per notch of the length
+  // slider. Now only the recorded part is read (the rest is silence), and a column covering
+  // a lot of samples reads ~256 of them spread across it (enough to find its peak).
   void recalcTex() {
+    int filled = Mathf.Min(recordedEnd > 0 ? recordedEnd : 0, virtualBufferLength);
     for (int i = 0; i < wavewidth; i++) {
       int start = columnMult * i;
       if (start >= virtualBufferLength) break;
-      int end = Mathf.Min(start + columnMult, virtualBufferLength, sampleBuffer.Length - 1);
+      if (start >= filled) { display.SetColumn(i, 0); continue; }
+      int end = Mathf.Min(start + columnMult, filled, sampleBuffer.Length - 1);
       float peak = 0;
-      for (int n = start - (start & 1); n < end; n += 2) {
+      int stride = Mathf.Max(2, ((end - start) / 256) & ~1);
+      for (int n = start - (start & 1); n < end; n += stride) {
         float a = Mathf.Abs(sampleBuffer[n]), b = Mathf.Abs(sampleBuffer[n + 1]);
         if (a > peak) peak = a;
         if (b > peak) peak = b;
@@ -217,7 +224,7 @@ public class waveTranscribeRecorder : signalGenerator {
   void OnRemoteArrived(string hash) {
     if (hash != remoteHash) return;
     StopWaitingRemote();
-    TakeRecording(remoteFile);
+    if (TakeRecording(remoteFile)) StartJoinPlay();
   }
 
   void OnRemoteState(string hash, NetSamples.State s) {
@@ -232,6 +239,43 @@ public class waveTranscribeRecorder : signalGenerator {
   }
 
   void OnDestroy() { StopWaitingRemote(); }
+
+  // ---- a player who joined late (Net/NetLoopShare.cs, 2026-11-24) ----
+  public bool HasContent() { return recordedEnd > 0; }
+  public float[] ShareData(out int frames) {
+    frames = Mathf.Min(recordedEnd, virtualBufferLength) / 2;
+    return sampleBuffer;
+  }
+
+  public double PlaySeconds { get { return (curBufferIndex / 2) / (double)AudioSettings.outputSampleRate; } }
+
+  bool joinPlay;
+  double joinPos, joinTime;
+  public void ApplyJoinState(string file, bool play, double pos, double time) {
+    joinPlay = play; joinPos = pos; joinTime = time;
+    StopWaitingRemote();
+    remoteLabel = "the session's recording";
+    remoteFile = file;
+    remoteHash = string.IsNullOrEmpty(file) ? "" : SampleIndex.HashOf(file);
+    if (!string.IsNullOrEmpty(file) && TakeRecording(file)) { remoteHash = ""; StartJoinPlay(); return; }
+    if (remoteHash == "") return;
+    NetSamples.Arrived += OnRemoteArrived;
+    NetSamples.StateChanged += OnRemoteState;
+    NetSamples.Need(remoteHash);
+  }
+
+  // carry on where the host's is by now (it was mid-take when we joined, and the file took
+  // a moment to come over): started from the top, ours ran on after the host's had ended
+  void StartJoinPlay() {
+    if (!joinPlay) return;
+    joinPlay = false;
+    double now = joinPos + System.Math.Max(0, Mirror.NetworkTime.time - joinTime);
+    long idx = (long)(now * AudioSettings.outputSampleRate) * 2;
+    if (idx >= virtualBufferLength) return; // the host's has played to the end by now
+    curBufferIndex = (int)idx & ~1;
+    playing = true;
+    _deviceInterface.buttons[1].phantomHit(true);
+  }
 
   bool TakeRecording(string file) {
     string path = sampleManager.instance.parseFilename(file);
