@@ -13,6 +13,7 @@
 // limitations under the License.
 
 using UnityEngine;
+using System.Collections.Generic;
 using System.Collections;
 using System.IO;
 
@@ -177,39 +178,87 @@ public class tape : manipObject {
   }
 
   manipulator tempM;
+
+  // (2026-11-25) Which deck a held tape goes into. The tape touches the slot above or
+  // below as well as the one it's over (slots are 4 cm tall, 5 cm apart), and it used to
+  // take whichever slot it touched last - and lose it again on leaving a neighbour, so
+  // the tape showed in the wrong deck or none. Now every slot it touches is kept, and
+  // it goes into the one nearest the tape (a slight lead is needed to switch, so it
+  // doesn't flicker between two).
+  readonly Dictionary<Transform, float> touching = new Dictionary<Transform, float>();
+  const float touchHold = .1f;    // a slot not reported touching for this long is let go
+  const float switchLead = .006f; // m: how much nearer another slot must be
+
   void OnCollisionEnter(Collision coll) {
     if (curState != manipState.grabbed) return;
     if (coll.transform.name != "tapeInsert") return;
-    if (manipulatorObjScript != null) {
-      manipulatorObjScript.hapticPulse(1000);
-      tempM = manipulatorObjScript;
-    }
+    touching[coll.transform] = Time.time;
+    PickDeck();
+  }
 
-    if (deck != null && deck != coll.transform) //if still in another deck
-    {
-      deck.parent.GetComponent<samplerLoad>().UnloadTape(this);
-      NetTapes.Ejected(deck.parent.GetComponent<samplerLoad>()); // multiplayer
-    }
-
-    deck = coll.transform;
-
-    tapeTrans.parent = deck;
-    tapeTrans.localPosition = Vector3.zero;
-    tapeTrans.localRotation = Quaternion.Euler(-90, 0, 0);
-    tapeTrans.localScale = tapeTransOrigScale;
-
+  void OnCollisionStay(Collision coll) {
+    if (curState != manipState.grabbed) return;
+    if (coll.transform.name != "tapeInsert") return;
+    touching[coll.transform] = Time.time;
   }
 
   void OnCollisionExit(Collision coll) {
     if (curState != manipState.grabbed) return;
-    if (deck == coll.transform) {
-      deck.parent.GetComponent<samplerLoad>().UnloadTape(this);
-      NetTapes.Ejected(deck.parent.GetComponent<samplerLoad>()); // multiplayer
-      if (manipulatorObjScript != null) manipulatorObjScript.hapticPulse(500);
+    touching.Remove(coll.transform);
+    PickDeck();
+  }
+
+  void Update() {
+    if (curState == manipState.grabbed && (touching.Count > 0 || deck != null)) PickDeck();
+  }
+
+  static readonly List<Transform> stale = new List<Transform>();
+  void PickDeck() {
+    if (tapeTrans == null) { // its body went with a deck that was removed (a patch reload) while held
+      touching.Clear();
+      deck = null;
+      Destroy(gameObject);
+      return;
+    }
+    stale.Clear();
+    foreach (KeyValuePair<Transform, float> kv in touching)
+      if (kv.Key == null || !kv.Key.gameObject.activeInHierarchy || Time.time - kv.Value > touchHold) stale.Add(kv.Key);
+    foreach (Transform t in stale) touching.Remove(t);
+
+    Transform best = null;
+    float bestD = float.MaxValue;
+    foreach (Transform t in touching.Keys) {
+      float d = Vector3.Distance(transform.position, t.position);
+      if (d < bestD) { bestD = d; best = t; }
+    }
+    if (best != null && deck != null && best != deck && touching.ContainsKey(deck) &&
+        Vector3.Distance(transform.position, deck.position) < bestD + switchLead) best = deck;
+    if (best == deck) return;
+
+    if (deck != null) { // out of the slot it was in
+      samplerLoad sl = deck.parent.GetComponent<samplerLoad>();
+      // (2026-11-25) only a deck this tape was really loaded in is emptied on the other
+      // headsets: a tape just passing over a deck that holds another tape used to eject
+      // that tape there
+      bool wasLoaded = sl != null && sl.Holds(this);
+      if (sl != null) sl.UnloadTape(this);
+      if (wasLoaded) NetTapes.Ejected(sl); // multiplayer
+      if (best == null && manipulatorObjScript != null) manipulatorObjScript.hapticPulse(500);
       deck = null;
       tapeTrans.parent = transform;
       tapeTrans.localPosition = Vector3.zero;
       tapeTrans.localRotation = Quaternion.identity;
+      tapeTrans.localScale = tapeTransOrigScale;
+    }
+    if (best != null) {
+      if (manipulatorObjScript != null) {
+        manipulatorObjScript.hapticPulse(1000);
+        tempM = manipulatorObjScript;
+      }
+      deck = best;
+      tapeTrans.parent = deck;
+      tapeTrans.localPosition = Vector3.zero;
+      tapeTrans.localRotation = Quaternion.Euler(-90, 0, 0);
       tapeTrans.localScale = tapeTransOrigScale;
     }
   }
@@ -414,7 +463,9 @@ public class tape : manipObject {
       highlightGain = .5f;
       SetHighlight(highlightGain);
       if (insertCoroutine != null) StopCoroutine(insertCoroutine);
+      touching.Clear();
       if (deck != null) {
+        touching[deck] = Time.time; // still in its slot (its touch is reported from the next physics step)
         tapeTrans.parent = deck;
         tapeTrans.localPosition = Vector3.zero;
         tapeTrans.localRotation = Quaternion.Euler(-90, 0, 0);

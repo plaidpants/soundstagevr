@@ -154,6 +154,7 @@ public static class NetSync {
     NetTimelines.RegisterServer();
     NetScales.RegisterServer();
     NetSampler.RegisterServer();
+    NetCameraScreen.RegisterServer();
     NetRoom.ServerStarted();
     migrating = false;
     if (keepIds) {
@@ -200,6 +201,7 @@ public static class NetSync {
     NetTimelines.RegisterClient();
     NetScales.RegisterClient();
     NetSampler.RegisterClient();
+    NetCameraScreen.RegisterClient();
     NetworkClient.RegisterHandler<NetSuccessionMsg>(m => { if (NetSession.instance != null) NetSession.instance.successionRank = m.rank; });
     pendingByTemp.Clear();
   }
@@ -554,6 +556,13 @@ public static class NetSync {
     // key messages, so they're no reason to share the whole patch (2026-11: every mallet
     // hit made the session reload).
     if (data is XyloRollData xr) xr.selectedKeys = null;
+    // Tapes going into or out of a deck are shared by NetTapes; counting them here too
+    // reloaded the whole patch on every other headset each time a tape went into the
+    // tape Timeline - and a reload while someone held a tape over a deck broke the tape
+    // (2026-11-25).
+    if (data is SamplerData sd) { sd.label = null; sd.file = null; }
+    if (data is TimelineData tl && tl.tracks != null)
+      for (int i = 0; i < tl.tracks.Length; i++) { tl.tracks[i].label = null; tl.tracks[i].filename = null; }
     using (var ms = new MemoryStream()) {
       using (var w = new StreamWriter(ms, new UTF8Encoding(false))) deviceSerializer.Serialize(w, data);
       byte[] b = ms.ToArray();

@@ -21,6 +21,7 @@ public class timelineTrackComponentInterface : componentInterface {
   public int ID = 0;
 
   clipPlayerSimple player;
+  clipPlayerSimple deckPlayer;
   public button triggerButton;
   public omniJack jackIn, sampleOut, pulseOut;
   public timelineTrackSignalGenerator signal;
@@ -58,6 +59,8 @@ public class timelineTrackComponentInterface : componentInterface {
 
   void Awake() {
     player = GetComponent<clipPlayerSimple>();
+    deckPlayer = GetComponentInChildren<clipPlayerSimple>(true); // (on the deck, a child)
+    if (deckPlayer != null) deckPlayer.gateStops = true; // a deck's sound lasts as long as its note
     signal = GetComponent<timelineTrackSignalGenerator>();
     _deviceInterface = GetComponentInParent<timelineDeviceInterface>();
   }
@@ -74,6 +77,7 @@ public class timelineTrackComponentInterface : componentInterface {
   }
 
   void Update() {
+    if (deckPlayer != null && deckPlayer.adsr == null && _deviceInterface != null) deckPlayer.adsr = _deviceInterface.adsr;
     if (signal.incoming != jackIn.signal) {
       signal.incoming = jackIn.signal;
       if (signal.incoming == null) updateSignal(false, sigSource.signal);

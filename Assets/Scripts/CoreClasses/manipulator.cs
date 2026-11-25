@@ -101,6 +101,27 @@ public class manipulator : MonoBehaviour {
   // Hands: controls sit right next to the device's move handles, and the first hit used
   // to win (and then stuck). Prefer an actual control over a handle, and among those the
   // one nearest the pinch.
+  // (2026-11-25) Tapes sit close together (the library wheel, a shelf of tapes): with a
+  // controller the first tape touched stayed selected until the controller left it, even
+  // with another right under it. Among the tapes touched, take the nearest; switch from
+  // the current one only when another is clearly nearer, so it doesn't flicker.
+  Transform NearestTape(Transform current) {
+    Vector3 p = transform.position;
+    Transform best = null;
+    float bestD = float.MaxValue;
+    foreach (Transform t in hitTransforms) {
+      if (t == null) continue;
+      tape tp = t.GetComponent<tape>();
+      if (tp == null) continue;
+      if (t != current && (tp.curState == manipObject.manipState.grabbed || tp.curState == manipObject.manipState.selected)) continue;
+      float d = Vector3.Distance(t.position, p);
+      if (d < bestD) { bestD = d; best = t; }
+    }
+    if (current != null && best != null && best != current && hitTransforms.Contains(current) &&
+        Vector3.Distance(current.position, p) < bestD + .008f) return current;
+    return best != null ? best : current;
+  }
+
   Transform PickHandCandidate() {
     Vector3 p = GrabPointWorld;
     Transform best = null;
@@ -380,6 +401,7 @@ public class manipulator : MonoBehaviour {
       candidate = PickHandCandidate();
     } else if (selectedObject != null) {
       if (hitTransforms.Contains(selectedTransform)) candidate = selectedTransform;
+      if (selectedObject is tape) candidate = NearestTape(candidate); // (2026-11-25)
     } else {
       foreach (Transform t in hitTransforms) {
         if (t != null) {
@@ -392,6 +414,7 @@ public class manipulator : MonoBehaviour {
           }
         }
       }
+      if (candidate != null && candidate.GetComponent<tape>() != null) candidate = NearestTape(null);
     }
 
     // multiplayer: someone else is holding it

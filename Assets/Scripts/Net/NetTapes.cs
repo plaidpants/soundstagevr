@@ -41,13 +41,14 @@ public static class NetTapes {
   }
 
   public static void Apply(NetTapeMsg m) {
-    if (!NetDevice.byId.TryGetValue(m.netId, out NetDevice dev) || dev == null) return;
+    if (!NetDevice.byId.TryGetValue(m.netId, out NetDevice dev) || dev == null) { Debug.Log("[NetTapes] from another player: device " + m.netId + " isn't here"); return; }
     samplerLoad[] all = dev.GetComponentsInChildren<samplerLoad>(true);
-    if (m.deck < 0 || m.deck >= all.Length) return;
+    if (m.deck < 0 || m.deck >= all.Length) { Debug.Log("[NetTapes] from another player: " + dev.name + " deck " + m.deck + " isn't here (" + all.Length + " decks)"); return; }
     samplerLoad s = all[m.deck];
-    if (string.IsNullOrEmpty(m.label)) { s.ForceEject(); return; }
+    if (string.IsNullOrEmpty(m.label)) { Debug.Log("[NetTapes] another player took the tape out of " + dev.name + " deck " + m.deck); s.ForceEject(); return; }
     s.getTapeInfo(out string label, out string file);
-    if (SampleIndex.SameSample(file, m.file)) return; // already in (same sound, whatever its name here)
+    if (SampleIndex.SameSample(file, m.file)) { Debug.Log("[NetTapes] " + m.label + " is already in " + dev.name + " deck " + m.deck); return; } // already in (same sound, whatever its name here)
+    Debug.Log("[NetTapes] another player put " + m.label + " into " + dev.name + " deck " + m.deck + " (" + all.Length + " decks; was " + (string.IsNullOrEmpty(label) ? "empty" : label) + ")");
     s.ForceEject();
     s.SetSample(m.label, m.file);
     dev.Rebaseline();

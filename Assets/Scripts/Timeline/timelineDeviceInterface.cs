@@ -37,6 +37,23 @@ public class timelineDeviceInterface : deviceInterface {
     base.Awake();
     _timeline = GetComponent<timelineComponentInterface>();
     _timeline.SetStartVariables(4, 3, .4f, .2f, new Vector2(0, 8), new Vector2(0, 8));
+    MakeAdsr();
+  }
+
+  // (2026-11-25) An ADSR panel like the xylophone roll's (copied from its prefab): it shapes
+  // every deck's sound over the length of its note - attack, decay to sustain while the
+  // note lasts, release when it ends or the timeline stops.
+  public adsrInterface adsr;
+  void MakeAdsr() {
+    GameObject xylo = Resources.Load<GameObject>("Prefabs/XyloRoll");
+    Transform src = xylo != null ? xylo.transform.Find("ADSR") : null;
+    if (src == null) { Debug.LogWarning("[Timeline] no ADSR panel to copy (Prefabs/XyloRoll/ADSR)"); return; }
+    GameObject g = Instantiate(src.gameObject, transform, false);
+    g.name = "ADSR";
+    Transform play = transform.Find("PLAY");
+    if (play != null) g.transform.rotation = play.rotation; // face the same way as the buttons
+    g.transform.localPosition = new Vector3(-.24f, -.17f, .0115f); // under the buttons: clear of the slider above and the PLAY / REC trigger jacks to its side
+    adsr = g.GetComponent<adsrInterface>();
   }
 
   void spawnTrack() {
@@ -94,6 +111,11 @@ public class timelineDeviceInterface : deviceInterface {
 
     data.handleHeight = trackHandle.localPosition.y;
 
+    if (adsr != null && adsr.xyHandles != null) {
+      data.ADSRdata = new Vector2[3];
+      for (int i = 0; i < 3; i++) data.ADSRdata[i] = adsr.xyHandles[i].percent;
+    }
+
     List<timelineEvent.eventData> tempevents = new List<timelineEvent.eventData>();
     for (int i = 0; i < _timeline._tlEvents.Count; i++) {
       if (_timeline._tlEvents[i] != null) tempevents.Add(_timeline._tlEvents[i].getEventInfo());
@@ -117,6 +139,11 @@ public class timelineDeviceInterface : deviceInterface {
 
     _timeline.SetTimelineData(data.timelineData);
 
+    if (adsr != null && data.ADSRdata != null && data.ADSRdata.Length >= 3) { // (older patches have none: defaults)
+      for (int i = 0; i < 3; i++) adsr.xyHandles[i].setPercent(data.ADSRdata[i]);
+      adsr.setDefaults = false;
+    }
+
     Vector3 pos = trackHandle.localPosition;
     pos.y = data.handleHeight;
     trackHandle.localPosition = pos;
@@ -137,6 +164,7 @@ public class timelineDeviceInterface : deviceInterface {
 
 public class TimelineData : InstrumentData {
   public TimelineComponentData timelineData;
+  public Vector2[] ADSRdata;
   public float handleHeight;
   public timelineTrackComponentInterface.trackComponent[] tracks;
   public timelineEvent.eventData[] timelineEvents;

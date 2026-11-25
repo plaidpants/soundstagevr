@@ -62,7 +62,9 @@ public class cameraPanel : manipObject {
     BoxCollider box = GetComponent<BoxCollider>();
     Vector3 size = box != null ? box.size : new Vector3(.096f, .054f, .01f);
     Vector3 center = box != null ? box.center : Vector3.zero;
-    Material baseMat = Resources.Load("Materials/Highlight") as Material;
+    // (2026-11-25) not the Highlight material: its shader draws only the inside faces (it is
+    // meant as a glow shell around an object), so a solid bar looked inside out
+    Material baseMat = Resources.Load("Materials/RecycleSymbol") as Material;
     float w = size.x * .15f;
     edges = new cameraPanelEdge[2];
     for (int i = 0; i < 2; i++) {
@@ -80,8 +82,8 @@ public class cameraPanel : manipObject {
       vis.transform.localPosition = new Vector3(side * w * .3f, 0, 0);
       vis.transform.localScale = new Vector3(w * .25f, size.y * .9f, size.z * 1.2f);
       Renderer r = vis.GetComponent<Renderer>();
-      if (baseMat != null) r.material = new Material(baseMat);
-      r.material.SetColor("_TintColor", Color.HSVToRGB(0f, 0f, .5f));
+      if (baseMat != null) { r.material = new Material(baseMat); r.material.SetTexture("_MainTex", Texture2D.whiteTexture); }
+      r.material.SetColor("_TintColor", Color.HSVToRGB(0f, 0f, .35f));
       vis.SetActive(false);
 
       cameraPanelEdge e = g.AddComponent<cameraPanelEdge>();

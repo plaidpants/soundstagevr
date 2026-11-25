@@ -58,6 +58,7 @@ public class samplerLoad : MonoBehaviour {
   }
 
   tape currentTape;
+  public bool Holds(tape t) { return t != null && currentTape == t; }
   public void LoadTape(tape t) {
     if (currentTape != null && currentTape != t) {
       ForceEject();

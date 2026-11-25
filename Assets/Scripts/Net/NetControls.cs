@@ -236,6 +236,8 @@ public class NetControls : MonoBehaviour {
     if (obj is generalGrip && obj.GetComponentInParent<samplerDeviceInterface>() is samplerDeviceInterface sd) { NetSampler.TurntableMoved(sd); return; } // the sampler's turntable moved: just its place, not the whole patch (a reload emptied the other headsets' loopers)
     if (obj is generalGrip) return; // (2026-11-24) the keyboard's / xylophone's MIDI panels and sequencer, dragged about: where they sit isn't in the patch, so resending it shared nothing - it only reloaded every other headset, restarting their sequencers
     if (obj is turntableUI) return;
+    if (obj is cameraPanel || obj is cameraPanelEdge) { NetCameraScreen.Moved(obj); return; } // the camera's screen moved / resized: just that (2026-11-25)
+    if (obj is curveUI) return; // the (unused) Curve device's cursor: nothing changes
     if (obj is maracaUI || obj is drumstick || obj is airhornUI || obj is microphoneGrip) return; // held instruments: they go back to their place when let go, nothing in the patch changed
     if (OnNote(obj)) return; // a note moved, resized or recorded: NetTimelines sends just that note (this used to reload the whole patch on every headset - a big hitch each time a note was let go)
     if (obj is tooltips) return; // the help (?) button: showing help or its video is local - a patch reload here restarted every device // scratching only moves the playhead: nothing in the patch changes, and a whole-patch reload here dropped whatever the other hand was holding
