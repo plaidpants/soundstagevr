@@ -50,7 +50,7 @@ public class microphoneDeviceInterface : deviceInterface {
   }
 
   public override void hit(bool on, int ID = -1) {
-    signal.active = on;
+    signal.active = on; // (the input is chosen in the settings menu: MIC, MicCapture)
   }
 
   public override InstrumentData GetData() {

@@ -37,6 +37,7 @@ public class wirePanelComponentInterface : componentInterface {
   uiPanelSinglePress sharedsamplespanel; // left column row 8, buttonID 21: size of / clear the received-samples cache (SampleCache)
   float clearArmedUntil; // the shared-samples button clears on a second press within 4 s
   uiPanelSinglePress binauralpanel; // right column row 7, buttonID 17: 3D audio off / speakers / all
+  uiPanelSinglePress micpanel; // left column row 6, buttonID 22: the microphone input (MicCapture)
 
   Color colorGreen = Color.HSVToRGB(.4f, 230f / 255, 118f / 255);
   Color colorRed = Color.HSVToRGB(0f, 230f / 255, 118f / 255);
@@ -72,6 +73,10 @@ public class wirePanelComponentInterface : componentInterface {
     sharedsamplespanel = CloneButton("sharedSamplesPanel", 21, 8);
     if (sharedsamplespanel != null) sharedsamplespanel.transform.localPosition = AboveTop(8, midipanel.transform.localPosition.x);
     UpdateSharedSamplesLabel();
+    micpanel = CloneButton("micInputPanel", 22, 6);
+    if (micpanel != null) micpanel.transform.localPosition = AboveTop(6, midipanel.transform.localPosition.x);
+    UpdateMicLabel();
+    MicCapture.Changed += UpdateMicLabel;
     SampleCache.Changed += UpdateSharedSamplesLabel;
     TestHarness.Changed += UpdateHarnessLabel;
     NetSession.StatusChanged += UpdateNetLabel;
@@ -265,6 +270,13 @@ public class wirePanelComponentInterface : componentInterface {
     NetSession.StatusChanged -= UpdateNetLabel;
     NetRoom.Changed -= UpdateNetLabel;
     SampleCache.Changed -= UpdateSharedSamplesLabel;
+    MicCapture.Changed -= UpdateMicLabel;
+  }
+
+  void UpdateMicLabel() {
+    if (micpanel == null) return;
+    micpanel.label.text = MicCapture.MenuLabel();
+    micpanel.newColor(colorGreen);
   }
 
   void UpdateEnvironmentLabels() {
@@ -385,6 +397,9 @@ public class wirePanelComponentInterface : componentInterface {
         NetCodeDialog.Open(midipanel, wl != null ? wl.GetComponent<TextMesh>() : null, 0.1665f); // terms, then the room code
       }
       UpdateNetLabel();
+    } else if (ID == 22) {
+      MicCapture.NextInput();
+      UpdateMicLabel();
     } else if (ID == 21) {
       if (Time.unscaledTime < clearArmedUntil) {
         clearArmedUntil = 0;

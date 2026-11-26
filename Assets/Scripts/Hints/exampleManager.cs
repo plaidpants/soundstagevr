@@ -16,6 +16,7 @@ using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading.Tasks;
 
 public class exampleManager : MonoBehaviour {
 
@@ -61,7 +62,22 @@ public class exampleManager : MonoBehaviour {
     items[11].Setup(this, menuItem.deviceType.Camera, "camAndMicExample", "Camera\n+ Mic");
   }
 
+  bool examplesReady = false;
+
   void Start() {
+    StartCoroutine(ExtractExamples());
+
+        GameObject g = Instantiate(vidplayerPrefab, transform, false) as GameObject;
+    g.transform.localPosition = Vector3.zero;
+    g.transform.localRotation = Quaternion.Euler(0, 180, 0);
+
+    StartCoroutine(SetupCheck());
+    StartCoroutine(heightUpdate());
+  }
+
+  // (2026-11-26) in the background: it ran on the main thread in Start, freezing the
+  // headset's view for its length on a first start
+  IEnumerator ExtractExamples() {
 #if UNITY_ANDROID || (UNITY_STANDALONE_WIN && !UNITY_EDITOR) // (2026-11-18: and the Windows build)
         // Extract the examples if they're missing, or if they came from a different build
         // (2026-11: the examples are updated with the app, e.g. sequencer LOOP settings;
@@ -73,24 +89,40 @@ public class exampleManager : MonoBehaviour {
         bool current = Directory.Exists(examplesDir) && File.Exists(stampFile) && File.ReadAllText(stampFile) == stamp;
         if (!current)
         {
-            Directory.CreateDirectory(Directory.GetParent(Application.persistentDataPath).FullName + Path.DirectorySeparatorChar + "Examples");
-            //copy tgz to directory where we can extract it
-            byte[] tgz = StreamingAssetsLoader.ReadAllBytes(Application.streamingAssetsPath + Path.DirectorySeparatorChar + "Examples.tgz");
-            System.IO.File.WriteAllBytes(Directory.GetParent(Application.persistentDataPath).FullName + Path.DirectorySeparatorChar + "Examples.tgz", tgz);
-            //extract it
-            Utility_SharpZipCommands.ExtractTGZ(Directory.GetParent(Application.persistentDataPath).FullName + Path.DirectorySeparatorChar + "Examples.tgz", Directory.GetParent(Application.persistentDataPath).FullName + Path.DirectorySeparatorChar + "Examples");
-            //delete tgz
-            File.Delete(Directory.GetParent(Application.persistentDataPath).FullName + Path.DirectorySeparatorChar + "Examples.tgz");
-            File.WriteAllText(stampFile, stamp);
+            float t0 = Time.realtimeSinceStartup;
+            string parent = Directory.GetParent(Application.persistentDataPath).FullName;
+            string src = Application.streamingAssetsPath + Path.DirectorySeparatorChar + "Examples.tgz";
+            byte[] tgz = null;
+            if (Application.platform == RuntimePlatform.Android) {
+              using (var req = UnityEngine.Networking.UnityWebRequest.Get(src)) {
+                yield return req.SendWebRequest();
+                if (req.result == UnityEngine.Networking.UnityWebRequest.Result.Success) tgz = req.downloadHandler.data;
+                else Debug.LogError("[exampleManager] couldn't read Examples.tgz: " + req.error);
+              }
+            } else {
+              Task<byte[]> r = Task.Run(() => File.ReadAllBytes(src));
+              while (!r.IsCompleted) yield return null;
+              if (r.Exception == null) tgz = r.Result;
+            }
+            if (tgz != null) {
+              Task work = Task.Run(() => {
+                Directory.CreateDirectory(parent + Path.DirectorySeparatorChar + "Examples");
+                //copy tgz to directory where we can extract it
+                File.WriteAllBytes(parent + Path.DirectorySeparatorChar + "Examples.tgz", tgz);
+                //extract it
+                Utility_SharpZipCommands.ExtractTGZ(parent + Path.DirectorySeparatorChar + "Examples.tgz", parent + Path.DirectorySeparatorChar + "Examples");
+                //delete tgz
+                File.Delete(parent + Path.DirectorySeparatorChar + "Examples.tgz");
+                File.WriteAllText(stampFile, stamp);
+              });
+              while (!work.IsCompleted) yield return null;
+              if (work.Exception != null) Debug.LogWarning("[exampleManager] extracting the examples failed: " + work.Exception.GetBaseException().Message);
+              else Debug.Log("[exampleManager] examples extracted in " + (Time.realtimeSinceStartup - t0).ToString("F1") + " s (in the background)");
+            }
         }
 #endif
-
-        GameObject g = Instantiate(vidplayerPrefab, transform, false) as GameObject;
-    g.transform.localPosition = Vector3.zero;
-    g.transform.localRotation = Quaternion.Euler(0, 180, 0);
-
-    StartCoroutine(SetupCheck());
-    StartCoroutine(heightUpdate());
+    examplesReady = true;
+    yield break;
   }
 
   void InitSides() {
@@ -112,7 +144,8 @@ public class exampleManager : MonoBehaviour {
 
   IEnumerator SetupCheck() {
     yield return new WaitForSeconds(.25f);
-    while (!menuManager.instance.loaded) {
+    while (!menuManager.instance.loaded || !examplesReady ||
+           sampleManager.instance == null || sampleManager.instance.sampleDictionary == null) { // (samples / examples unpacking on a first start)
       yield return null;
     }
     InitSides();

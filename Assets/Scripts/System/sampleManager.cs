@@ -17,6 +17,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using ICSharpCode.SharpZipLib.Tar;
 using ICSharpCode.SharpZipLib.GZip;
 
@@ -157,19 +158,50 @@ public class sampleManager : MonoBehaviour {
 
     string[] fileEndings = new string[] { "*.wav", "*.ogg", "*.mp3" };
 
+  // a first unpack of the built-in samples is under way (BuiltinSamples leaves the library alone)
+  public static bool FirstUnpack { get; private set; }
+
   public void Init() {
+    instance = this;
 
     // The app's own library: unpacked from Samples.tgz the first time (the Quest, and the
     // Windows build since 2026-11-18 - a PC that never had SoundStage had no samples).
     // Later builds add only new built-ins, in the background (BuiltinSamples).
+    // (2026-11-26) The first unpack runs in the background too: it took ~20 s on the
+    // main thread, with no frames - the "Made with Unity" screen froze in the headset.
+    // sampleDictionary stays null until it's done (SampleIndex and the start example wait).
     string lib = BuiltinSamples.LibraryDir;
     if (lib != null && !Directory.Exists(lib)) {
       Directory.CreateDirectory(lib);
-      BuiltinSamples.UpdateLibrary(lib, true);
+      FirstUnpack = true;
+      StartCoroutine(UnpackThenLoad(lib));
+      return;
     }
+    LoadDictionary();
+  }
 
-        instance = this;
-    sampleDictionary = new Dictionary<string, Dictionary<string, string>>();
+  IEnumerator UnpackThenLoad(string lib) {
+    float t0 = Time.realtimeSinceStartup;
+    yield return null; // let the first frame out
+    NetNotice.Show("UNPACKING SAMPLES", "first start only", 0, 120f);
+    byte[] tgz = null;
+    yield return BuiltinSamples.ReadArchive(b => tgz = b);
+    if (tgz != null) {
+      string stamp = BuiltinSamples.BuildStamp;
+      Task work = Task.Run(() => BuiltinSamples.UpdateLibrary(lib, true, tgz, stamp));
+      while (!work.IsCompleted) yield return null;
+      if (work.Exception != null) Debug.LogWarning("[sampleManager] unpacking the samples failed: " + work.Exception.GetBaseException().Message);
+    }
+    tgz = null;
+    NetNotice.Hide();
+    Debug.Log("[sampleManager] first unpack of the built-in samples took " + (Time.realtimeSinceStartup - t0).ToString("F1") + " s (in the background)");
+    FirstUnpack = false;
+    LoadDictionary();
+  }
+
+  void LoadDictionary() {
+    var dict = new Dictionary<string, Dictionary<string, string>>();
+    sampleDictionary = dict;
 
     string dir = Directory.GetParent(Application.persistentDataPath).FullName + Path.DirectorySeparatorChar + "Samples";
     loadSampleDictionary(dir, "APP");

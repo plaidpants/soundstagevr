@@ -68,6 +68,17 @@ same Wi-Fi and turn MULTIPLAYER ON. The first one hosts, the others find it and 
   [privacy policy](https://plaidpants.github.io/soundstagevr/SoundStagePrivacyPolicy.html).
   *FORGET MY INTERNET ID* on the terms page deletes your anonymous ID.
 
+*Talking while you play* — SoundStage has no voice chat of its own; use Meta's:
+* **Quest players:** start a **call** with the others from the Quest's people / chats
+  menu before or while you play. A Meta call or party keeps going inside apps, so you can
+  talk while SoundStage runs. Everyone needs to follow each other to call.
+* **PC players:** join the same call from the **Meta Horizon** phone app, or use
+  Discord (also on Quest) if your group already does.
+* **Same room?** Don't call each other: the call picks up the other headset's speakers
+  and echoes. Only people in other places need to be on the call.
+* Headphones help for everyone on a call: the music from the headset speakers otherwise
+  goes into your mic and to the others twice (once from SoundStage, once from the call).
+
 *Same physical room* — use **ALIGN ROOM**: everyone touches the same two spots (a metre or
 more apart) so the virtual room lines up with the real one. **MOVE ROOM** then moves the
 room for everyone with the stick.

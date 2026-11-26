@@ -167,7 +167,7 @@ public class NetNotice : MonoBehaviour {
   }
 
   void Build() {
-    TextMesh source = FindObjectOfType<TextMesh>(true); // borrow SoundStage's own font
+    TextMesh source = CommonText(); // borrow SoundStage's own font
     title = MakeText("title", .022f, new Vector3(0, .035f, 0), source);
     body = MakeText("body", .011f, new Vector3(0, -.02f, 0), source);
     title.color = new Color(1f, .75f, .3f);
@@ -176,6 +176,25 @@ public class NetNotice : MonoBehaviour {
     chime.playOnAwake = false;
     chime.volume = .5f;
     chime.clip = MakeChime();
+  }
+
+  // the font + material most of SoundStage's labels use (2026-11-26: it took the first
+  // TextMesh found, which on a first start - the samples unpacking - was an odd one, and
+  // the notices were unreadable for the rest of the session)
+  static TextMesh CommonText() {
+    var count = new System.Collections.Generic.Dictionary<string, int>();
+    var pick = new System.Collections.Generic.Dictionary<string, TextMesh>();
+    TextMesh best = null; int bestN = 0;
+    foreach (TextMesh t in FindObjectsOfType<TextMesh>(true)) {
+      MeshRenderer r = t.GetComponent<MeshRenderer>();
+      if (t.font == null || t.font.material == null || r == null) continue;
+      string key = t.font.name;
+      int n; count.TryGetValue(key, out n); count[key] = ++n;
+      if (!pick.ContainsKey(key)) pick[key] = t;
+      if (n > bestN) { bestN = n; best = pick[key]; }
+    }
+    if (best != null) Debug.Log("[NetNotice] font " + best.font.name + " (" + bestN + " labels use it), material " + best.font.material.name + " (the font's own)");
+    return best;
   }
 
   TextMesh MakeText(string name, float size, Vector3 pos, TextMesh source) {
@@ -187,7 +206,9 @@ public class NetNotice : MonoBehaviour {
       t.font = source.font;
       t.fontSize = source.fontSize;
       t.characterSize = source.characterSize;
-      g.GetComponent<MeshRenderer>().sharedMaterial = source.GetComponent<MeshRenderer>().sharedMaterial;
+      // the font's own material (its glyph atlas): a label's material can be one made for
+      // something else - "InstrumentSelectMat (Quest boost)" - and drew blocks (2026-11-26)
+      g.GetComponent<MeshRenderer>().sharedMaterial = source.font.material;
     }
     t.anchor = TextAnchor.MiddleCenter;
     t.alignment = TextAlignment.Center;

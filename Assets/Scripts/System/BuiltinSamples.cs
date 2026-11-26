@@ -67,7 +67,7 @@ public class BuiltinSamples : MonoBehaviour {
     while (!load.IsCompleted) yield return null;
     bool indexOk = load.Exception == null && load.Result;
     if (indexOk) ready = true;
-    bool libStale = lib != null && Directory.Exists(lib) && !LibraryCurrent(lib);
+    bool libStale = lib != null && Directory.Exists(lib) && !LibraryCurrent(lib) && !sampleManager.FirstUnpack; // (a first unpack is under way: it does the lot)
     if (indexOk && !libStale) yield break;
 
     byte[] tgz = null;
@@ -94,7 +94,7 @@ public class BuiltinSamples : MonoBehaviour {
   }
 
   // the archive's bytes (inside the APK on the Quest), without blocking the frame
-  static IEnumerator ReadArchive(Action<byte[]> done) {
+  public static IEnumerator ReadArchive(Action<byte[]> done) {
     if (Application.platform != RuntimePlatform.Android) {
       Task<byte[]> r = Task.Run(() => File.Exists(ArchivePath) ? File.ReadAllBytes(ArchivePath) : null);
       while (!r.IsCompleted) yield return null;
