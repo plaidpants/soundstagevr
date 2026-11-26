@@ -51,7 +51,9 @@ public class timelineDeviceInterface : deviceInterface {
     GameObject g = Instantiate(src.gameObject, transform, false);
     g.name = "ADSR";
     Transform play = transform.Find("PLAY");
-    if (play != null) g.transform.rotation = play.rotation; // face the same way as the buttons
+    // the xylophone's panel sits turned half round in its own device (local 180 degrees about
+    // up); on the timeline it needs the same turn, or it faces the back (0.1.8 had it so)
+    if (play != null) g.transform.rotation = play.rotation * Quaternion.Euler(0, 180f, 0);
     g.transform.localPosition = new Vector3(-.24f, -.17f, .0115f); // under the buttons: clear of the slider above and the PLAY / REC trigger jacks to its side
     adsr = g.GetComponent<adsrInterface>();
   }

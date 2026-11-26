@@ -294,7 +294,7 @@ public class DesktopMode : MonoBehaviour {
       if (!pressing || keyPlaying) hand.pointerTarget = picked; // (keep what was clicked while the click lands)
       TouchKey(keyPlaying && picked != null ? picked.GetComponent<key>() : null);
       if (dist < float.MaxValue) {
-        target = point - ray.direction * .01f;
+        target = pickedDrawSurface ? point + ray.direction * .01f : point - ray.direction * .01f; // a grid: just inside it
         depth = dist;
       } else target = ray.GetPoint(Mathf.Clamp(depth, .3f, 3f));
       MoveTipTo(target, Quaternion.LookRotation(ray.direction, cam.transform.up));
@@ -343,7 +343,7 @@ public class DesktopMode : MonoBehaviour {
     Camera cam = Camera.main;
     if (cam == null || hand == null || handRoot == null) return false;
     Ray ray = cam.ScreenPointToRay(screen);
-    if (PickTarget(ray, out _, out _) != null) return true;
+    if (PickTarget(ray, out _, out _) != null || pickedDrawSurface) return true;
     return RaycastScene(ray, out RaycastHit h) && DrumPadAt(h) != null;
   }
 
@@ -353,6 +353,7 @@ public class DesktopMode : MonoBehaviour {
     if (cam == null || hand == null || handRoot == null) return 0;
     Ray ray = cam.ScreenPointToRay(screen);
     Transform t = PickTarget(ray, out _, out _);
+    if (pickedDrawSurface) return 2;
     if (t != null && !(t.GetComponent<manipObject>() is handle)) return 2;
     if (RaycastScene(ray, out RaycastHit h) && DrumPadAt(h) != null) return 2;
     return t != null ? 1 : 0;
@@ -489,7 +490,16 @@ public class DesktopMode : MonoBehaviour {
   // list entries floating over other things can be picked. Anything more than 4 cm
   // behind the first surface hit is out of reach.
   readonly System.Collections.Generic.List<RaycastHit> hits = new System.Collections.Generic.List<RaycastHit>();
+  // Piano-roll / timeline grids (timelineGridUI) aren't controls: they draw a note when the
+  // controller tip is inside them and the trigger is pulled. On the phone a touch on one
+  // counts as using it (PickTarget returns null with pickedDrawSurface set, and the tip
+  // goes just inside it), so it draws instead of looking around or grabbing the device
+  // behind it. Notes on the grid are controls and still win.
+  bool pickedDrawSurface;
+
   Transform PickTarget(Ray ray, out Vector3 point, out float dist) {
+    pickedDrawSurface = false;
+    bool grid = false; Vector3 gridP = Vector3.zero; float gridD = 0;
     hits.Clear();
     hits.AddRange(Physics.RaycastAll(ray, 30f, ~0, QueryTriggerInteraction.Collide));
     hits.Sort((a, b) => a.distance.CompareTo(b.distance));
@@ -501,7 +511,10 @@ public class DesktopMode : MonoBehaviour {
       if (first == float.MaxValue) { first = h.distance; point = h.point; dist = h.distance; }
       if (h.distance > first + .04f) break;
       manipObject mo = h.collider.GetComponent<manipObject>();
-      if (mo == null) continue; // a case, panel backing...: only blocks what's more than 4 cm behind it
+      if (mo == null) {
+        if (PointerInput.touch && !grid && h.collider.GetComponentInParent<timelineGridUI>() != null) { grid = true; gridP = h.point; gridD = h.distance; }
+        continue; // a case, panel backing...: only blocks what's more than 4 cm behind it
+      }
       if (mo is handle) {
         if (handleT == null) { handleT = h.collider.transform; handleP = h.point; handleD = h.distance; }
         continue;
@@ -511,6 +524,7 @@ public class DesktopMode : MonoBehaviour {
         return jk.near.transform; // phone: a jack with a plug in it - take the plug (a finger covers both)
       return h.collider.transform; // a control
     }
+    if (grid) { point = gridP; dist = gridD; pickedDrawSurface = true; return null; } // over the device behind it
     if (handleT != null) { point = handleP; dist = handleD; }
     return handleT;
   }

@@ -151,6 +151,7 @@ For multiplayer problems, logs from every machine in the session help most.
 * [Sonic Ether Natural Bloom & Dirty Lens](https://github.com/sonicether/SE-Natural-Bloom-Dirty-Lens) — the glow and bloom
 * [Unity Gaming Services](https://unity.com/products/gaming-services) (Multiplayer Services: Authentication, Lobby, Relay) and Unity Transport — internet multiplayer
 * [SharpZipLib](https://github.com/icsharpcode/SharpZipLib) — compression (saves, sample packs)
+* [NVorbis](https://github.com/NVorbis/NVorbis) (OGG) and [NLayer](https://github.com/naudio/NLayer) (MP3) — sample decoding, MIT licence, included as source in `Assets/Plugins`
 * [MIDI-dot-NET](https://github.com/jstnryan/midi-dot-net) — MIDI note names (MIDI input and output now use the Windows MIDI API directly)
 * [Meta XR / Oculus Integration](https://developer.oculus.com/downloads/package/unity-integration/) and the Unity Oculus XR plug-in — VR, hand tracking, passthrough, spatial audio
 
