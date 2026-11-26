@@ -10,7 +10,15 @@
 //                                    APK from "Build Quest (dev)" must be on the headset)
 //   Build Quest (release)            the store APK, project settings untouched
 //
-// Output: BuildQuest/soundstage-dev.apk and BuildQuest/soundstage.apk.
+//   Build Phone (dev) + Run          the phone version (Desktop/PhoneMode.cs) on an Android
+//   Build Phone (release)            phone over USB: the same project built without VR, with
+//                                    SOUNDSTAGE_PHONE defined, as its own app
+//                                    (com.HardLightLabsLLC.SoundStagePhone), landscape. The
+//                                    Oculus loader, package name and orientation are set for
+//                                    the build and put back afterwards (PhoneBuild.cs).
+//
+// Output: BuildQuest/soundstage-dev.apk and BuildQuest/soundstage.apk;
+//         BuildPhone/soundstage-phone-dev.apk and BuildPhone/soundstage-phone.apk.
 // The Editor must already be on Android (File > Build Settings): switching platform
 // reimports the whole project, so it's never done from here.
 
@@ -66,7 +74,7 @@ public static class QuestBuildMenu {
     }
   }
 
-  static void Build(string path, BuildOptions options, string kind) {
+  static void Build(string path, BuildOptions options, string kind, string[] defines = null) {
     Directory.CreateDirectory(Path.GetDirectoryName(path));
     bool oldBundle = EditorUserBuildSettings.buildAppBundle;
     EditorUserBuildSettings.buildAppBundle = false; // an APK, for the headset and for Meta
@@ -77,6 +85,7 @@ public static class QuestBuildMenu {
         target = BuildTarget.Android,
         targetGroup = BuildTargetGroup.Android,
         options = options,
+        extraScriptingDefines = defines,
       };
       float start = (float)EditorApplication.timeSinceStartup;
       BuildReport r = BuildPipeline.BuildPlayer(bpo);
@@ -88,6 +97,43 @@ public static class QuestBuildMenu {
       if (s.result == BuildResult.Succeeded) Debug.Log(msg); else Debug.LogError(msg);
     } finally {
       EditorUserBuildSettings.buildAppBundle = oldBundle;
+    }
+  }
+
+  // ---- phone ----
+
+  const string PhoneDevApk = "BuildPhone/soundstage-phone-dev.apk";
+  const string PhoneApk = "BuildPhone/soundstage-phone.apk";
+
+  [MenuItem("SoundStage/Build Phone (dev) + Run", false, 140)]
+  static void BuildPhoneDev() { BuildPhone(true); }
+
+  [MenuItem("SoundStage/Build Phone (release)", false, 141)]
+  static void BuildPhoneRelease() {
+    if (!OnAndroid()) return;
+    if (!EditorUtility.DisplayDialog("Build Phone (release)",
+          "Build the phone APK (no VR, touch controls)?\n\nSigned with: " + KeyDescription() + "\nOutput: " + PhoneApk, "Build", "Cancel")) return;
+    BuildPhone(false);
+  }
+
+  static void BuildPhone(bool dev) {
+    if (!OnAndroid()) return;
+    var target = NamedBuildTarget.Android;
+    Il2CppCompilerConfiguration oldConfig = PlayerSettings.GetIl2CppCompilerConfiguration(target);
+    Il2CppCodeGeneration oldCodeGen = PlayerSettings.GetIl2CppCodeGeneration(target);
+    using (new PhoneBuild.Settings()) {
+      try {
+        BuildOptions o = BuildOptions.None;
+        if (dev) {
+          PlayerSettings.SetIl2CppCompilerConfiguration(target, Il2CppCompilerConfiguration.Debug);
+          PlayerSettings.SetIl2CppCodeGeneration(target, Il2CppCodeGeneration.OptimizeSize);
+          o = BuildOptions.Development | BuildOptions.AutoRunPlayer;
+        }
+        Build(dev ? PhoneDevApk : PhoneApk, o, dev ? "phone dev" : "phone release", new[] { "SOUNDSTAGE_PHONE" });
+      } finally {
+        PlayerSettings.SetIl2CppCompilerConfiguration(target, oldConfig);
+        PlayerSettings.SetIl2CppCodeGeneration(target, oldCodeGen);
+      }
     }
   }
 

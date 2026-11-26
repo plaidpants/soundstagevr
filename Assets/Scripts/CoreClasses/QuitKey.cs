@@ -10,7 +10,7 @@ public class QuitKey : MonoBehaviour {
 
   [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
   static void Boot() {
-    if (Application.platform != RuntimePlatform.WindowsPlayer && Application.platform != RuntimePlatform.WindowsEditor) return;
+    if (Application.platform != RuntimePlatform.WindowsPlayer && Application.platform != RuntimePlatform.WindowsEditor && !Phone.Active) return; // the phone: its back button
     GameObject g = new GameObject("QuitKey");
     g.hideFlags = HideFlags.HideInHierarchy;
     DontDestroyOnLoad(g);
@@ -31,6 +31,6 @@ public class QuitKey : MonoBehaviour {
       return;
     }
     armedUntil = Time.unscaledTime + 2f;
-    NetNotice.Show("PRESS ESC AGAIN TO QUIT", "", 0, 2f);
+    NetNotice.Show(PointerInput.touch && !Application.isEditor ? "PRESS BACK AGAIN TO QUIT" : "PRESS ESC AGAIN TO QUIT", "", 0, 2f);
   }
 }

@@ -42,6 +42,7 @@ public class QuestPerformanceSetup : MonoBehaviour {
 #if UNITY_ANDROID && !UNITY_EDITOR
   [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
   static void Bootstrap() {
+    if (Phone.Active) return; // the phone build: no headset to set up
     GameObject go = new GameObject("QuestPerformanceSetup");
     DontDestroyOnLoad(go);
     go.AddComponent<QuestPerformanceSetup>();

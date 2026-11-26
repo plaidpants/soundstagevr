@@ -64,7 +64,7 @@ public static class QuestInput {
   }
 
   public static bool GetButton(string name) {
-    if (DesktopMode.MouseHand && DesktopMode.KeyFor(name, out KeyCode k)) return Input.GetKey(k);
+    if (DesktopMode.MouseHand && DesktopMode.KeyFor(name, out KeyCode k)) return PointerInput.GetKey(k);
     if (!OVRSafe.Available) return false;
     OVRInput.Controller c = ControllerFor(name);
     switch (Base(name)) {
@@ -78,7 +78,7 @@ public static class QuestInput {
   }
 
   public static bool GetButtonDown(string name) {
-    if (DesktopMode.MouseHand && DesktopMode.KeyFor(name, out KeyCode k)) return Input.GetKeyDown(k);
+    if (DesktopMode.MouseHand && DesktopMode.KeyFor(name, out KeyCode k)) return PointerInput.GetKeyDown(k);
     if (!OVRSafe.Available) return false;
     OVRInput.Controller c = ControllerFor(name);
     switch (Base(name)) {
@@ -92,7 +92,7 @@ public static class QuestInput {
   }
 
   public static bool GetButtonUp(string name) {
-    if (DesktopMode.MouseHand && DesktopMode.KeyFor(name, out KeyCode k)) return Input.GetKeyUp(k);
+    if (DesktopMode.MouseHand && DesktopMode.KeyFor(name, out KeyCode k)) return PointerInput.GetKeyUp(k);
     if (!OVRSafe.Available) return false;
     OVRInput.Controller c = ControllerFor(name);
     switch (Base(name)) {

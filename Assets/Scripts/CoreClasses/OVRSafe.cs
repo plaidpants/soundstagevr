@@ -12,6 +12,7 @@ public static class OVRSafe {
     get {
       if (state == 0) {
         if (NoVR.On) state = 2; // started with -novr: leave the headset runtime alone
+        else if (Phone.Active) state = 2; // a phone: no headset runtime to ask
         else try { var v = OVRPlugin.version; state = v != null ? 1 : 2; }
         catch (System.Exception) { state = 2; }
         if (state == 2) Debug.Log("[OVRSafe] no OVRPlugin library: controllers and hands are off (desktop mode)");

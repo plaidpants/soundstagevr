@@ -118,7 +118,7 @@ public class NetSession : MonoBehaviour {
   void Start() {
     // The PC (editor or Windows build) can't easily press the settings button, so it
     // always joins in for that run - also with a Link headset attached.
-    if (NetSpectator.Active || Application.isEditor || Application.platform == RuntimePlatform.WindowsPlayer) sessionOverride = true;
+    if ((NetSpectator.Active && !Phone.Active) || Application.isEditor || Application.platform == RuntimePlatform.WindowsPlayer) sessionOverride = true;
     Debug.Log("[NetSession] multiplayer " + CurrentMode + (sessionOverride ? " (PC: always on)" : "") +
               ", spectator=" + NetSpectator.Active + ", xr=" + UnityEngine.XR.XRSettings.isDeviceActive);
     // Internet never starts by itself: a session left on would keep using relay bandwidth
