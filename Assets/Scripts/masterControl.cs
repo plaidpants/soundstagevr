@@ -79,7 +79,8 @@ public class masterControl : MonoBehaviour {
     glowVal = PlayerPrefs.GetFloat("glowVal");
     setGlowLevel(glowVal);
     setGlowQuality(PlayerPrefs.GetInt("glowQuality", 2));
-    setEmissionLevel(PlayerPrefs.GetInt("emissionLevel", 0));
+    if (PlayerPrefs.HasKey("emissionBrightness")) setEmissionBrightness(PlayerPrefs.GetFloat("emissionBrightness"));
+    else setEmissionLevel(PlayerPrefs.GetInt("emissionLevel", 0)); // (the old stepped setting)
     // 3D audio (binaural) setting: saved, and now switchable in the in-game settings
     // panel too (before, only the desktop UI's audio settings set it, so on the Quest it
     // was always off)
@@ -176,7 +177,17 @@ public class masterControl : MonoBehaviour {
     emissionLevelIndex = ((index % emissionLevels.Length) + emissionLevels.Length) % emissionLevels.Length;
     PlayerPrefs.SetInt("emissionLevel", emissionLevelIndex);
     Shader.SetGlobalFloat("_SSEmissionOffset", Mathf.Log(emissionLevels[emissionLevelIndex]));
+    emissionBrightness = emissionLevels[emissionLevelIndex];
     Debug.Log("[masterControl] glow brightness " + Mathf.RoundToInt(emissionLevels[emissionLevelIndex] * 100) + "%");
+  }
+
+  // (2026-11-26) the settings menu's GLOW BRIGHTNESS slider: any value from the dimmest
+  // step to full, not just the six steps
+  public float emissionBrightness = 1f;
+  public void setEmissionBrightness(float b) {
+    emissionBrightness = Mathf.Clamp(b, emissionLevels[emissionLevels.Length - 1], 1f);
+    PlayerPrefs.SetFloat("emissionBrightness", emissionBrightness);
+    Shader.SetGlobalFloat("_SSEmissionOffset", Mathf.Log(emissionBrightness));
   }
 
   public void setGlowLevel(float t) {

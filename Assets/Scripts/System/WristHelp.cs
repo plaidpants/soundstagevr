@@ -24,6 +24,8 @@ public class WristHelp : MonoBehaviour {
     "Pinky pinch, palm down:  menu\n" +
     "Fingertips:  play keys\n" +
     "Slap:  hit drums\n" +
+    "Other hand:  reposition\n" +
+    "    held items\n" +
     "Copy, delete:  use controllers\n" +
     "Touch ? again to close";
 
