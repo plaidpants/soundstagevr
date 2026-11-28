@@ -143,11 +143,11 @@ public class scaleSequencerDeviceInterface : deviceInterface, INetBeatSync, INet
     dimensionDisplays[0].GetComponent<Renderer>().material.SetFloat("_EmissionGain", .3f);
     dimensionDisplays[1].GetComponent<Renderer>().material.SetFloat("_EmissionGain", .3f);
 
-    // the copied prefab's "?" plays the drum machine's help video; no video for this device yet
-    foreach (string n in new string[] { "tooltip", "tooltipVideo" }) {
-      Transform t = transform.Find(n);
-      if (t != null) t.gameObject.SetActive(false);
-    }
+    // the copied prefab's "?" played the drum machine's help video; it stays, showing a
+    // written card instead (HelpCards, from Start - 2026-11-27); the video spot is only
+    // where the card goes
+    Transform vidSpot = transform.Find("tooltipVideo");
+    if (vidSpot != null) vidSpot.gameObject.SetActive(false);
 
     // start with 8 note rows, root at the bottom
     Vector3 sp = stretchNode.localPosition;
@@ -413,6 +413,7 @@ public class scaleSequencerDeviceInterface : deviceInterface, INetBeatSync, INet
     _beatManager.setTriggers(executeNextStep, resetSteps);
     _beatManager.updateBeatNoTriplets(beatSpeed);
     _beatManager.updateSwing(swingPercent);
+    HelpCards.Attach(this, "scaleseq", true); // a written card instead of the drum machine's video (2026-11-27)
   }
 
   // ---------------------------------------------------------------------------------

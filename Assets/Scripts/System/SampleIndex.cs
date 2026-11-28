@@ -290,6 +290,11 @@ public class SampleIndex : MonoBehaviour {
     if (dirty) Save();
   }
 
-  void OnApplicationPause(bool paused) { if (paused) Save(); }
+  void OnApplicationPause(bool paused) {
+    if (!paused) return;
+    Watchdog.Mark("SampleIndex save: start");
+    Save();
+    Watchdog.Mark("SampleIndex save: done");
+  }
   void OnApplicationQuit() { Save(); }
 }

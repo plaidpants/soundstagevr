@@ -18,6 +18,10 @@ using System.Collections;
 public class tooltips : manipObject {
   public GameObject vidPlayerPrefab, vidContainer;
   public string vidFile;
+  // (2026-11-27) devices with no video: a written card instead (HelpCards)
+  [System.NonSerialized] public string helpText;
+  [System.NonSerialized] public Transform cardDevice;
+  GameObject card;
 
   Material mat;
   Color normalColor = new Color(.5f, .5f, 1);
@@ -108,6 +112,11 @@ public class tooltips : manipObject {
 
   public void ToggleVideo(bool on) {
     tipOn = on;
+    if (!string.IsNullOrEmpty(helpText)) {
+      if (on && card == null) card = HelpCards.MakeCard(cardDevice != null ? cardDevice : transform.parent, helpText, vidContainer != null ? vidContainer.transform : null, this);
+      if (card != null) card.SetActive(on);
+      return;
+    }
 
     vidContainer.SetActive(on);
     if (tipOn && !tipLoaded) {

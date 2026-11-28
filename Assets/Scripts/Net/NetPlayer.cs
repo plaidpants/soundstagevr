@@ -37,10 +37,21 @@ public class NetPlayer : NetworkBehaviour {
   public static readonly List<NetPlayer> all = new List<NetPlayer>();
 
   static readonly Color[] palette = {
-    new Color(1f, .45f, .2f), new Color(.25f, .7f, 1f), new Color(.5f, 1f, .35f), new Color(1f, .35f, .8f)
+    new Color(1f, .45f, .2f), new Color(.25f, .7f, 1f), new Color(.5f, 1f, .35f), new Color(1f, .35f, .8f),
+    // (2026-11-26) up to 8 players on local Wi-Fi
+    new Color(1f, .9f, .25f), new Color(.65f, .45f, 1f), new Color(.2f, 1f, .85f), new Color(1f, .3f, .3f)
   };
 
   [SyncVar(hook = nameof(OnColor))] public Color color = Color.white;
+  // (2026-11-27) this player is on a PC: it never sleeps, so it's first in line to take
+  // over as host (NetSync.SendSuccession)
+  [SyncVar] public bool isPc;
+
+  [Command]
+  void CmdSetPc(bool pc) {
+    isPc = pc;
+    NetSync.SendSuccession(); // the line may change
+  }
 
   public float sendRate = 20f;
 
@@ -99,6 +110,7 @@ public class NetPlayer : NetworkBehaviour {
   }
 
   public override void OnStartLocalPlayer() {
+    CmdSetPc(Application.platform != RuntimePlatform.Android);
     quietUntil = Time.unscaledTime + 2f; // the others' objects are still spawning
     if (!NetworkServer.active) UISound.PlayerJoined(); // we joined someone (a host starting alone stays quiet)
     foreach (Renderer r in parts) if (r != null) r.enabled = false;

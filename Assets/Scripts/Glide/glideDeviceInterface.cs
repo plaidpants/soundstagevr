@@ -35,6 +35,8 @@ public class glideDeviceInterface : deviceInterface {
     if (signal.incoming != input.signal) signal.incoming = input.signal;
   }
 
+  void Start() { HelpCards.Attach(this, "glide"); } // a "?" with a written card (no help video)
+
   public override InstrumentData GetData() {
     GlideData data = new GlideData();
     data.deviceType = menuItem.deviceType.Glide;

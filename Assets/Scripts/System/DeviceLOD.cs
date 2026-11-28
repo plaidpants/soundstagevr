@@ -24,6 +24,10 @@
 // device's largest side. Renderers created later (keys added by resizing, timeline
 // notes) aren't in the group and always draw. Parts already under a LODGroup (tapes)
 // are left alone. Quality lodBias (0.7 on Quest) scales these thresholds.
+//
+// (2026-11-27) A screen-height threshold means a small device (Gain, Gate) drops its
+// labels much closer than a big one: about half an arm's length away. Full detail now
+// also stays on out to minFullDetailDistance, whatever the device's size.
 
 using UnityEngine;
 using System.Collections;
@@ -33,6 +37,8 @@ public class DeviceLOD : MonoBehaviour {
   public static float farDetailScreenHeight = 0.07f;
   public static float cullScreenHeight = 0.004f;
   public static float smallPartFraction = 0.12f;
+  public static float minFullDetailDistance = 1.5f; // metres: labels and small parts stay at least this far out
+  public static float assumedFov = 90f;              // vertical, degrees, if there's no camera yet
   public static bool enabledGlobally = true;
 
   IEnumerator Start() {
@@ -84,5 +90,20 @@ public class DeviceLOD : MonoBehaviour {
       new LOD(cullScreenHeight, big.ToArray()),
     });
     g.RecalculateBounds();
+
+    // the screen height this device has at minFullDetailDistance (Unity compares the
+    // group's size / view height, divided by the quality lodBias): no higher than that
+    Camera cam = Camera.main;
+    float fov = cam != null && cam.fieldOfView > 1f ? cam.fieldOfView : assumedFov;
+    Vector3 ls = transform.lossyScale;
+    float worldSize = g.size * Mathf.Max(Mathf.Abs(ls.x), Mathf.Abs(ls.y), Mathf.Abs(ls.z));
+    float atMin = worldSize / (2f * minFullDetailDistance * Mathf.Tan(fov * .5f * Mathf.Deg2Rad)) * QualitySettings.lodBias;
+    float far = Mathf.Clamp(atMin, cullScreenHeight * 2f, farDetailScreenHeight);
+    if (far < farDetailScreenHeight) {
+      g.SetLODs(new LOD[] {
+        new LOD(far, mine.ToArray()),
+        new LOD(cullScreenHeight, big.ToArray()),
+      });
+    }
   }
 }

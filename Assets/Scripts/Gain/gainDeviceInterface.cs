@@ -36,6 +36,8 @@ public class gainDeviceInterface : deviceInterface {
     if (signal.incoming != input.signal) signal.incoming = input.signal;
   }
 
+  void Start() { HelpCards.Attach(this, "gain"); } // a "?" with a written card (no help video)
+
   public override InstrumentData GetData() {
     GainData data = new GainData();
     data.deviceType = menuItem.deviceType.Gain;

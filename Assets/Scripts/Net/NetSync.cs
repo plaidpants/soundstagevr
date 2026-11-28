@@ -69,13 +69,23 @@ public static class NetSync {
   public static bool keepIds;     // becoming host after the host left: keep the IDs
   public static bool HadPatch { get { return NetDevice.byId.Count > 0; } }
 
-  // host: tell each joined headset its place in line (join order)
+  static bool IsPc(NetworkConnectionToClient c) {
+    NetPlayer p = c.identity != null ? c.identity.GetComponent<NetPlayer>() : null;
+    return p != null && p.isPc;
+  }
+
+  // host: tell each joined headset its place in line (PCs first, then join order)
   public static void SendSuccession() {
     if (!NetworkServer.active) return;
     var conns = new List<NetworkConnectionToClient>();
     foreach (NetworkConnectionToClient c in NetworkServer.connections.Values)
       if (c != NetworkServer.localConnection && c.isReady) conns.Add(c);
-    conns.Sort((a, b) => a.connectionId.CompareTo(b.connectionId));
+    // PCs first (they never sleep: 2026-11-27), then join order
+    conns.Sort((a, b) => {
+      bool pa = IsPc(a), pb = IsPc(b);
+      if (pa != pb) return pa ? -1 : 1;
+      return a.connectionId.CompareTo(b.connectionId);
+    });
     for (int i = 0; i < conns.Count; i++) conns[i].Send(new NetSuccessionMsg { rank = i + 1 });
   }
 
@@ -90,8 +100,9 @@ public static class NetSync {
       if (!NetDevice.byId.TryGetValue(ids[i], out NetDevice d) || d == null) return false;
       deviceInterface di = d.GetComponent<deviceInterface>();
       if (di == null) return false;
-      if (PortableHash(di.GetData()) != PortableHash(set.InstrumentList[i])) {
-        Debug.Log("[NetSync] device " + ids[i] + " (" + d.name + ") differs");
+      string mineXml = PortableXml(di.GetData()), theirsXml = PortableXml(set.InstrumentList[i]);
+      if (mineXml != theirsXml) {
+        Debug.Log("[NetSync] device " + ids[i] + " (" + d.name + ") differs: " + FirstDifference(mineXml, theirsXml));
         return false;
       }
     }
@@ -101,10 +112,24 @@ public static class NetSync {
   static readonly System.Text.RegularExpressions.Regex idElements =
     new System.Text.RegularExpressions.Regex(@"<(\w*ID)>-?\d+</\1>");
 
+  // (2026-11-27) lists of IDs too ("<jackOutIDs><int>-27738</int>..."): jack IDs are
+  // per headset, so the drum machine never matched and every rejoin reloaded the patch
+  static readonly System.Text.RegularExpressions.Regex idLists =
+    new System.Text.RegularExpressions.Regex(@"<(\w*IDs?)>\s*<int>[\s\S]*?</\1>|<(\w*IDs?) />");
+
   static readonly System.Text.RegularExpressions.Regex pulseOffsets =
     new System.Text.RegularExpressions.Regex(@"<pulseOffset>[^<]*</pulseOffset>");
 
-  static int PortableHash(InstrumentData data) {
+  // (2026-11-27) where two devices' saved data first differ, to see why a rejoin reloads
+  static string FirstDifference(string a, string b) {
+    int n = Mathf.Min(a.Length, b.Length), i = 0;
+    while (i < n && a[i] == b[i]) i++;
+    int from = Mathf.Max(0, a.LastIndexOf('<', Mathf.Max(0, Mathf.Min(i, a.Length - 1))) );
+    string Cut(string x) { int f = Mathf.Min(from, x.Length); return x.Substring(f, Mathf.Min(120, x.Length - f)).Replace("\r", "").Replace("\n", " "); }
+    return "here [" + Cut(a) + "] vs host [" + Cut(b) + "]";
+  }
+
+  static string PortableXml(InstrumentData data) {
     Vector3 p = data.position, sc = data.scale; Quaternion q = data.rotation; int id = data.ID;
     data.position = Vector3.zero; data.rotation = Quaternion.identity; data.scale = Vector3.one; data.ID = 0;
     string xml;
@@ -112,13 +137,10 @@ public static class NetSync {
       using (var w = new StringWriter()) { deviceSerializer.Serialize(w, data); xml = w.ToString(); }
     } finally { data.position = p; data.rotation = q; data.scale = sc; data.ID = id; }
     xml = idElements.Replace(xml, "");
+    xml = idLists.Replace(xml, "");
     xml = pulseOffsets.Replace(xml, ""); // lined up by NetClock, not a reason to reload (PulseClock)
     xml = SampleIndex.Normalize(xml); // samples compare by content, not by their path on each machine
-    unchecked {
-      int h = (int)2166136261;
-      foreach (char ch in xml) h = (h ^ ch) * 16777619;
-      return h;
-    }
+    return xml;
   }
   static int nextTempId = 1;
   static readonly long myToken = System.DateTime.Now.Ticks ^ (long)Random.Range(int.MinValue, int.MaxValue);

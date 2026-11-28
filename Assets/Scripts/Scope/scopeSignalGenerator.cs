@@ -8,13 +8,16 @@
 using UnityEngine;
 
 public class scopeSignalGenerator : signalGenerator {
-  public signalGenerator incoming;
+  public signalGenerator incoming, trigger; // trigger: the TRIG jack (2026-11-27)
   public scopeViz viz;
+  float[] _scratch_trig; // reused audio-thread scratch (see AudioBufferPool)
 
   public override void processBuffer(float[] buffer, double dspTime, int channels) {
-    signalGenerator inc = incoming; // (read once: a cable pulled on the main thread can clear it)
+    signalGenerator inc = incoming, trig = trigger; // (read once: a cable pulled on the main thread can clear them)
     if (inc != null) inc.Pull(buffer, dspTime, channels);
     else System.Array.Clear(buffer, 0, buffer.Length);
-    if (viz != null) viz.Capture(buffer, channels);
+    float[] t = null;
+    if (trig != null) { t = AudioBufferPool.GetCleared(ref _scratch_trig, buffer.Length); trig.Pull(t, dspTime, channels); }
+    if (viz != null) viz.Capture(buffer, channels, t);
   }
 }

@@ -311,10 +311,11 @@ public static class MicNative {
 
   public static bool Available { get { return linked; } }
   public static int Start(int preset, bool exclusive) {
-    try { return SSMic_Start(preset, exclusive ? 1 : 0); }
+    Watchdog.Mark("mic: AAudio start");
+    try { int r = SSMic_Start(preset, exclusive ? 1 : 0); Watchdog.Mark("mic: AAudio started (" + r + ")"); return r; }
     catch (System.Exception e) { linked = false; Debug.LogWarning("[Microphone] the AAudio plugin isn't in this build (" + e.GetType().Name + ")"); return -1000; }
   }
-  public static void Stop() { if (linked) SSMic_Stop(); }
+  public static void Stop() { if (!linked) return; Watchdog.Mark("mic: AAudio stop"); SSMic_Stop(); Watchdog.Mark("mic: AAudio stopped"); }
   public static string ErrorText(int r) { return linked ? Marshal.PtrToStringAnsi(SSMic_ErrorText(r)) : "not in this build"; }
   public static int[] Info() { var a = new int[10]; if (linked) SSMic_Info(a); return a; }
   public static int OpenReader(int outRate, float targetMs) { return SSMic_OpenReader(outRate, targetMs); }
@@ -507,7 +508,9 @@ public static class MicCapture {
         device = System.Array.IndexOf(devs, want) >= 0 ? want : devs[0];
         Microphone.GetDeviceCaps(device, out int minF, out int maxF);
         int freq = (minF == 0 && maxF == 0) ? output : Mathf.Clamp(output, minF, maxF); // 0 / 0: any rate
+        Watchdog.Mark("mic: Unity Microphone.Start");
         clip = Microphone.Start(device, true, 1, freq);
+        Watchdog.Mark("mic: Unity Microphone started");
         if (clip == null) { Debug.LogWarning("[Microphone] " + device + " didn't open at " + freq + " Hz"); return false; }
         lastPos = -1; Chunks = 0; chunkMax = chunkPrev = 0; chunkWindowAt = Time.unscaledTime; lastFrame = -1;
         Native = false; opened = true;
@@ -531,7 +534,7 @@ public static class MicCapture {
   static void Close() {
     if (!opened) return;
     if (Native) { MicNative.Stop(); Debug.Log("[Microphone] AAudio off"); }
-    else { if (device != null) Microphone.End(device); Debug.Log("[Microphone] " + device + " off"); }
+    else { if (device != null) { Watchdog.Mark("mic: Unity Microphone.End"); Microphone.End(device); Watchdog.Mark("mic: Unity Microphone ended"); } Debug.Log("[Microphone] " + device + " off"); }
     opened = false; Native = false; clip = null; users = 0;
   }
 

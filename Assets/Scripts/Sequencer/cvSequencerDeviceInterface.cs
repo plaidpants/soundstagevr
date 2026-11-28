@@ -93,11 +93,16 @@ public class cvSequencerDeviceInterface : deviceInterface, INetBeatSync, INetPul
 
     for (int i = 0; i < dimensionDisplays.Length; i++) {
       dimensionDisplays[i].GetComponent<Renderer>().material.SetColor("_TintColor", Color.white);
-      //dimensionDisplays[i].gameObject.SetActive(false);
+      dimensionDisplays[i].gameObject.SetActive(false); // (2026-11-27: hidden until the grid is touched, as on the other sequencers)
     }
 
     dimensionDisplays[0].GetComponent<Renderer>().material.SetFloat("_EmissionGain", .3f);
     dimensionDisplays[1].GetComponent<Renderer>().material.SetFloat("_EmissionGain", .3f);
+
+    // (2026-11-27) the prefab's corner handle wasn't wired to this device, so touching it
+    // never showed the grid size ("8 X 12"); the drum machine's is
+    xyHandle grow = stretchNode != null ? stretchNode.GetComponent<xyHandle>() : null;
+    if (grow != null && grow._interface == null) grow._interface = this;
   }
 
   // New sequencers start on ONCE (2026-11): that's how one started from the control
@@ -111,6 +116,7 @@ public class cvSequencerDeviceInterface : deviceInterface, INetBeatSync, INetPul
     _beatManager.setTriggers(executeNextStep, resetSteps);
     _beatManager.updateBeatNoTriplets(beatSpeed);
     _beatManager.updateSwing(swingPercent);
+    HelpCards.Attach(this, "cvseq", true); // a written card instead of the drum machine's video (2026-11-27)
   }
 
   public void SetDimensions(int dimX, int dimY) {
@@ -528,7 +534,7 @@ public class cvSequencerDeviceInterface : deviceInterface, INetBeatSync, INetPul
       dimensionDisplays[0].GetComponent<Renderer>().material.SetColor("_TintColor", Color.Lerp(Color.white, Color.black, t));
       yield return null;
     }
-    //dimensionDisplays[0].gameObject.SetActive(false);
+    dimensionDisplays[0].gameObject.SetActive(false); // (2026-11-27: faded to black is still drawn - and visible on the Quest)
   }
 
   public override InstrumentData GetData() {

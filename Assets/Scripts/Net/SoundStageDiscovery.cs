@@ -4,6 +4,7 @@
 // The count rides in the URI's query string ("?players=N"), which the KCP transport
 // ignores when connecting, so the discovery message format is unchanged.
 using System;
+using UnityEngine;
 using System.Net;
 using Mirror;
 using Mirror.Discovery;
@@ -12,11 +13,15 @@ public class SoundStageDiscovery : NetworkDiscovery {
   protected override ServerResponse ProcessRequest(ServerRequest request, IPEndPoint endpoint) {
     ServerResponse r = base.ProcessRequest(request, endpoint);
     try {
-      UriBuilder b = new UriBuilder(r.uri) { Query = "players=" + NetworkServer.connections.Count };
+      // (2026-11-27) "pc=1": this host is a PC, which never sleeps, so it's the better host
+      string pc = Application.platform == RuntimePlatform.Android ? "" : "&pc=1";
+      UriBuilder b = new UriBuilder(r.uri) { Query = "players=" + NetworkServer.connections.Count + pc };
       r.uri = b.Uri;
     } catch (Exception) { }
     return r;
   }
+
+  public static bool IsPc(ServerResponse r) { return r.uri != null && r.uri.Query.Contains("pc=1"); }
 
   // players on the host that sent this response (its own included), or -1 if it didn't say
   public static int Players(ServerResponse r) {

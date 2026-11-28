@@ -54,11 +54,17 @@ public class QuestPerformanceSetup : MonoBehaviour {
   }
 
   void OnApplicationPause(bool paused) {
-    if (!paused) Apply();
+    if (paused) return;
+    Watchdog.Mark("QuestPerformanceSetup resume: start");
+    Apply();
+    Watchdog.Mark("QuestPerformanceSetup resume: done");
   }
 
   void OnApplicationFocus(bool focused) {
-    if (focused) Apply();
+    if (!focused) return;
+    Watchdog.Mark("QuestPerformanceSetup focus: start");
+    Apply();
+    Watchdog.Mark("QuestPerformanceSetup focus: done");
   }
 
   public static void Apply() {

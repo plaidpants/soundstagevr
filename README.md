@@ -83,6 +83,11 @@ same Wi-Fi and turn MULTIPLAYER ON. The first one hosts, the others find it and 
 more apart) so the virtual room lines up with the real one. **MOVE ROOM** then moves the
 room for everyone with the stick.
 
+*Taking your headset off* — the session carries on while your headset is off, until it
+goes to sleep (**Settings > Power > Auto Sleep** on the Quest; set it longer if you often take
+breaks). If the host's headset sleeps, the next player takes over as host straight away and
+the music keeps going; the old host joins back in as a player when they put it on again.
+
 **Samples in multiplayer** — samples are matched by their content, so a renamed or moved
 file still counts as the same sample. A sample someone else's patch uses that your machine
 doesn't have is sent to you (the tape shows *LOADING*), checked, and kept in a hidden cache;

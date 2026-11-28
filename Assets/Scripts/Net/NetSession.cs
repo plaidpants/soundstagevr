@@ -75,7 +75,12 @@ public class NetSession : MonoBehaviour {
   bool sessionOverride; // desktop spectator: LOCAL for this run without saving it
   bool sessionFull;     // the only session around is full: show SESSION FULL and look again later
   const float FullRetry = 15f;
-  static bool IsFull(int players) { return players >= NetInternet.MaxPlayers; }
+  // (2026-11-26) 8 players on local Wi-Fi, 4 over the internet: everything there goes
+  // through Unity's relay, whose traffic grows with the square of the players (each
+  // player's head and hands go to every other) and is billed past the free tier.
+  public const int MaxLocalPlayers = 8;
+  public static int MaxPlayers { get { return Kind == Mode.Internet ? NetInternet.MaxPlayers : MaxLocalPlayers; } }
+  static bool IsFull(int players) { return players >= MaxPlayers; }
   string lastStatus = "";
 
   // What's running: Off, or the kind (Local / Internet) when multiplayer is on.
@@ -204,7 +209,7 @@ public class NetSession : MonoBehaviour {
     manager.playerPrefab = Resources.Load<GameObject>("Net/NetPlayer");
     if (manager.playerPrefab == null) Debug.LogError("[NetSession] Resources/Net/NetPlayer missing: run SoundStage > Multiplayer > Create NetPlayer prefab");
     manager.autoCreatePlayer = true;
-    manager.maxConnections = NetInternet.MaxPlayers;
+    manager.maxConnections = MaxPlayers; // (set again when hosting: the kind can change)
     manager.sendRate = 30;
     manager.offlineScene = "";
     manager.onlineScene = "";
@@ -266,7 +271,7 @@ public class NetSession : MonoBehaviour {
   // Every session we can see is full. Don't host a separate one next to it (the merge
   // check would only try to join the full one); say so and look again every so often.
   void WaitWhileFull() {
-    if (!sessionFull) Debug.Log("[NetSession] session is full (" + NetInternet.MaxPlayers + " players): checking again every " + FullRetry + " s");
+    if (!sessionFull) Debug.Log("[NetSession] session is full (" + MaxPlayers + " players): checking again every " + FullRetry + " s");
     sessionFull = true;
     if (discovery != null) discovery.StopDiscovery();
     RaiseStatus();
@@ -285,6 +290,7 @@ public class NetSession : MonoBehaviour {
     if (CurrentMode == Mode.Internet) { HostInternet(++searchRun); return; }
     discovery.StopDiscovery();
     SetState(State.Host);
+    manager.maxConnections = MaxPlayers;
     manager.StartHost();
     discovery.AdvertiseServer();
     Debug.Log("[NetSession] no host found: hosting");
@@ -298,11 +304,14 @@ public class NetSession : MonoBehaviour {
   // host that has players always wins; of two lone hosts the one with the higher
   // server ID gives up and joins the other (the rule is the same on both, so they
   // never swap back and forth).
+  bool probingLogged;
   void ProbeOtherHosts() {
     if (state != State.Host || NetworkServer.connections.Count > 1) {
       hostProbe.StopDiscovery();
+      probingLogged = false;
       return;
     }
+    if (!probingLogged) { probingLogged = true; Debug.Log("[NetSession] hosting alone: looking for other hosts every 6 s"); }
     try {
       hostProbe.StartDiscovery();
     } catch (System.Exception e) {
@@ -315,15 +324,23 @@ public class NetSession : MonoBehaviour {
 
   void StopProbe() { if (hostProbe != null) hostProbe.StopDiscovery(); }
 
+  string lastOnce;
+  void LogOnce(string m) { if (m != lastOnce) { lastOnce = m; Debug.Log(m); } }
+
   void OnOtherHostFound(ServerResponse r) {
     if (state != State.Host || r.serverId == discovery.ServerId) return; // ourselves
     if (NetworkServer.connections.Count > 1) return; // someone joined us: stay host
     int theirs = SoundStageDiscovery.Players(r);
-    if (IsFull(theirs)) return; // can't join it anyway
+    if (IsFull(theirs)) { Debug.Log("[NetSession] another host (" + r.uri + ") is full: staying"); return; }
+    bool mePc = Application.platform != RuntimePlatform.Android, themPc = SoundStageDiscovery.IsPc(r);
     if (theirs > 1) {
       Debug.Log("[NetSession] another host with " + theirs + " players is running (" + r.uri + "): joining it");
+    } else if (mePc != themPc) {
+      // (2026-11-27) two lone hosts, a PC and a headset: the PC hosts (it never sleeps)
+      if (mePc) { LogOnce("[NetSession] another lone host (a headset, " + r.uri + "): staying host, it joins us (the PC hosts)"); return; }
+      Debug.Log("[NetSession] another lone host is running on a PC (" + r.uri + "): joining it");
     } else {
-      if (discovery.ServerId < r.serverId) return;   // two lone hosts: the other one gives up
+      if (discovery.ServerId < r.serverId) { LogOnce("[NetSession] another lone host (" + r.uri + "): staying host, it joins us"); return; } // the other one gives up
       Debug.Log("[NetSession] another lone host is running (" + r.uri + "): joining it instead");
     }
     CancelInvoke();
@@ -358,6 +375,17 @@ public class NetSession : MonoBehaviour {
   // (NetSync.PatchMatches) - nothing reloads and the music keeps playing.
   public void OnClientConnectionLost() {
     if (state != State.Client) return;
+    if (Time.realtimeSinceStartup - resumedAt < 10f) {
+      // (2026-11-27) We were asleep: the host timed US out and is still running. Taking
+      // over here made a second host next to it. Look for it and join it again.
+      successionRank = 0;
+      NetSync.migrating = NetSync.HadPatch; // same patch: keep it if it matches
+      Debug.Log("[NetSession] lost the connection while asleep: looking for the session again");
+      SetState(State.Searching);
+      migrationRank = 1;
+      Invoke(nameof(StartMigrationSearch), .3f);
+      return;
+    }
     if (CurrentMode == Mode.Internet) NetInternet.MarkBad(joinedLobby); // gone or unreachable: don't pick it again
     int rank = successionRank;
     successionRank = 0;
@@ -391,6 +419,7 @@ public class NetSession : MonoBehaviour {
   // a bit longer the further back in line, in case it left too)
   int migrationRank = 2;
   void StartMigrationSearch() {
+    Watchdog.Mark("StartMigrationSearch, rank " + migrationRank);
     if (CurrentMode == Mode.Internet) { StartInternet(3f + 2f * migrationRank); return; }
     EnsureNetwork();
     CancelInvoke();
@@ -475,6 +504,7 @@ public class NetSession : MonoBehaviour {
     UseTransport(utp);
     if (migration) NetLimits.TookOver(); else NetLimits.SessionStarted();
     SetState(State.Host);
+    manager.maxConnections = MaxPlayers;
     manager.StartHost();
     await NetInternet.Publish();
     if (run != searchRun || state != State.Host) { NetInternet.Unpublish(); return; }
@@ -520,7 +550,73 @@ public class NetSession : MonoBehaviour {
   }
   void EndPending() { int r = pendingEnd; pendingEnd = 0; EndInternet(r); }
 
+  // ---- handing over when the host's headset sleeps (2026-11-27) ----
+  // Taking a headset off pauses the app once the headset's Auto Sleep time has passed
+  // (Settings > Power > Auto Sleep). A paused host used to freeze the session for everyone
+  // for 30 s (the network timeout) before the next in line took over. Now the host stops
+  // hosting as it pauses: the others see it leave straight away and the next in line takes
+  // over within a second (the usual host migration, same patch, no reload). Back on, it
+  // looks for the session again and joins it as a player.
+  public static bool handoverOnPause = true;
+  bool handedOver;
+
+  float resumedAt = -100f;
+
+  void OnApplicationPause(bool paused) {
+    string what = "NetSession " + (paused ? "pause" : "resume");
+    Watchdog.Mark(what + ": start, " + state + ", " + NetPlayer.all.Count + " players");
+    PauseOrResume(paused);
+    Watchdog.Mark(what + ": done, " + state);
+  }
+
+  void PauseOrResume(bool paused) {
+    if (!paused) resumedAt = Time.realtimeSinceStartup;
+    if (paused) {
+      // (a player that pauses stays in the session: short pauses - the headset settling as
+      // it goes on - came and went in a second, and leaving made it drop out and rejoin each
+      // time. If it sleeps past the host's 30 s timeout, it rejoins on waking: see
+      // OnClientConnectionLost.)
+      if (!handoverOnPause || state != State.Host || NetPlayer.all.Count <= 1) return;
+      Debug.Log("[NetSession] pausing while hosting " + NetPlayer.all.Count + " players: handing the session over");
+      handedOver = true;
+      HandOver();
+      return;
+    }
+    if (!handedOver) return;
+    handedOver = false;
+    if (!On || Ended) { SetState(State.Off); return; }
+    Debug.Log("[NetSession] back after handing over: looking for the session");
+    NetSync.migrating = NetSync.HadPatch; // the same patch as theirs: keep it, nothing reloads
+    migrationRank = 1;
+    StartMigrationSearch();
+  }
+
+  // stop hosting now, so the players see us leave and the next in line takes over at once
+  void HandOver() {
+    CancelInvoke();
+    searchRun++;
+    if (CurrentMode == Mode.Internet) NetInternet.Unpublish();
+    SetState(State.Searching); // (so stopping the host doesn't count as losing a connection)
+    Watchdog.Mark("HandOver: stopping the host");
+    if (manager != null && NetworkServer.active) manager.StopHost(); // the players get the disconnect now
+    Watchdog.Mark("HandOver: host stopped");
+    if (discovery != null) discovery.StopDiscovery();
+    if (hostProbe != null) hostProbe.StopDiscovery();
+  }
+
+  // Quitting (the Quest menu's Quit, back twice on the phone, closing the PC window):
+  // leave the session properly first, so nobody waits out the 30 s timeout - as host the
+  // next in line takes over at once, as a player the host sees us go. (Usually the pause
+  // just before has already handed over; this covers a quit that comes without one.)
   void OnApplicationQuit() {
+    Watchdog.Note("quitting, " + state);
+    if (state == State.Host && NetworkServer.active && NetPlayer.all.Count > 1) {
+      Debug.Log("[NetSession] quitting while hosting " + NetPlayer.all.Count + " players: handing the session over");
+      HandOver();
+    } else if (manager != null && NetworkClient.active && !NetworkServer.active) {
+      SetState(State.Off); // (so the disconnect doesn't start a search)
+      manager.StopClient();
+    }
     NetInternet.Unpublish(); // best effort: an unremoved session drops out of the list ~30 s later
   }
 
@@ -555,7 +651,7 @@ public class NetSession : MonoBehaviour {
     bool internet = CurrentMode == Mode.Internet;
     switch (instance.state) {
       case State.Searching:
-        if (instance.sessionFull) return "SESSION FULL (" + NetInternet.MaxPlayers + "/" + NetInternet.MaxPlayers + ")";
+        if (instance.sessionFull) return "SESSION FULL (" + MaxPlayers + "/" + MaxPlayers + ")";
         return internet && NetInternet.status != "" ? NetInternet.status : "SEARCHING...";
       case State.Host:
         string h = "HOSTING (" + Mathf.Max(1, PlayerCount) + ")";
